@@ -23,7 +23,7 @@ interface Message {
 }
 
 export default function Home() {
-    const [activePlatform, setActivePlatform] = useState('FB');
+    const [activePlatform, setActivePlatform] = useState('Facebook');
     const [threads, setThreads] = useState<Thread[]>([]);
     const [activeThread, setActiveThread] = useState<Thread | null>(null);
     const [messages, setMessages] = useState<Message[]>([]);
@@ -34,12 +34,12 @@ export default function Home() {
     // Load Threads
     useEffect(() => {
         async function loadThreads() {
-            if (activePlatform !== 'FB') {
+            if (activePlatform !== 'Facebook') {
                 setThreads([]);
                 return;
             }
             try {
-                const res = await fetch('/api/threads?platform=FB');
+                const res = await fetch('/api/threads?platform=Facebook');
                 if (res.ok) {
                     const data = await res.json();
                     setThreads(data);
@@ -108,7 +108,7 @@ export default function Home() {
             {/* Column 1: Platforms */}
             <div className={styles.sidebar}>
                 <div className={styles.sidebarTitle}>Virtual Me</div>
-                {['FB', 'Instagram', 'Google Chat', 'Google Voice'].map(p => (
+                {['Facebook', 'Instagram', 'Google Chat', 'Google Voice'].map(p => (
                     <div
                         key={p}
                         className={`${styles.navItem} ${activePlatform === p ? styles.navItemActive : ''}`}
