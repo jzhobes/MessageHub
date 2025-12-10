@@ -11,10 +11,9 @@ export async function GET(request: Request) {
     return new NextResponse('Missing path', { status: 400 });
   }
 
-  // Security check: ensure path doesn't try to go up too far
-  if (filePath.includes('..')) {
-    return new NextResponse('Invalid path', { status: 403 });
-  }
+  // Security check: ensure path is within allowed directories.
+  // We can't strictly block '..' because the stickers might be in ../../../stickers_used/
+  // Instead we rely on the final path check against baseDir.
 
   // Construct absolute path
   // Base: data/FB

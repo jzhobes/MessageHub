@@ -20,6 +20,13 @@ interface Message {
     photos?: any[];
     videos?: any[];
     gifs?: any[];
+    sticker?: {
+        uri: string;
+    };
+    reactions?: Array<{
+        reaction: string;
+        actor: string;
+    }>;
 }
 
 export default function Home() {
@@ -185,14 +192,7 @@ export default function Home() {
                             {messages.map((msg, i) => {
                                 const isMyMsg = isMe(msg.sender_name);
 
-                                // GROUPING LOGIC
-                                // Messages are rendered in reverse (index 0 is bottom).
-                                // Visually:
-                                // [Top, Index k]    -> First in Group (Top corners rounded, Bottom flat?)
-                                // [Mid, Index k-1]  -> Middle (Flat)
-                                // [Bot, Index 0]    -> Last in Group (Top flat, Bottom rounded)
-
-                                // We need to look at i+1 (Above) and i-1 (Below).
+                                // Check neighbours for grouping
                                 const prevMsg = messages[i + 1]; // Visually Above
                                 const nextMsg = messages[i - 1]; // Visually Below
 
@@ -200,11 +200,6 @@ export default function Home() {
                                 const isBottom = !nextMsg || nextMsg.sender_name !== msg.sender_name;
 
                                 // Determine Border Radius Class
-                                // default radius is 18px.
-                                // We want to Flatten corners on the "consecutive" side.
-                                // Left side (Other): Flatten Left corners.
-                                // Right side (Me): Flatten Right corners.
-
                                 let borderRadiusStyle = {};
                                 const R = '18px';
                                 const F = '4px'; // Flattened radius (not 0, usually small curve looks better, or 2px)
@@ -243,71 +238,129 @@ export default function Home() {
                                 // Name Logic (Top of group)
                                 const showName = !isMyMsg && isTop;
 
-                                const hasMedia = (msg.photos && msg.photos.length > 0) || (msg.videos && msg.videos.length > 0) || (msg.gifs && msg.gifs.length > 0);
+                                const hasMedia = (msg.photos && msg.photos.length > 0) || (msg.videos && msg.videos.length > 0) || (msg.gifs && msg.gifs.length > 0) || msg.sticker;
                                 const isMediaOnly = hasMedia && !msg.content;
 
+                                // Timestamp Logic
+                                // Show if it's the start of the list (i === messages.length - 1)
+                                // OR if the hour differs from the previous message (msg[i+1])
+                                let showTimestamp = false;
+                                if (i === messages.length - 1) {
+                                    showTimestamp = true;
+                                } else if (messages[i + 1]) {
+                                    const currentDate = new Date(msg.timestamp_ms);
+                                    const prevDate = new Date(messages[i + 1].timestamp_ms);
+                                    // Compare hours (and different days completely)
+                                    // Simple check: if different hour OR different date
+                                    // checking absolute hour difference
+                                    // To be safe: check formatting string equality? Or getHours()
+                                    if (currentDate.getHours() !== prevDate.getHours() || currentDate.getDate() !== prevDate.getDate() || currentDate.getMonth() !== prevDate.getMonth()) {
+                                        showTimestamp = true;
+                                    }
+                                }
+
+                                const timestampStr = new Date(msg.timestamp_ms).toLocaleString('en-US', {
+                                    weekday: 'short',
+                                    month: 'short',
+                                    day: 'numeric',
+                                    year: 'numeric',
+                                    hour: 'numeric',
+                                    minute: '2-digit'
+                                });
+
                                 return (
-                                    <div
-                                        key={i}
-                                        className={`${styles.messageRow} ${isMyMsg ? styles.sentRow : styles.receivedRow} ${isBottom ? styles.messageRowGroupEnd : ''}`}
-                                    >
-                                        {/* Avatar Area (Left) */}
-                                        {!isMyMsg && (
-                                            <div className={styles.avatarArea}>
-                                                {showAvatar && (
-                                                    <div className={styles.profileImage} title={msg.sender_name}>
-                                                        {msg.sender_name.charAt(0).toUpperCase()}
+                                    <div key={i} style={{ width: '100%', display: 'flex', flexDirection: 'column' }}>
+                                        <div
+                                            className={`${styles.messageRow} ${isMyMsg ? styles.sentRow : styles.receivedRow} ${isBottom ? styles.messageRowGroupEnd : ''}`}
+                                        >
+                                            {/* Avatar Area (Left) */}
+                                            {!isMyMsg && (
+                                                <div className={`${styles.avatarArea} ${msg.reactions && msg.reactions.length > 0 ? styles.hasReactionsAvatar : ''}`}>
+                                                    {showAvatar && (
+                                                        <div className={styles.profileImage} title={msg.sender_name}>
+                                                            {msg.sender_name.charAt(0).toUpperCase()}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+
+                                            <div className={`${styles.messageContentStack} ${msg.reactions && msg.reactions.length > 0 ? styles.hasReactions : ''}`} style={{ alignItems: isMyMsg ? 'flex-end' : 'flex-start' }}>
+                                                {/* Name (Outside, Above) */}
+                                                {showName && <div className={styles.senderNameOutside}>{msg.sender_name}</div>}
+
+                                                {/* Bubble */}
+                                                <div
+                                                    className={`${styles.messageBubble} ${isMyMsg ? styles.sentBubble : styles.receivedBubble} ${isMediaOnly ? styles.mediaBubble : ''}`}
+                                                    title={formatTime(msg.timestamp_ms)}
+                                                    style={borderRadiusStyle}
+                                                >
+                                                    {msg.content && <div>{msg.content}</div>}
+
+                                                    {/* Photos */}
+                                                    {msg.photos && msg.photos.map((p: any, idx: number) => (
+                                                        <div key={`p-${idx}`} style={{ marginTop: msg.content ? 5 : 0 }}>
+                                                            <img
+                                                                src={`/api/media?path=${encodeURIComponent(p.uri)}`}
+                                                                alt="Photo"
+                                                                style={{ maxWidth: '100%', borderRadius: '12px', maxHeight: '300px', display: 'block' }}
+                                                                loading="lazy"
+                                                            />
+                                                        </div>
+                                                    ))}
+                                                    {/* Videos */}
+                                                    {msg.videos && msg.videos.map((v: any, idx: number) => (
+                                                        <div key={`v-${idx}`} style={{ marginTop: msg.content ? 5 : 0 }}>
+                                                            <video
+                                                                src={`/api/media?path=${encodeURIComponent(v.uri)}`}
+                                                                controls
+                                                                style={{ maxWidth: '100%', borderRadius: '12px', maxHeight: '300px', display: 'block' }}
+                                                            />
+                                                        </div>
+                                                    ))}
+                                                    {/* GIFs */}
+                                                    {msg.gifs && msg.gifs.map((g: any, idx: number) => (
+                                                        <div key={`g-${idx}`} style={{ marginTop: msg.content ? 5 : 0 }}>
+                                                            <img
+                                                                src={`/api/media?path=${encodeURIComponent(g.uri)}`}
+                                                                alt="GIF"
+                                                                style={{ maxWidth: '100%', borderRadius: '12px', maxHeight: '300px', display: 'block' }}
+                                                                loading="lazy"
+                                                            />
+                                                        </div>
+                                                    ))}
+
+                                                    {/* Stickers */}
+                                                    {msg.sticker && (
+                                                        <div style={{ marginTop: msg.content ? 5 : 0 }}>
+                                                            <img
+                                                                src={`/api/media?path=${encodeURIComponent(msg.sticker.uri)}`}
+                                                                alt="Sticker"
+                                                                style={{ maxWidth: '120px', borderRadius: '0', display: 'block' }}
+                                                                loading="lazy"
+                                                            />
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                {/* Reactions */}
+                                                {msg.reactions && msg.reactions.length > 0 && (
+                                                    <div className={styles.reactionContainer} style={{ justifyContent: 'flex-end' }}>
+                                                        {msg.reactions.map((r, idx) => (
+                                                            <div key={idx} className={styles.reactionBubble} title={r.actor}>
+                                                                {r.reaction}
+                                                            </div>
+                                                        ))}
                                                     </div>
                                                 )}
                                             </div>
-                                        )}
-
-                                        <div className={styles.messageContentStack} style={{ alignItems: isMyMsg ? 'flex-end' : 'flex-start' }}>
-                                            {/* Name (Outside, Above) */}
-                                            {showName && <div className={styles.senderNameOutside}>{msg.sender_name}</div>}
-
-                                            {/* Bubble */}
-                                            <div
-                                                className={`${styles.messageBubble} ${isMyMsg ? styles.sentBubble : styles.receivedBubble} ${isMediaOnly ? styles.mediaBubble : ''}`}
-                                                title={formatTime(msg.timestamp_ms)}
-                                                style={borderRadiusStyle}
-                                            >
-                                                {msg.content && <div>{msg.content}</div>}
-
-                                                {/* Photos */}
-                                                {msg.photos && msg.photos.map((p: any, idx: number) => (
-                                                    <div key={`p-${idx}`} style={{ marginTop: msg.content ? 5 : 0 }}>
-                                                        <img
-                                                            src={`/api/media?path=${encodeURIComponent(p.uri)}`}
-                                                            alt="Photo"
-                                                            style={{ maxWidth: '100%', borderRadius: '12px', maxHeight: '300px', display: 'block' }}
-                                                            loading="lazy"
-                                                        />
-                                                    </div>
-                                                ))}
-                                                {/* Videos */}
-                                                {msg.videos && msg.videos.map((v: any, idx: number) => (
-                                                    <div key={`v-${idx}`} style={{ marginTop: msg.content ? 5 : 0 }}>
-                                                        <video
-                                                            src={`/api/media?path=${encodeURIComponent(v.uri)}`}
-                                                            controls
-                                                            style={{ maxWidth: '100%', borderRadius: '12px', maxHeight: '300px', display: 'block' }}
-                                                        />
-                                                    </div>
-                                                ))}
-                                                {/* GIFs */}
-                                                {msg.gifs && msg.gifs.map((g: any, idx: number) => (
-                                                    <div key={`g-${idx}`} style={{ marginTop: msg.content ? 5 : 0 }}>
-                                                        <img
-                                                            src={`/api/media?path=${encodeURIComponent(g.uri)}`}
-                                                            alt="GIF"
-                                                            style={{ maxWidth: '100%', borderRadius: '12px', maxHeight: '300px', display: 'block' }}
-                                                            loading="lazy"
-                                                        />
-                                                    </div>
-                                                ))}
-                                            </div>
                                         </div>
+
+                                        {/* Timestamp (Rendered AFTER row, so displays ABOVE considering column-reverse) */}
+                                        {showTimestamp && (
+                                            <div className={styles.timestampLabel}>
+                                                {timestampStr}
+                                            </div>
+                                        )}
                                     </div>
                                 );
                             })}

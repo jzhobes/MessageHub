@@ -37,11 +37,42 @@ export async function GET(request: Request) {
     const fileContents = fs.readFileSync(msgPath, 'utf8');
     const data = JSON.parse(fileContents);
     
-    // A little fix for FB's weird encoding if needed.
-    // Ideally we fix this at display time or we implement a fix function.
-    // For now, raw.
+    // Facebook Export Encoding Fix
+    // They often export UTF-8 bytes decoded as Latin-1.
+    // We need to re-encode to latin1 then decode as utf-8.
+    const fixString = (str: string) => {
+      try {
+        let decoded = Buffer.from(str, 'latin1').toString('utf8');
+        // Fix for "Heavy Black Heart" (U+2764) -> Red Heart (U+2764 U+FE0F)
+        // Only if it's the exact character, or maybe globally?
+        // Let's do globally for FB messages.
+        decoded = decoded.replace(/\u2764(?!\uFE0F)/g, '\u2764\uFE0F');
+        return decoded;
+      } catch (e) {
+        return str;
+      }
+    };
+
+    const fixRecursive = (obj: any): any => {
+      if (typeof obj === 'string') {
+        return fixString(obj);
+      } else if (Array.isArray(obj)) {
+        return obj.map(fixRecursive);
+      } else if (obj && typeof obj === 'object') {
+        const newObj: any = {};
+        for (const key in obj) {
+          if (Object.prototype.hasOwnProperty.call(obj, key)) {
+            newObj[key] = fixRecursive(obj[key]);
+          }
+        }
+        return newObj;
+      }
+      return obj;
+    };
     
-    return NextResponse.json(data);
+    const fixedData = fixRecursive(data);
+    
+    return NextResponse.json(fixedData);
   } catch (error) {
     console.error("Error reading message file:", error);
     return NextResponse.json({ error: 'Failed to load messages' }, { status: 500 });
