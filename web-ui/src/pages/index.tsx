@@ -13,13 +13,22 @@ interface Thread {
   file_count: number;
 }
 
+interface MediaItem {
+  uri: string;
+}
+
+interface Reaction {
+  reaction: string;
+  actor: string;
+}
+
 interface Message {
   sender_name: string;
   timestamp_ms: number;
   content?: string;
-  photos?: any[];
-  videos?: any[];
-  gifs?: any[];
+  photos?: MediaItem[];
+  videos?: MediaItem[];
+  gifs?: MediaItem[];
   sticker?: {
     uri: string;
   };
@@ -27,13 +36,10 @@ interface Message {
     link?: string;
     share_text?: string;
   };
-  reactions?: Array<{
-    reaction: string;
-    actor: string;
-  }>;
+  reactions?: Reaction[];
 }
 
-function LinkPreview({ url, initialShareText, onImageFound, hasTextContent = true }: { url: string; initialShareText?: string; onImageFound?: () => void; hasTextContent?: boolean }) {
+function LinkPreview({ url, onImageFound, hasTextContent = true }: { url: string; onImageFound?: () => void; hasTextContent?: boolean }) {
   const [data, setData] = useState<{ image?: string; title?: string; description?: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [isVisible, setIsVisible] = useState(false);
@@ -148,7 +154,6 @@ const MessageItem = ({
   msg,
   isMyMsg,
   isBottom,
-  isTop,
   showAvatar,
   showName,
   borderRadiusStyle,
@@ -160,7 +165,6 @@ const MessageItem = ({
   msg: Message;
   isMyMsg: boolean;
   isBottom: boolean;
-  isTop: boolean;
   showAvatar: boolean;
   showName: boolean;
   borderRadiusStyle: React.CSSProperties;
@@ -169,8 +173,6 @@ const MessageItem = ({
   showTimestamp: boolean;
   timestampStr: string;
 }) => {
-  const [hasPreviewImage, setHasPreviewImage] = useState(false);
-
   // Helper to format text with links
   const formatMessageContent = (text: string) => {
     const urlRegex = /(https?:\/\/[^\s]+)/g;
@@ -239,7 +241,7 @@ const MessageItem = ({
 
             {/* Photos */}
             {msg.photos &&
-              msg.photos.map((p: any, idx: number) => (
+              msg.photos.map((p, idx) => (
                 <div
                   key={`p-${idx}`}
                   style={{
@@ -261,7 +263,7 @@ const MessageItem = ({
               ))}
             {/* Videos */}
             {msg.videos &&
-              msg.videos.map((v: any, idx: number) => (
+              msg.videos.map((v, idx) => (
                 <div
                   key={`v-${idx}`}
                   style={{
@@ -283,7 +285,7 @@ const MessageItem = ({
               ))}
             {/* GIFs */}
             {msg.gifs &&
-              msg.gifs.map((g: any, idx: number) => (
+              msg.gifs.map((g, idx) => (
                 <div
                   key={`g-${idx}`}
                   style={{
@@ -342,7 +344,7 @@ const MessageItem = ({
                     />
                   </div>
                 ) : (
-                  <LinkPreview url={msg.share.link} initialShareText={msg.share.share_text} onImageFound={() => setHasPreviewImage(true)} hasTextContent={hasTextContent} />
+                  <LinkPreview url={msg.share.link} hasTextContent={hasTextContent} />
                 )}
               </>
             )}
@@ -351,7 +353,7 @@ const MessageItem = ({
           {/* Reactions */}
           {msg.reactions && msg.reactions.length > 0 && (
             <div className={styles.reactionContainer} style={{ justifyContent: 'flex-end' }}>
-              {msg.reactions.map((r: any, idx: number) => (
+              {msg.reactions.map((r, idx) => (
                 <div key={idx} className={styles.reactionBubble} title={r.actor}>
                   {r.reaction}
                 </div>
@@ -384,7 +386,9 @@ export default function Home() {
 
   // Sync state with URL params on mount/update
   useEffect(() => {
-    if (!isRouterReady) return;
+    if (!isRouterReady) {
+      return;
+    }
 
     const platformParam = router.query.platform as string;
     const threadIdParam = router.query.threadId as string;
@@ -417,8 +421,10 @@ export default function Home() {
   }, [isRouterReady, router.query, activePlatform, activeThread, threads]);
 
   const updateUrl = (platform: string, threadId?: string) => {
-    const query: any = { platform };
-    if (threadId) query.threadId = threadId;
+    const query: Record<string, string> = { platform };
+    if (threadId) {
+      query.threadId = threadId;
+    }
 
     router.push(
       {
@@ -432,7 +438,9 @@ export default function Home() {
 
   // Load Threads
   useEffect(() => {
-    if (!isRouterReady) return;
+    if (!isRouterReady) {
+      return;
+    }
 
     async function loadThreads() {
       try {
@@ -468,24 +476,43 @@ export default function Home() {
       return;
     }
 
+    const loadMessages = async (threadId: string, pageNum: number, reset: boolean) => {
+      setLoading(true);
+      try {
+        const res = await fetch(`/api/messages?threadId=${encodeURIComponent(threadId)}&page=${pageNum}&platform=${encodeURIComponent(activePlatform)}`);
+        if (res.ok) {
+          const data = await res.json();
+          const newMsgs = data.messages || [];
+
+          if (reset) {
+            setMessages(newMsgs);
+          } else {
+            setMessages((prev) => [...prev, ...newMsgs]);
+          }
+          setHasMore(newMsgs.length > 0);
+        } else {
+          setHasMore(false);
+        }
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoading(false);
+      }
+    };
+
     setMessages([]);
     setPage(1);
     loadMessages(activeThread.id, 1, true); // Reset
-  }, [activeThread]);
+  }, [activeThread, activePlatform]);
 
-  const loadMessages = async (threadId: string, pageNum: number, reset: boolean) => {
+  const loadMessagesManual = async (threadId: string, pageNum: number) => {
     setLoading(true);
     try {
       const res = await fetch(`/api/messages?threadId=${encodeURIComponent(threadId)}&page=${pageNum}&platform=${encodeURIComponent(activePlatform)}`);
       if (res.ok) {
         const data = await res.json();
         const newMsgs = data.messages || [];
-
-        if (reset) {
-          setMessages(newMsgs);
-        } else {
-          setMessages((prev) => [...prev, ...newMsgs]);
-        }
+        setMessages((prev) => [...prev, ...newMsgs]);
         setHasMore(newMsgs.length > 0);
       } else {
         setHasMore(false);
@@ -503,7 +530,7 @@ export default function Home() {
     }
     const nextPage = page + 1;
     setPage(nextPage);
-    loadMessages(activeThread.id, nextPage, false);
+    loadMessagesManual(activeThread.id, nextPage);
   };
 
   const isMe = (name: string) => name === 'John Ho' || name === 'Virtual Me';
@@ -622,7 +649,6 @@ export default function Home() {
                     msg={msg}
                     isMyMsg={isMyMsg}
                     isBottom={isBottom}
-                    isTop={isTop}
                     showAvatar={showAvatar}
                     showName={showName}
                     borderRadiusStyle={borderRadiusStyle}

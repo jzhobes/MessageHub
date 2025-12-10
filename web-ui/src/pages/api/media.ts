@@ -6,7 +6,9 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
   const { path: filePathParam } = req.query;
   const filePath = Array.isArray(filePathParam) ? filePathParam[0] : filePathParam;
 
-  if (!filePath) return res.status(400).send('Missing path');
+  if (!filePath) {
+    return res.status(400).send('Missing path');
+  }
 
   const baseDir = path.resolve(process.cwd(), '../data');
   const absolutePath = path.join(baseDir, filePath);

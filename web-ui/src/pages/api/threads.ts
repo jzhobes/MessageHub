@@ -21,27 +21,31 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
     const fileContents = fs.readFileSync(indexPath, 'utf8');
     const data = JSON.parse(fileContents);
 
-    // Facebook Encoding Fix
+    // Type for arbitrary JSON values
+    type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+
+    // Facebook exports use Latin-1 encoding instead of UTF-8, causing emoji and special characters to be corrupted.
+    // This function recursively walks the entire JSON structure and fixes all string values.
     const fixString = (str: string) => {
       try {
         let decoded = Buffer.from(str, 'latin1').toString('utf8');
         decoded = decoded.replace(/\u2764(?!\uFE0F)/g, '\u2764\uFE0F');
         return decoded;
-      } catch (e) {
+      } catch {
         return str;
       }
     };
 
-    const fixRecursive = (obj: any): any => {
+    const fixEncodingRecursive = (obj: JsonValue): JsonValue => {
       if (typeof obj === 'string') {
         return fixString(obj);
       } else if (Array.isArray(obj)) {
-        return obj.map(fixRecursive);
+        return obj.map(fixEncodingRecursive);
       } else if (obj && typeof obj === 'object') {
-        const newObj: any = {};
+        const newObj: { [key: string]: JsonValue } = {};
         for (const key in obj) {
           if (Object.prototype.hasOwnProperty.call(obj, key)) {
-            newObj[key] = fixRecursive(obj[key]);
+            newObj[key] = fixEncodingRecursive(obj[key]);
           }
         }
         return newObj;
@@ -49,7 +53,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
       return obj;
     };
 
-    const fixedData = fixRecursive(data);
+    const fixedData = fixEncodingRecursive(data);
     return res.status(200).json(fixedData);
   } catch (error) {
     console.error('Error reading index:', error);

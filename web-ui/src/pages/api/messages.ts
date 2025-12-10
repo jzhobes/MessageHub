@@ -2,6 +2,37 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import fs from 'fs';
 import path from 'path';
 
+// Google Chat type definitions
+interface GoogleChatAttachedFile {
+  export_name: string;
+}
+
+interface GoogleChatReaction {
+  emoji: {
+    unicode: string;
+  };
+}
+
+interface GoogleChatCreator {
+  name: string;
+}
+
+interface GoogleChatMessage {
+  created_date: string;
+  text?: string;
+  creator?: GoogleChatCreator;
+  attached_files?: GoogleChatAttachedFile[];
+  reactions?: GoogleChatReaction[];
+}
+
+interface GoogleChatData {
+  messages: GoogleChatMessage[];
+}
+
+interface MediaItem {
+  uri: string;
+}
+
 export default function handler(req: NextApiRequest, res: NextApiResponse) {
   const { threadId, page = '1', platform } = req.query;
 
@@ -36,7 +67,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
         console.error(`[Google Chat] File not found: ${msgPath}`);
         return res.status(404).json({ error: 'Message file not found' });
       }
-      const data = JSON.parse(fs.readFileSync(msgPath, 'utf8'));
+      const data: GoogleChatData = JSON.parse(fs.readFileSync(msgPath, 'utf8'));
       const rawMessages = data.messages || [];
       console.log(`[Google Chat] Found ${rawMessages.length} raw messages`);
 
@@ -51,19 +82,19 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
             .replace(' UTC', '')
             .replace(/\u202f/g, ' ');
           return new Date(clean).getTime();
-        } catch (e) {
+        } catch {
           return 0;
         }
       };
 
-      const messages = rawMessages.map((m: any) => {
+      const messages = rawMessages.map((m: GoogleChatMessage) => {
         const ms = googleDateToMs(m.created_date);
 
         const attached = m.attached_files || [];
-        const photos: any[] = [];
-        const videos: any[] = [];
+        const photos: MediaItem[] = [];
+        const videos: MediaItem[] = [];
 
-        attached.forEach((f: any) => {
+        attached.forEach((f: GoogleChatAttachedFile) => {
           const ext = path.extname(f.export_name).toLowerCase();
           const uri = `Google Chat/Groups/${threadIdStr}/${f.export_name}`;
           if (['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(ext)) {
@@ -73,7 +104,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
           }
         });
 
-        const reactions = (m.reactions || []).map((r: any) => ({
+        const reactions = (m.reactions || []).map((r: GoogleChatReaction) => ({
           reaction: r.emoji.unicode,
           actor: 'Unknown',
         }));
@@ -108,27 +139,31 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
     const fileContents = fs.readFileSync(msgPath, 'utf8');
     const data = JSON.parse(fileContents);
 
-    // Facebook Export Encoding Fix
+    // Type for arbitrary JSON values
+    type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+
+    // Facebook exports use Latin-1 encoding instead of UTF-8, causing emoji and special characters to be corrupted.
+    // This function recursively walks the entire JSON structure and fixes all string values.
     const fixString = (str: string) => {
       try {
         let decoded = Buffer.from(str, 'latin1').toString('utf8');
         decoded = decoded.replace(/\u2764(?!\uFE0F)/g, '\u2764\uFE0F');
         return decoded;
-      } catch (e) {
+      } catch {
         return str;
       }
     };
 
-    const fixRecursive = (obj: any): any => {
+    const fixEncodingRecursive = (obj: JsonValue): JsonValue => {
       if (typeof obj === 'string') {
         return fixString(obj);
       } else if (Array.isArray(obj)) {
-        return obj.map(fixRecursive);
+        return obj.map(fixEncodingRecursive);
       } else if (obj && typeof obj === 'object') {
-        const newObj: any = {};
+        const newObj: { [key: string]: JsonValue } = {};
         for (const key in obj) {
           if (Object.prototype.hasOwnProperty.call(obj, key)) {
-            newObj[key] = fixRecursive(obj[key]);
+            newObj[key] = fixEncodingRecursive(obj[key]);
           }
         }
         return newObj;
@@ -136,7 +171,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
       return obj;
     };
 
-    const fixedData = fixRecursive(data);
+    const fixedData = fixEncodingRecursive(data);
 
     return res.status(200).json(fixedData);
   } catch (error) {

@@ -18,6 +18,7 @@ const eslintConfig = defineConfig([
   {
     rules: {
       curly: ['error', 'all'],
+      '@next/next/no-img-element': 'off', // Using custom API route for dynamic media serving
     },
   },
 ]);

@@ -2,10 +2,17 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import fs from 'fs';
 import path from 'path';
 
+interface PreviewMetadata {
+  url: string;
+  image: string | null;
+  title: string | null;
+  description: string | null;
+}
+
 const CACHE_FILE = path.join(process.cwd(), '../data/preview_cache.json');
 
 // Helper to read cache safely
-function readCache(): Record<string, any> {
+function readCache(): Record<string, PreviewMetadata> {
   try {
     if (fs.existsSync(CACHE_FILE)) {
       return JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8'));
@@ -17,7 +24,7 @@ function readCache(): Record<string, any> {
 }
 
 // Helper to write cache safely
-function writeCache(data: Record<string, any>) {
+function writeCache(data: Record<string, PreviewMetadata>) {
   try {
     fs.writeFileSync(CACHE_FILE, JSON.stringify(data, null, 2));
   } catch (e) {
