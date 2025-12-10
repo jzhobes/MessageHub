@@ -1,17 +1,23 @@
 #!/bin/bash
 
-# Loop through all zip files in the current directory
-for zip_file in *.zip; do
-    # Create a directory name based on the zip filename (removing the extension)
-    dir_name="${zip_file%.zip}_extracted"
-    
+# Default to current directory if no argument is provided
+TARGET_DIR="${1:-.}"
+
+echo "Extracting zip files in: $TARGET_DIR"
+
+# Loop through all zip files in the target directory
+for zip_file in "$TARGET_DIR"/*.zip; do
+    # Check if the file exists (in case no zip files matches)
+    if [ ! -e "$zip_file" ]; then
+        echo "No zip files found in $TARGET_DIR"
+        exit 0
+    fi
+
     echo "Processing $zip_file..."
     
-    # Create the directory
-    mkdir -p "$dir_name"
+    # Extract the zip file into the target directory
+    # -o: overwrite existing files without prompting (essential for merging without interruption)
+    unzip -o "$zip_file" -d "$TARGET_DIR"
     
-    # Extract the zip file into the new directory
-    unzip -q "$zip_file" -d "$dir_name"
-    
-    echo "Extracted $zip_file to $dir_name"
+    echo "Extracted $zip_file"
 done

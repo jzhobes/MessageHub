@@ -5,22 +5,13 @@ import path from 'path';
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const filePath = searchParams.get('path');
-  const platform = searchParams.get('platform');
 
   if (!filePath) return new NextResponse('Missing path', { status: 400 });
 
-  // Construct absolute path
-  let baseDir;
-  if (platform === 'Instagram') {
-    baseDir = path.resolve(process.cwd(), '../data');
-  } else {
-    // Default to FB
-    baseDir = path.resolve(process.cwd(), '../data');
-  }
+  const baseDir = path.resolve(process.cwd(), '../data');
 
   const absolutePath = path.join(baseDir, filePath);
 
-  // Allow reading only from baseDir
   if (!absolutePath.startsWith(baseDir)) {
     return new NextResponse('Access denied', { status: 403 });
   }
@@ -32,7 +23,6 @@ export async function GET(request: Request) {
   try {
     const fileBuffer = fs.readFileSync(absolutePath);
 
-    // Determine content type
     const ext = path.extname(absolutePath).toLowerCase();
     let contentType = 'application/octet-stream';
     if (ext === '.jpg' || ext === '.jpeg') {

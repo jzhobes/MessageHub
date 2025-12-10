@@ -218,9 +218,11 @@
   line-height: 1.4;
   position: relative;
   font-size: 0.95rem;
+  white-space: pre-wrap;
   overflow-wrap: break-word;
   word-wrap: break-word;
   word-break: break-word;
+  overflow: hidden;
 }
 
 .mediaBubble {
