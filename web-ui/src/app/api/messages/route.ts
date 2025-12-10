@@ -1,4 +1,3 @@
-
 import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
@@ -7,36 +6,48 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const threadId = searchParams.get('threadId');
   const page = searchParams.get('page') || '1';
+  const platform = searchParams.get('platform');
 
   if (!threadId) {
     return NextResponse.json({ error: 'Missing threadId' }, { status: 400 });
   }
 
+  let inboxPath;
+  if (platform === 'Facebook') {
+    inboxPath = path.join(process.cwd(), '../data/your_facebook_activity/messages/inbox');
+  } else if (platform === 'Instagram') {
+    inboxPath = path.join(process.cwd(), '../data/your_instagram_activity/messages/inbox');
+  } else {
+    // Fallback for backward compat or fail? Let's default to FB if undefined but fail if unknown?
+    // Actually better to fail if unknown platform.
+    // But for robustness let's see. If platform is missing, maybe default FB?
+    // Or just return 400.
+    if (!platform) {
+      inboxPath = path.join(process.cwd(), '../data/your_facebook_activity/messages/inbox');
+    } else {
+      return NextResponse.json({ error: 'Invalid platform' }, { status: 400 });
+    }
+  }
+
   // Construct path
-  // ../data/FB/your_facebook_activity/messages/inbox/{threadId}/message_{page}.json
-  const msgPath = path.join(
-    process.cwd(), 
-    '../data/FB/your_facebook_activity/messages/inbox', 
-    threadId, 
-    `message_${page}.json`
-  );
+  const msgPath = path.join(inboxPath, threadId, `message_${page}.json`);
 
   try {
     if (!fs.existsSync(msgPath)) {
-         return NextResponse.json({ error: 'Message file not found' }, { status: 404 }); 
+      return NextResponse.json({ error: 'Message file not found' }, { status: 404 });
     }
-    
+
     // We also need to fix encoding usually? text is usually utf-8.
     // FB data might have encoding issues (latin1 vs utf8)
     // The Python script earlier saw "Maggie Wong" correct.
     // But typically FB JSON export has escaped unicode like \u00f3.
-    // JSON.parse handles unicode escapes automatically. 
-    // BUT sometimes FB exports have mojibake if not handled right. 
+    // JSON.parse handles unicode escapes automatically.
+    // BUT sometimes FB exports have mojibake if not handled right.
     // We will just return the JSON as is for now.
-    
+
     const fileContents = fs.readFileSync(msgPath, 'utf8');
     const data = JSON.parse(fileContents);
-    
+
     // Facebook Export Encoding Fix
     // They often export UTF-8 bytes decoded as Latin-1.
     // We need to re-encode to latin1 then decode as utf-8.
@@ -69,12 +80,12 @@ export async function GET(request: Request) {
       }
       return obj;
     };
-    
+
     const fixedData = fixRecursive(data);
-    
+
     return NextResponse.json(fixedData);
   } catch (error) {
-    console.error("Error reading message file:", error);
+    console.error('Error reading message file:', error);
     return NextResponse.json({ error: 'Failed to load messages' }, { status: 500 });
   }
 }

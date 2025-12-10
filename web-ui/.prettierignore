@@ -1,0 +1,8 @@
+.next
+node_modules
+out
+build
+coverage
+public
+.DS_Store
+*.lock

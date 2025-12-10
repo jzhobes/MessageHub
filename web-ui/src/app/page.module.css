@@ -1,249 +1,251 @@
 .container {
-    display: flex;
-    height: 100vh;
-    width: 100vw;
-    background-color: #f5f5f7;
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+  background-color: #f5f5f7;
 }
 
 /* Col 1: Sidebar */
 .sidebar {
-    width: 260px;
-    background-color: #1c1c1e;
-    /* iOS Dark gray */
-    color: #aeaeb2;
-    display: flex;
-    flex-direction: column;
-    padding: 20px 10px;
-    flex-shrink: 0;
+  width: 260px;
+  background-color: #1c1c1e;
+  /* iOS Dark gray */
+  color: #aeaeb2;
+  display: flex;
+  flex-direction: column;
+  padding: 20px 10px;
+  flex-shrink: 0;
 }
 
 .sidebarTitle {
-    color: #fff;
-    font-size: 1.2rem;
-    font-weight: 600;
-    margin-bottom: 20px;
-    padding-left: 10px;
+  color: #fff;
+  font-size: 1.2rem;
+  font-weight: 600;
+  margin-bottom: 20px;
+  padding-left: 10px;
 }
 
 .navItem {
-    padding: 10px 15px;
-    margin-bottom: 5px;
-    border-radius: 10px;
-    cursor: pointer;
-    transition: all 0.2s;
-    font-weight: 500;
+  padding: 10px 15px;
+  margin-bottom: 5px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
 }
 
 .navItem:hover {
-    background-color: #2c2c2e;
-    color: #fff;
+  background-color: #2c2c2e;
+  color: #fff;
 }
 
 .navItemActive {
-    background-color: #0a84ff;
-    /* iOS Blue */
-    color: #fff;
+  background-color: #0a84ff;
+  /* iOS Blue */
+  color: #fff;
 }
 
 /* Col 2: Thread List */
 .threadList {
-    width: 350px;
-    background-color: rgba(255, 255, 255, 0.8);
-    backdrop-filter: blur(20px);
-    border-right: 1px solid #d1d1d6;
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-    flex-shrink: 0;
-    /* Prevent collapsing */
+  width: 350px;
+  background-color: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(20px);
+  border-right: 1px solid #d1d1d6;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  /* Prevent collapsing */
 }
 
 .threadListHeader {
-    padding: 20px;
-    font-size: 1.5rem;
-    font-weight: 700;
-    border-bottom: 1px solid #e5e5ea;
-    background: rgba(255, 255, 255, 0.9);
-    position: sticky;
-    top: 0;
-    z-index: 10;
+  padding: 20px;
+  font-size: 1.5rem;
+  font-weight: 700;
+  border-bottom: 1px solid #e5e5ea;
+  background: rgba(255, 255, 255, 0.9);
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
 .threadItem {
-    padding: 15px 20px;
-    border-bottom: 1px solid #e5e5ea;
-    cursor: pointer;
-    transition: background 0.2s;
+  padding: 15px 20px;
+  border-bottom: 1px solid #e5e5ea;
+  cursor: pointer;
+  transition: background 0.2s;
 }
 
 .threadItem:hover {
-    background-color: #f2f2f7;
+  background-color: #f2f2f7;
 }
 
 .threadItemActive {
-    background-color: #e4e4ed;
-    border-left: 4px solid #0a84ff;
+  background-color: #e4e4ed;
+  border-left: 4px solid #0a84ff;
 }
 
 .threadName {
-    font-weight: 600;
-    color: #000;
-    font-size: 1rem;
-    margin-bottom: 4px;
+  font-weight: 600;
+  color: #000;
+  font-size: 1rem;
+  margin-bottom: 4px;
 }
 
 .threadSnippet {
-    color: #8e8e93;
-    font-size: 0.85rem;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+  color: #8e8e93;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .threadTime {
-    font-size: 0.75rem;
-    color: #aeaeb2;
-    float: right;
+  font-size: 0.75rem;
+  color: #aeaeb2;
+  float: right;
 }
 
 /* Col 3: Messages */
 .chatArea {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    background-color: #fff;
-    height: 100%;
-    min-width: 0;
-    overflow: hidden;
-    /* Prevent spilling out */
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background-color: #fff;
+  height: 100%;
+  min-width: 0;
+  overflow: hidden;
+  /* Prevent spilling out */
 }
 
 .chatHeader {
-    height: 60px;
-    border-bottom: 1px solid #e5e5ea;
-    display: flex;
-    align-items: center;
-    padding: 0 20px;
-    font-weight: 600;
-    font-size: 1.1rem;
-    background-color: rgba(255, 255, 255, 0.95);
+  height: 60px;
+  border-bottom: 1px solid #e5e5ea;
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  font-weight: 600;
+  font-size: 1.1rem;
+  background-color: rgba(255, 255, 255, 0.95);
 }
 
 .messagesContainer {
-    flex: 1;
-    overflow-y: auto;
-    padding: 20px;
-    display: flex;
-    flex-direction: column-reverse;
-    /* Scroll from bottom */
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column-reverse;
+  /* Scroll from bottom */
 }
 
 /* Message Row System */
 .messageRow {
-    display: flex;
-    align-items: flex-end;
-    margin-bottom: 2px;
-    width: 100%;
+  display: flex;
+  align-items: flex-end;
+  margin-bottom: 2px;
+  width: 100%;
 }
 
 .messageRowGroupEnd {
-    margin-bottom: 12px;
-    /* Space after a block of messages */
+  margin-bottom: 12px;
+  /* Space after a block of messages */
 }
 
 .sentRow {
-    justify-content: flex-end;
+  justify-content: flex-end;
 }
 
 .receivedRow {
-    justify-content: flex-start;
+  justify-content: flex-start;
 }
 
 .avatarArea {
-    width: 32px;
-    height: 32px;
-    margin-right: 8px;
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+  width: 32px;
+  height: 32px;
+  margin-right: 8px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .profileImage {
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    background-color: #e1e1e1;
-    color: #666;
-    font-size: 12px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: bold;
-    overflow: hidden;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background-color: #e1e1e1;
+  color: #666;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  overflow: hidden;
 }
 
 .messageContentStack {
-    display: flex;
-    flex-direction: column;
-    max-width: 70%;
-    position: relative;
-    /* for absolute reactions */
-    z-index: 1;
-    /* Ensure stack handles z-indexing */
+  display: flex;
+  flex-direction: column;
+  max-width: 70%;
+  position: relative;
+  /* for absolute reactions */
+  z-index: 1;
+  /* Ensure stack handles z-indexing */
 }
 
 .hasReactions {
-    margin-bottom: 15px;
-    /* Add space ONLY if reactions are present to prevent overlap */
+  margin-bottom: 15px;
+  /* Add space ONLY if reactions are present to prevent overlap */
 }
 
 .hasReactionsAvatar {
-    margin-bottom: 15px;
+  margin-bottom: 15px;
 }
 
 .senderNameOutside {
-    font-size: 0.7rem;
-    color: #8e8e93;
-    margin-bottom: 2px;
-    margin-left: 4px;
-    /* Slight offset */
+  font-size: 0.7rem;
+  color: #8e8e93;
+  margin-bottom: 2px;
+  margin-left: 4px;
+  /* Slight offset */
 }
 
 .messageBubble {
-    padding: 10px 16px;
-    border-radius: 18px;
-    line-height: 1.4;
-    position: relative;
-    font-size: 0.95rem;
-    overflow-wrap: break-word;
-    word-wrap: break-word;
-    word-break: break-word;
+  padding: 10px 16px;
+  border-radius: 18px;
+  line-height: 1.4;
+  position: relative;
+  font-size: 0.95rem;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+  word-break: break-word;
 }
 
 .mediaBubble {
-    padding: 0 !important;
-    background-color: transparent !important;
-    overflow: hidden;
+  padding: 0 !important;
+  background-color: transparent !important;
+  overflow: hidden;
 }
 
 .mediaBubble img,
 .mediaBubble video {
-    display: block;
-    /* Remove inline gap */
-    border-radius: inherit;
+  display: block;
+  /* Remove inline gap */
+  border-radius: inherit;
 }
 
 .sentBubble {
-    background-color: #007aff;
-    color: white;
-    border-bottom-right-radius: 4px;
+  background-color: #007aff;
+  color: white;
+  border-bottom-right-radius: 4px;
 }
 
 .receivedBubble {
-    background-color: #e5e5ea;
-    color: black;
-    border-bottom-left-radius: 4px;
+  background-color: #e5e5ea;
+  color: black;
+  border-bottom-left-radius: 4px;
 }
 
 /* Adjust corners for consecutive messages if desired, 
@@ -251,56 +253,56 @@
    We will keep bubbles distinct for now. */
 
 .emptyState {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    height: 100%;
-    color: #8e8e93;
-    font-size: 1.2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #8e8e93;
+  font-size: 1.2rem;
 }
 
 .loadMore {
-    align-self: center;
-    margin: 10px;
-    padding: 8px 16px;
-    background: #f2f2f7;
-    border-radius: 20px;
-    cursor: pointer;
-    font-size: 0.9rem;
-    color: #007aff;
+  align-self: center;
+  margin: 10px;
+  padding: 8px 16px;
+  background: #f2f2f7;
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: #007aff;
 }
 
 .reactionContainer {
-    display: flex;
-    position: absolute;
-    bottom: -15px;
-    /* Hang off the bottom */
-    right: 0;
-    z-index: 999;
-    /* Ensure it draws ON TOP of the next message */
-    padding-right: 10px;
-    /* Offset from edge */
-    justify-content: flex-end;
+  display: flex;
+  position: absolute;
+  bottom: -15px;
+  /* Hang off the bottom */
+  right: 0;
+  z-index: 999;
+  /* Ensure it draws ON TOP of the next message */
+  padding-right: 10px;
+  /* Offset from edge */
+  justify-content: flex-end;
 }
 
 .reactionBubble {
-    background: white;
-    border: 1px solid #e5e5ea;
-    border-radius: 12px;
-    padding: 2px 6px;
-    font-size: 0.8rem;
-    margin-right: 4px;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-    display: flex;
-    align-items: center;
-    cursor: help;
+  background: white;
+  border: 1px solid #e5e5ea;
+  border-radius: 12px;
+  padding: 2px 6px;
+  font-size: 0.8rem;
+  margin-right: 4px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  display: flex;
+  align-items: center;
+  cursor: help;
 }
 
 .timestampLabel {
-    width: 100%;
-    text-align: center;
-    font-size: 0.75rem;
-    color: #8e8e93;
-    margin: 16px 0 8px 0;
-    font-weight: 500;
+  width: 100%;
+  text-align: center;
+  font-size: 0.75rem;
+  color: #8e8e93;
+  margin: 16px 0 8px 0;
+  font-weight: 500;
 }

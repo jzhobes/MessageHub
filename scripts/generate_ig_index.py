@@ -6,8 +6,8 @@ import datetime
 # Resolve paths relative to this script
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
-DATA_ROOT = os.path.join(PROJECT_ROOT, "data/your_facebook_activity/messages/inbox")
-OUTPUT_FILE = os.path.join(PROJECT_ROOT, "data/fb_threads_index.json")
+DATA_ROOT = os.path.join(PROJECT_ROOT, "data/your_instagram_activity/messages/inbox")
+OUTPUT_FILE = os.path.join(PROJECT_ROOT, "data/ig_threads_index.json")
 
 def get_thread_info(thread_dir):
     # Try reading message_1.json
@@ -31,8 +31,8 @@ def get_thread_info(thread_dir):
         
         # Determine sender name for snippet
         sender = last_msg.get('sender_name', '')
-        if sender == 'John Ho' or sender == 'Virtual Me':
-            name = "You"
+        if sender == 'John Ho' or sender == 'jzhobes' or sender == 'Virtual Me':
+             name = "You"
         else:
             name = sender.split(' ')[0]
 
@@ -77,7 +77,7 @@ def get_thread_info(thread_dir):
 
 def main():
     if not os.path.exists(DATA_ROOT):
-        print(f"Error: {DATA_ROOT} not found. Run this from virtual-me/data/FB directory.")
+        print(f"Error: {DATA_ROOT} not found. Run this from virtual-me/data/Instagram directory context.")
         return
 
     threads = []
