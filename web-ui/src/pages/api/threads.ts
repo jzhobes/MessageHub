@@ -1,29 +1,30 @@
-import { NextResponse } from 'next/server';
+import type { NextApiRequest, NextApiResponse } from 'next';
 import fs from 'fs';
 import path from 'path';
 
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const platform = searchParams.get('platform');
+export default function handler(req: NextApiRequest, res: NextApiResponse) {
+  const { platform } = req.query;
+  const platformStr = Array.isArray(platform) ? platform[0] : platform;
 
   let indexPath;
-  if (platform === 'Facebook') {
+  if (platformStr === 'Facebook') {
     indexPath = path.join(process.cwd(), '../data/fb_threads_index.json');
-  } else if (platform === 'Instagram') {
+  } else if (platformStr === 'Instagram') {
     indexPath = path.join(process.cwd(), '../data/ig_threads_index.json');
+  } else if (platformStr === 'Google Chat') {
+    indexPath = path.join(process.cwd(), '../data/google_chat_threads_index.json');
   } else {
-    return NextResponse.json([]);
+    return res.status(200).json([]);
   }
 
   try {
     const fileContents = fs.readFileSync(indexPath, 'utf8');
     const data = JSON.parse(fileContents);
 
-    // Facebook Encoding Fix (Same as in messages)
+    // Facebook Encoding Fix
     const fixString = (str: string) => {
       try {
         let decoded = Buffer.from(str, 'latin1').toString('utf8');
-        // Fix for "Heavy Black Heart" (U+2764) -> Red Heart (U+2764 U+FE0F)
         decoded = decoded.replace(/\u2764(?!\uFE0F)/g, '\u2764\uFE0F');
         return decoded;
       } catch (e) {
@@ -49,9 +50,9 @@ export async function GET(request: Request) {
     };
 
     const fixedData = fixRecursive(data);
-    return NextResponse.json(fixedData);
+    return res.status(200).json(fixedData);
   } catch (error) {
     console.error('Error reading index:', error);
-    return NextResponse.json({ error: 'Failed to load threads' }, { status: 500 });
+    return res.status(500).json({ error: 'Failed to load threads' });
   }
 }

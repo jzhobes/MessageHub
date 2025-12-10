@@ -1,10 +1,8 @@
-'use client';
-
-import { useState, useEffect, Suspense } from 'react';
-import { useSearchParams, useRouter, usePathname } from 'next/navigation';
+import { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/router';
 import { FaFacebook, FaInstagram, FaPhone } from 'react-icons/fa';
 import { SiGooglechat } from 'react-icons/si';
-import styles from './page.module.css';
+import styles from '../styles/index.module.css';
 
 interface Thread {
   id: string; // folder name
@@ -35,12 +33,37 @@ interface Message {
   }>;
 }
 
-// Link Preview Component
 function LinkPreview({ url, initialShareText, onImageFound, hasTextContent = true }: { url: string; initialShareText?: string; onImageFound?: () => void; hasTextContent?: boolean }) {
   const [data, setData] = useState<{ image?: string; title?: string; description?: string } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isVisible, setIsVisible] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsVisible(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: '100px' },
+    );
+
+    if (containerRef.current) {
+      observer.observe(containerRef.current);
+    }
+
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isVisible) {
+      return;
+    }
+
     let mounted = true;
     async function fetchPreview() {
       try {
@@ -66,11 +89,11 @@ function LinkPreview({ url, initialShareText, onImageFound, hasTextContent = tru
     return () => {
       mounted = false;
     };
-  }, [url, onImageFound]);
+  }, [url, onImageFound, isVisible]);
 
   if (loading) {
     return (
-      <div style={{ marginTop: '8px', padding: '10px', backgroundColor: 'rgba(0,0,0,0.05)', borderRadius: '8px', fontSize: '0.9rem' }}>
+      <div ref={containerRef} style={{ marginTop: '8px', padding: '10px', backgroundColor: 'rgba(0,0,0,0.05)', borderRadius: '8px', fontSize: '0.9rem', maxWidth: '300px' }}>
         <a href={url} target="_blank" rel="noopener noreferrer" style={{ color: '#007aff', textDecoration: 'none' }}>
           {url}
         </a>
@@ -89,7 +112,7 @@ function LinkPreview({ url, initialShareText, onImageFound, hasTextContent = tru
           marginRight: '-16px',
           marginBottom: '-10px',
           width: 'calc(100% + 32px)',
-          maxWidth: '332px',
+          maxWidth: '300px',
           display: 'flex',
           flexDirection: 'column',
         }}
@@ -112,9 +135,6 @@ function LinkPreview({ url, initialShareText, onImageFound, hasTextContent = tru
         {/* Text Content */}
         <div style={{ padding: '10px 12px', backgroundColor: '#f0f0f5', borderTop: '1px solid rgba(0,0,0,0.05)' }}>
           <div style={{ fontWeight: 600, fontSize: '0.9rem', marginBottom: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: '#000' }}>{data.title || url}</div>
-          {/* {data.description && (
-            <div style={{ fontSize: '0.8rem', color: '#666', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', lineHeight: '1.3' }}>{data.description}</div>
-          )} */}
         </div>
       </div>
     );
@@ -212,7 +232,7 @@ const MessageItem = ({
             title={formatTime(msg.timestamp_ms)}
             style={{
               ...borderRadiusStyle,
-              maxWidth: hasPreviewImage ? '300px' : undefined,
+              maxWidth: msg.share?.link ? '300px' : undefined,
             }}
           >
             {hasTextContent && msg.content && <div>{formatMessageContent(msg.content)}</div>}
@@ -344,33 +364,41 @@ const MessageItem = ({
   );
 };
 
-// Internal component that uses search params
-function ChatContent() {
-  const searchParams = useSearchParams();
+export default function Home() {
   const router = useRouter();
-  const pathname = usePathname();
 
-  const [activePlatform, setActivePlatform] = useState(searchParams.get('platform') || 'Facebook');
+  const [activePlatform, setActivePlatform] = useState('Facebook');
   const [threads, setThreads] = useState<Thread[]>([]);
   const [activeThread, setActiveThread] = useState<Thread | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
+  const [isRouterReady, setIsRouterReady] = useState(false);
+
+  useEffect(() => {
+    if (router.isReady) {
+      setIsRouterReady(true);
+    }
+  }, [router.isReady]);
 
   // Sync state with URL params on mount/update
   useEffect(() => {
-    const platformParam = searchParams.get('platform');
-    const threadIdParam = searchParams.get('threadId');
+    if (!isRouterReady) return;
+
+    const platformParam = router.query.platform as string;
+    const threadIdParam = router.query.threadId as string;
 
     // 1. Handle Platform Change
     if (platformParam && platformParam !== activePlatform) {
       setActivePlatform(platformParam);
-      return; // Platform change triggers its own effect
+      // We return here because activePlatform change will trigger the loadThreads effect
+      // and we want to defer thread selection until threads are loaded?
+      // Actually, if we change platform, we need to load threads first.
+      return;
     }
 
     // 2. Handle Thread Change (Same Platform)
-    // Ensure we have threads loaded before trying to set active thread
     if (threads.length > 0) {
       // Case A: URL has a thread ID
       if (threadIdParam) {
@@ -386,50 +414,51 @@ function ChatContent() {
         setActiveThread(null);
       }
     }
-  }, [searchParams, activePlatform, activeThread, threads]);
+  }, [isRouterReady, router.query, activePlatform, activeThread, threads]);
 
-  // Derived: update URL helper
   const updateUrl = (platform: string, threadId?: string) => {
-    const params = new URLSearchParams(searchParams.toString());
-    params.set('platform', platform);
-    if (threadId) {
-      params.set('threadId', threadId);
-    } else {
-      params.delete('threadId');
-    }
-    router.push(`${pathname}?${params.toString()}`, { scroll: false });
+    const query: any = { platform };
+    if (threadId) query.threadId = threadId;
+
+    router.push(
+      {
+        pathname: '/',
+        query: query,
+      },
+      undefined,
+      { scroll: false },
+    );
   };
 
-  // Load Threads & Handle initial thread selection
+  // Load Threads
   useEffect(() => {
+    if (!isRouterReady) return;
+
     async function loadThreads() {
-      if (activePlatform !== 'Facebook' && activePlatform !== 'Instagram') {
-        setThreads([]);
-        return;
-      }
       try {
-        const res = await fetch(`/api/threads?platform=${activePlatform}`);
+        const res = await fetch(`/api/threads?platform=${encodeURIComponent(activePlatform)}`);
         if (res.ok) {
           const data = await res.json();
           setThreads(data);
-          // Active thread is handled by the searchParams effect now
         }
       } catch (e) {
         console.error('Failed to load threads', e);
       }
     }
     loadThreads();
-  }, [activePlatform]);
+  }, [activePlatform, isRouterReady]);
 
-  // Handlers now ONLY update URL. State sync happens in useEffect.
   const handlePlatformSelect = (p: string) => {
     updateUrl(p, undefined);
+    setActivePlatform(p); // Optimistic update
   };
 
   const handleThreadSelect = (t: Thread) => {
-    // Optimistic update check? No, let's keep it strictly 'URL fetches state' to avoid race.
-    // But to make it feel responsive, could we clear messages?
-    // setMessages([]); // Optional: prevent seeing old messages while switching?
+    if (activeThread?.id === t.id) {
+      return;
+    }
+    setMessages([]);
+    setLoading(true);
     updateUrl(activePlatform, t.id);
   };
 
@@ -447,10 +476,9 @@ function ChatContent() {
   const loadMessages = async (threadId: string, pageNum: number, reset: boolean) => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/messages?threadId=${threadId}&page=${pageNum}&platform=${activePlatform}`);
+      const res = await fetch(`/api/messages?threadId=${encodeURIComponent(threadId)}&page=${pageNum}&platform=${encodeURIComponent(activePlatform)}`);
       if (res.ok) {
         const data = await res.json();
-        // data.messages is expected
         const newMsgs = data.messages || [];
 
         if (reset) {
@@ -458,11 +486,7 @@ function ChatContent() {
         } else {
           setMessages((prev) => [...prev, ...newMsgs]);
         }
-
-        // Check if we have more pages (naive check or rely on file_count)
-        // message_1.json exists. If current result < expected limit?
-        // Or just allow user to click "Load Older" until 404.
-        setHasMore(newMsgs.length > 0 && true /* We could accept header or try next page */);
+        setHasMore(newMsgs.length > 0);
       } else {
         setHasMore(false);
       }
@@ -482,22 +506,21 @@ function ChatContent() {
     loadMessages(activeThread.id, nextPage, false);
   };
 
-  // Identify "Me"
   const isMe = (name: string) => name === 'John Ho' || name === 'Virtual Me';
 
   const filteredMessages = messages.filter((msg) => {
     if (!msg.content) {
       return true;
     }
-
-    // Check for "Reacted [emoji] to your message" pattern (or "User reacted...")
-    // Filter out ALL reaction notifications
-    // Updated regex to be more permissive: contains "reacted", any emoji/text, then "to your message"
     if (/reacted\s+.+?\s+to your message/i.test(msg.content)) {
       return false;
     }
     return true;
   });
+
+  if (!isRouterReady) {
+    return <div>Loading...</div>;
+  }
 
   return (
     <div className={styles.container}>
@@ -539,41 +562,19 @@ function ChatContent() {
               <span style={{ fontSize: '0.8rem', color: '#999', marginLeft: '10px' }}>({activeThread.file_count} pages)</span>
             </div>
             <div className={styles.messagesContainer}>
-              {/*
-                 Note: The container uses flex-direction: column-reverse.
-                 So the FIRST item in the array (messages[0]) is rendered at the BOTTOM.
-
-                 "Bottom-left of their message" means the last message in a block *chronologically*.
-                 Since we render column-reverse:
-                 The item visually at the bottom of a block is the one with the smallest index in that block.
-
-                 Example Block:
-                 [Index 3] Sender A
-                 [Index 2] Sender A
-                 [Index 1] Sender A  <- This one gets the avatar (Visually last)
-                 [Index 0] Sender B
-               */}
-
+              {loading && messages.length === 0 && <div style={{ padding: '20px', textAlign: 'center', color: '#999' }}>Loading messages...</div>}
               {filteredMessages.map((msg, i) => {
                 const isMyMsg = isMe(msg.sender_name);
-
-                // Check neighbours for grouping
-                const prevMsg = filteredMessages[i + 1]; // Visually Above
-                const nextMsg = filteredMessages[i - 1]; // Visually Below
-
+                const prevMsg = filteredMessages[i + 1];
+                const nextMsg = filteredMessages[i - 1];
                 const isTop = !prevMsg || prevMsg.sender_name !== msg.sender_name;
                 const isBottom = !nextMsg || nextMsg.sender_name !== msg.sender_name;
 
-                // Determine Border Radius Class
                 let borderRadiusStyle = {};
                 const R = '18px';
-                const F = '4px'; // Flattened radius (not 0, usually small curve looks better, or 2px)
+                const F = '4px';
 
                 if (isMyMsg) {
-                  // Right Side
-                  // Top-Right corner: Rounded if isTop, Flat if not
-                  // Bottom-Right corner: Rounded if isBottom, Flat if not
-                  // Left corners always rounded (18px)
                   borderRadiusStyle = {
                     borderTopRightRadius: isTop ? R : F,
                     borderBottomRightRadius: isBottom ? R : F,
@@ -581,10 +582,6 @@ function ChatContent() {
                     borderBottomLeftRadius: R,
                   };
                 } else {
-                  // Left Side
-                  // Top-Left: Rounded if isTop
-                  // Bottom-Left: Rounded if isBottom
-                  // Right corners always rounded
                   borderRadiusStyle = {
                     borderTopLeftRadius: isTop ? R : F,
                     borderBottomLeftRadius: isBottom ? R : F,
@@ -593,33 +590,18 @@ function ChatContent() {
                   };
                 }
 
-                // Also need to handle margin.
-                // If not isBottom (i.e. there is a message below us same sender), margin-bottom should be small (2px).
-                // If isBottom, margin-bottom larger (12px) -> moved to wrapper logic
-
-                // Avatar Logic (Bottom of group)
                 const showAvatar = !isMyMsg && isBottom;
-
-                // Name Logic (Top of group)
                 const showName = !isMyMsg && isTop;
-
                 const isImageShare = msg.share && msg.share.link && /\.(gif|jpe?g|png|webp)($|\?)/i.test(msg.share.link);
                 const hasMedia = (msg.photos && msg.photos.length > 0) || (msg.videos && msg.videos.length > 0) || (msg.gifs && msg.gifs.length > 0) || msg.sticker || isImageShare;
                 const isMediaOnly = hasMedia && !msg.content;
 
-                // Timestamp Logic
-                // Show if it's the start of the list (i === messages.length - 1)
-                // OR if the hour differs from the previous message (msg[i+1])
                 let showTimestamp = false;
                 if (i === messages.length - 1) {
                   showTimestamp = true;
                 } else if (messages[i + 1]) {
                   const currentDate = new Date(msg.timestamp_ms);
                   const prevDate = new Date(messages[i + 1].timestamp_ms);
-                  // Compare hours (and different days completely)
-                  // Simple check: if different hour OR different date
-                  // checking absolute hour difference
-                  // To be safe: check formatting string equality? Or getHours()
                   if (currentDate.getHours() !== prevDate.getHours() || currentDate.getDate() !== prevDate.getDate() || currentDate.getMonth() !== prevDate.getMonth()) {
                     showTimestamp = true;
                   }
@@ -664,13 +646,5 @@ function ChatContent() {
         )}
       </div>
     </div>
-  );
-}
-
-export default function Home() {
-  return (
-    <Suspense fallback={<div>Loading Virtual Me...</div>}>
-      <ChatContent />
-    </Suspense>
   );
 }

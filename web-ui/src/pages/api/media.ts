@@ -1,23 +1,22 @@
-import { NextResponse } from 'next/server';
+import type { NextApiRequest, NextApiResponse } from 'next';
 import fs from 'fs';
 import path from 'path';
 
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const filePath = searchParams.get('path');
+export default function handler(req: NextApiRequest, res: NextApiResponse) {
+  const { path: filePathParam } = req.query;
+  const filePath = Array.isArray(filePathParam) ? filePathParam[0] : filePathParam;
 
-  if (!filePath) return new NextResponse('Missing path', { status: 400 });
+  if (!filePath) return res.status(400).send('Missing path');
 
   const baseDir = path.resolve(process.cwd(), '../data');
-
   const absolutePath = path.join(baseDir, filePath);
 
   if (!absolutePath.startsWith(baseDir)) {
-    return new NextResponse('Access denied', { status: 403 });
+    return res.status(403).send('Access denied');
   }
 
   if (!fs.existsSync(absolutePath)) {
-    return new NextResponse('File not found', { status: 404 });
+    return res.status(404).send('File not found');
   }
 
   try {
@@ -37,14 +36,11 @@ export async function GET(request: Request) {
       contentType = 'video/quicktime';
     }
 
-    return new NextResponse(fileBuffer, {
-      headers: {
-        'Content-Type': contentType,
-        'Cache-Control': 'public, max-age=31536000, immutable',
-      },
-    });
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    res.send(fileBuffer);
   } catch (error) {
     console.error('Error serving media:', error);
-    return new NextResponse('Internal Error', { status: 500 });
+    return res.status(500).send('Internal Error');
   }
 }
