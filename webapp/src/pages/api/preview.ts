@@ -70,6 +70,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           // Add helpful headers for scraping
           headers['Accept'] = 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8';
           headers['Accept-Language'] = 'en-US,en;q=0.5';
+          headers['Sec-Fetch-Dest'] = 'document';
+          headers['Sec-Fetch-Mode'] = 'navigate';
+          headers['Sec-Fetch-Site'] = 'same-origin';
+          headers['Sec-Fetch-User'] = '?1';
+          headers['Upgrade-Insecure-Requests'] = '1';
           console.log('[Preview] Using Authenticated Instagram Fetch');
         }
       } catch (e) {
