@@ -309,3 +309,19 @@
   margin: 16px 0 8px 0;
   font-weight: 500;
 }
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.spinner {
+  animation: spin 1s linear infinite;
+  font-size: 1.2rem;
+  color: #007aff;
+  display: block;
+}

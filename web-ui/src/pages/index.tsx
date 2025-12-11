@@ -1,480 +1,17 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
-import { FaFacebook, FaInstagram, FaPhone, FaQuoteLeft } from 'react-icons/fa';
+import { FaFacebook, FaInstagram, FaPhone, FaSpinner } from 'react-icons/fa';
 import { SiGooglechat } from 'react-icons/si';
 import styles from '../styles/index.module.css';
-
-interface Thread {
-  id: string; // folder name
-  title: string;
-  participants: string[];
-  timestamp: number;
-  snippet: string;
-  file_count: number;
-}
-
-interface MediaItem {
-  uri: string;
-}
-
-interface Reaction {
-  reaction: string;
-  actor: string;
-}
-
-interface QuotedMessageMetadata {
-  creator?: {
-    name: string;
-  };
-  text?: string;
-}
-
-interface Message {
-  id?: string;
-  is_sender?: boolean;
-  sender_name: string;
-  timestamp_ms: number;
-  content?: string;
-  photos?: MediaItem[];
-  videos?: MediaItem[];
-  gifs?: MediaItem[];
-  sticker?: {
-    uri: string;
-  };
-  share?: {
-    link?: string;
-    share_text?: string;
-  };
-  reactions?: Reaction[];
-  quoted_message_metadata?: QuotedMessageMetadata;
-}
-
-function LinkPreview({ url, onImageFound, style }: { url: string; onImageFound?: () => void; style?: React.CSSProperties }) {
-  const [data, setData] = useState<{ image?: string; title?: string; description?: string } | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [isVisible, setIsVisible] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          setIsVisible(true);
-          observer.disconnect();
-        }
-      },
-      { rootMargin: '50px' },
-    );
-
-    if (containerRef.current) {
-      observer.observe(containerRef.current);
-    }
-
-    return () => observer.disconnect();
-  }, []);
-
-  useEffect(() => {
-    let mounted = true;
-    if (isVisible) {
-      fetchPreview();
-    }
-    async function fetchPreview() {
-      try {
-        const res = await fetch(`/api/preview?url=${encodeURIComponent(url)}`);
-        if (res.ok) {
-          const json = await res.json();
-          if (mounted) {
-            setData(json);
-            if (json.image && onImageFound) {
-              onImageFound();
-            }
-          }
-        }
-      } catch (e) {
-        console.error('Preview fetch error', e);
-      } finally {
-        if (mounted) {
-          setLoading(false);
-        }
-      }
-    }
-    return () => {
-      mounted = false;
-    };
-  }, [isVisible, url, onImageFound]);
-
-  if (loading) {
-    return (
-      <div
-        ref={containerRef}
-        style={{
-          marginTop: '0',
-          padding: '10px',
-          backgroundColor: '#fff',
-          borderRadius: '12px',
-          border: '1px solid #e5e5ea',
-          fontSize: '0.9rem',
-          maxWidth: '300px',
-          ...style,
-        }}
-      >
-        <a href={url} target="_blank" rel="noopener noreferrer" style={{ color: '#007aff', textDecoration: 'none' }}>
-          {url}
-        </a>
-        <div style={{ fontSize: '0.8rem', color: '#999', marginTop: '4px' }}>Loading preview...</div>
-      </div>
-    );
-  }
-
-  // Render logic
-  const hasImage = data && data.image;
-  const hasTitle = data && (data.title || data.description);
-
-  if (!loading && !hasImage && !hasTitle) {
-    // Fallback: Just show the URL as a card so it's not invisible
-    return (
-      <div
-        style={{
-          margin: '0',
-          width: '100%',
-          maxWidth: '300px', // Strict width for fallback too
-          borderRadius: '12px',
-          border: '1px solid #e5e5ea',
-          backgroundColor: '#fff',
-          padding: '10px',
-          ...style,
-        }}
-      >
-        <a href={url} target="_blank" rel="noopener noreferrer" style={{ color: '#007aff', textDecoration: 'none', wordBreak: 'break-all', fontSize: '0.9rem' }}>
-          {url}
-        </a>
-      </div>
-    );
-  }
-
-  // If we have data (image OR title), render visually rich card
-  if (hasImage || hasTitle) {
-    return (
-      <div
-        style={{
-          margin: '0',
-          width: '100%',
-          maxWidth: '300px', // Strict width as requested
-          borderRadius: '12px',
-          overflow: 'hidden',
-          border: '1px solid #e5e5ea',
-          display: 'flex',
-          flexDirection: 'column',
-          ...style,
-        }}
-      >
-        {/* Preview Image */}
-        {hasImage && data?.image && (
-          <a href={url} target="_blank" rel="noopener noreferrer" style={{ display: 'block', width: '100%' }}>
-            <img
-              src={data.image}
-              alt="Preview"
-              style={{
-                width: '100%',
-                height: 'auto',
-                display: 'block',
-                borderBottom: hasTitle ? '1px solid #eee' : 'none',
-              }}
-            />
-          </a>
-        )}
-
-        {/* Text Content */}
-        {hasTitle && (
-          <div style={{ padding: '10px 12px', backgroundColor: '#f0f0f5' }}>
-            {data?.title && (
-              <div style={{ fontWeight: 600, fontSize: '0.9rem', marginBottom: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: '#000' }}>{data.title}</div>
-            )}
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  return null;
-}
-
-const MessageItem = ({
-  msg,
-  isMyMsg,
-  isBottom,
-  showAvatar,
-  showName,
-  borderRadiusStyle,
-  isMediaOnly,
-  activePlatform,
-  showTimestamp,
-  timestampStr,
-  previewBubbleStyle,
-  onQuoteClick,
-}: {
-  msg: Message;
-  isMyMsg: boolean;
-  isBottom: boolean;
-  showAvatar: boolean;
-  showName: boolean;
-  borderRadiusStyle: React.CSSProperties;
-  isMediaOnly: boolean;
-  activePlatform: string;
-  showTimestamp: boolean;
-  timestampStr: string;
-  previewBubbleStyle?: React.CSSProperties;
-  onQuoteClick?: () => void;
-}) => {
-  const hasTextContent = !!msg.content;
-  // Helper to format text with links
-  const formatMessageContent = (text: string) => {
-    const urlRegex = /(https?:\/\/[^\s]+)/g;
-    const parts = text.split(urlRegex);
-    return parts.map((part, index) => {
-      if (part.match(urlRegex)) {
-        return (
-          <a key={index} href={part} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'underline' }} onClick={(e) => e.stopPropagation()}>
-            {part}
-          </a>
-        );
-      }
-      return part;
-    });
-  };
-
-  const formatTime = (ms: number) => {
-    return new Date(ms).toLocaleString();
-  };
-
-  // Determine shared link (priority: explicit share > content link)
-  const urlRegex = /(https?:\/\/[^\s]+)/;
-  const contentLinkMatch = msg.content ? msg.content.match(urlRegex) : null;
-  const previewUrl = msg.share?.link || (contentLinkMatch ? contentLinkMatch[0] : null);
-
-  return (
-    <div
-      style={{
-        width: '100%',
-        display: 'flex',
-        flexDirection: 'column',
-      }}
-    >
-      {/* Timestamp (Rendered BEFORE row, so displays ABOVE considering column layout) */}
-      {showTimestamp && <div className={styles.timestampLabel}>{timestampStr}</div>}
-
-      <div className={`${styles.messageRow} ${isMyMsg ? styles.sentRow : styles.receivedRow} ${isBottom ? styles.messageRowGroupEnd : ''}`}>
-        {/* Avatar Area (Left) */}
-        {!isMyMsg && (
-          <div className={`${styles.avatarArea} ${msg.reactions && msg.reactions.length > 0 ? styles.hasReactionsAvatar : ''}`}>
-            {showAvatar && (
-              <div className={styles.profileImage} title={msg.sender_name}>
-                {msg.sender_name.charAt(0).toUpperCase()}
-              </div>
-            )}
-          </div>
-        )}
-
-        <div
-          className={`${styles.messageContentStack} ${msg.reactions && msg.reactions.length > 0 ? styles.hasReactions : ''}`}
-          style={{
-            alignItems: isMyMsg ? 'flex-end' : 'flex-start',
-          }}
-        >
-          {/* Name (Outside, Above) */}
-          {showName && <div className={styles.senderNameOutside}>{msg.sender_name}</div>}
-
-          {/* Bubble */}
-          {(hasTextContent || (msg.photos && msg.photos.length > 0) || (msg.videos && msg.videos.length > 0) || (msg.gifs && msg.gifs.length > 0) || msg.sticker || msg.quoted_message_metadata) && (
-            <div
-              className={`${styles.messageBubble} ${isMyMsg ? styles.sentBubble : styles.receivedBubble} ${isMediaOnly ? styles.mediaBubble : ''}`}
-              title={formatTime(msg.timestamp_ms)}
-              style={{
-                ...borderRadiusStyle,
-              }}
-            >
-              {msg.quoted_message_metadata && (
-                <div
-                  style={{
-                    marginBottom: '8px',
-                    marginLeft: '-10px',
-                    marginRight: '-10px',
-                    marginTop: '-5px',
-                    padding: '8px 12px',
-                    backgroundColor: 'rgba(0,0,0,0.2)',
-                    borderRadius: '12px 12px 2px 2px',
-                    fontSize: '0.9rem',
-                    color: 'inherit',
-                    textAlign: 'left',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '4px',
-                    cursor: 'pointer',
-                  }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (onQuoteClick) {
-                      onQuoteClick();
-                    }
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', fontWeight: 600, opacity: 0.8 }}>
-                    <FaQuoteLeft size={10} />
-                    <div
-                      style={{
-                        width: '16px',
-                        height: '16px',
-                        borderRadius: '50%',
-                        backgroundColor: '#888',
-                        color: '#fff',
-                        fontSize: '10px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      {(msg.quoted_message_metadata.creator?.name || '?').charAt(0).toUpperCase()}
-                    </div>
-                    <div>{msg.quoted_message_metadata.creator?.name || 'Unknown'}</div>
-                  </div>
-                  <div style={{ opacity: 0.95, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', lineHeight: '1.3' }}>
-                    {msg.quoted_message_metadata.text}
-                  </div>
-                </div>
-              )}
-              {hasTextContent && msg.content && <div>{formatMessageContent(msg.content)}</div>}
-
-              {/* Photos */}
-              {msg.photos &&
-                msg.photos.map((p, idx) => (
-                  <div
-                    key={`p-${idx}`}
-                    style={{
-                      marginTop: hasTextContent ? 5 : 0,
-                    }}
-                  >
-                    <img
-                      src={p.uri.startsWith('http') ? p.uri : `/api/media?path=${encodeURIComponent(p.uri)}&platform=${activePlatform}`}
-                      alt="Photo"
-                      style={{
-                        maxWidth: '100%',
-                        ...borderRadiusStyle,
-                        maxHeight: '300px',
-                        display: 'block',
-                      }}
-                      loading="lazy"
-                    />
-                  </div>
-                ))}
-              {/* Videos */}
-              {msg.videos &&
-                msg.videos.map((v, idx) => (
-                  <div
-                    key={`v-${idx}`}
-                    style={{
-                      marginTop: hasTextContent ? 5 : 0,
-                    }}
-                  >
-                    <video
-                      src={`/api/media?path=${encodeURIComponent(v.uri)}&platform=${activePlatform}`}
-                      controls
-                      preload="none"
-                      style={{
-                        maxWidth: '100%',
-                        ...borderRadiusStyle,
-                        maxHeight: '300px',
-                        display: 'block',
-                      }}
-                    />
-                  </div>
-                ))}
-              {/* GIFs */}
-              {msg.gifs &&
-                msg.gifs.map((g, idx) => (
-                  <div
-                    key={`g-${idx}`}
-                    style={{
-                      marginTop: hasTextContent ? 5 : 0,
-                    }}
-                  >
-                    <img
-                      src={`/api/media?path=${encodeURIComponent(g.uri)}&platform=${activePlatform}`}
-                      alt="GIF"
-                      style={{
-                        maxWidth: '100%',
-                        borderRadius: '12px',
-                        maxHeight: '300px',
-                        display: 'block',
-                      }}
-                      loading="lazy"
-                    />
-                  </div>
-                ))}
-
-              {/* Stickers */}
-              {msg.sticker && (
-                <div
-                  style={{
-                    marginTop: hasTextContent ? 5 : 0,
-                  }}
-                >
-                  <img
-                    src={`/api/media?path=${encodeURIComponent(msg.sticker.uri)}&platform=${activePlatform}`}
-                    alt="Sticker"
-                    style={{
-                      maxWidth: '120px',
-                      borderRadius: '0',
-                      display: 'block',
-                    }}
-                    loading="lazy"
-                  />
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Shared Content / Link Preview Bubble */}
-          {previewUrl && (
-            <div style={{ marginTop: '4px', maxWidth: '300px' }}>
-              {/\.(gif|jpe?g|png|webp)($|\?)/i.test(previewUrl) ? (
-                <img
-                  src={previewUrl}
-                  alt="Shared Image"
-                  style={{
-                    maxWidth: '100%',
-                    borderRadius: '12px',
-                    maxHeight: '300px',
-                    display: 'block',
-                    ...previewBubbleStyle,
-                  }}
-                  loading="lazy"
-                />
-              ) : (
-                <LinkPreview url={previewUrl} style={previewBubbleStyle} />
-              )}
-            </div>
-          )}
-
-          {/* Reactions */}
-          {msg.reactions && msg.reactions.length > 0 && (
-            <div className={styles.reactionContainer} style={{ justifyContent: 'flex-end' }}>
-              {msg.reactions.map((r, idx) => (
-                <div key={idx} className={styles.reactionBubble} title={r.actor}>
-                  {r.reaction}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-};
+import MessageItem from '../components/MessageItem';
+import { Message, QuotedMessageMetadata, Thread } from '../types';
 
 export default function Home() {
   const router = useRouter();
 
-  const [activePlatform, setActivePlatform] = useState('Facebook');
+  const [activePlatform, setActivePlatform] = useState<string>('Facebook');
+  const [searchQuery, setSearchQuery] = useState('');
+  const loadMoreRef = useRef<HTMLDivElement>(null);
   const [threads, setThreads] = useState<Thread[]>([]);
   const [activeThread, setActiveThread] = useState<Thread | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -582,6 +119,7 @@ export default function Home() {
     }
     setMessages([]);
     setLoading(true);
+    setHasMore(false);
     updateUrl(activePlatform, t.id);
   };
 
@@ -648,12 +186,35 @@ export default function Home() {
     loadMessagesManual(activeThread.id, nextPage);
   };
 
+  // Autoload effect
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loading) {
+          handleLoadMore();
+        }
+      },
+      { threshold: 0.1 },
+    );
+
+    if (loadMoreRef.current) {
+      observer.observe(loadMoreRef.current);
+    }
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [hasMore, loading]);
+
   const filteredMessages = messages.filter((msg) => {
     if (!msg.content) {
-      return true;
+      return !searchQuery; // Hide media-only if searching text
     }
     if (/reacted\s+.+?\s+to your message/i.test(msg.content)) {
       return false;
+    }
+    if (searchQuery) {
+      return msg.content.toLowerCase().includes(searchQuery.toLowerCase()) || msg.sender_name.toLowerCase().includes(searchQuery.toLowerCase());
     }
     return true;
   });
@@ -740,12 +301,29 @@ export default function Home() {
       <div className={styles.chatArea}>
         {activeThread ? (
           <>
-            <div className={styles.chatHeader}>
-              {activeThread.title}
-              <span style={{ fontSize: '0.8rem', color: '#999', marginLeft: '10px' }}>({activeThread.file_count} pages)</span>
+            <div className={styles.chatHeader} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                {activeThread.title}
+                <span style={{ fontSize: '0.8rem', color: '#999', marginLeft: '10px' }}>({activeThread.file_count} pages)</span>
+              </div>
+              <input
+                type="text"
+                placeholder="Search active chat..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: '16px',
+                  border: '1px solid #ccc',
+                  fontSize: '0.9rem',
+                  outline: 'none',
+                  backgroundColor: 'rgba(255,255,255,0.9)',
+                  color: '#000',
+                  width: '200px',
+                }}
+              />
             </div>
             <div className={styles.messagesContainer}>
-              {loading && messages.length === 0 && <div style={{ padding: '20px', textAlign: 'center', color: '#999' }}>Loading messages...</div>}
               {filteredMessages.map((msg, i) => {
                 // Determine if my message
                 const isMyMsg = !!msg.is_sender;
@@ -834,10 +412,14 @@ export default function Home() {
                   </div>
                 );
               })}
-
-              {hasMore && (
-                <div className={styles.loadMore} onClick={handleLoadMore}>
-                  {loading ? 'Loading...' : 'Load Older Messages'}
+              {(hasMore || loading) && (
+                <div ref={loadMoreRef} style={{ display: 'flex', justifyContent: 'center', padding: '10px', alignItems: 'center', gap: '8px', color: '#999' }}>
+                  {loading && (
+                    <>
+                      <FaSpinner className={styles.spinner} size={24} />
+                      <span>Loading messages...</span>
+                    </>
+                  )}
                 </div>
               )}
             </div>
