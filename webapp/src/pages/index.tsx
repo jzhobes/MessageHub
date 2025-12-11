@@ -11,14 +11,16 @@ export default function Home() {
 
   const [activePlatform, setActivePlatform] = useState<string>('Facebook');
   const [searchQuery, setSearchQuery] = useState('');
-  const loadMoreRef = useRef<HTMLDivElement>(null);
   const [threads, setThreads] = useState<Thread[]>([]);
   const [activeThread, setActiveThread] = useState<Thread | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingThreads, setLoadingThreads] = useState(false);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [isRouterReady, setIsRouterReady] = useState(false);
+
+  const loadMoreRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (router.isReady) {
@@ -38,9 +40,6 @@ export default function Home() {
     // 1. Handle Platform Change
     if (platformParam && platformParam !== activePlatform) {
       setActivePlatform(platformParam);
-      // We return here because activePlatform change will trigger the loadThreads effect
-      // and we want to defer thread selection until threads are loaded?
-      // Actually, if we change platform, we need to load threads first.
       return;
     }
 
@@ -89,6 +88,7 @@ export default function Home() {
     async function loadThreads() {
       // Clear threads immediately to avoid showing stale platform data
       setThreads([]);
+      setLoadingThreads(true);
       try {
         const res = await fetch(`/api/threads?platform=${encodeURIComponent(activePlatform)}`);
         if (res.ok) {
@@ -99,6 +99,10 @@ export default function Home() {
         }
       } catch (e) {
         console.error('Failed to load threads', e);
+      } finally {
+        if (!ignore) {
+          setLoadingThreads(false);
+        }
       }
     }
     loadThreads();
@@ -225,10 +229,7 @@ export default function Home() {
       return;
     }
 
-    // Use filteredMessages since that's what's visible? Or messages (all loaded)?
-    // Use messages to catch even if filtered out? But filter logic is for search.
-    // If not visible, we can't scroll to it.
-    // Let's search 'filteredMessages' (rendered list) first.
+    // TODO: Search 'messages' (all loaded) if not found in 'filteredMessages'
 
     // Heuristic: Match content AND sender
     const match = filteredMessages.find((m) => {
@@ -244,13 +245,6 @@ export default function Home() {
       const el = document.getElementById(elId);
       if (el) {
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        // Flash effect
-        el.style.transition = 'background-color 0.5s';
-        const originalBg = el.style.backgroundColor;
-        el.style.backgroundColor = 'rgba(255, 215, 0, 0.2)';
-        setTimeout(() => {
-          el.style.backgroundColor = originalBg;
-        }, 1000);
       } else {
         console.error('Element not found in DOM');
       }
@@ -267,7 +261,7 @@ export default function Home() {
     <div className={styles.container}>
       {/* Column 1: Platforms */}
       <div className={styles.sidebar}>
-        <div className={styles.sidebarTitle}>MessageHub</div>
+        <div className={styles.sidebarTitle}>💬 MessageHub</div>
         {[
           { name: 'Facebook', icon: <FaFacebook size={20} color="#1877F2" /> },
           { name: 'Instagram', icon: <FaInstagram size={18} color="#E4405F" /> },
@@ -291,7 +285,13 @@ export default function Home() {
             <div className={styles.threadSnippet}>{thread.snippet || '(Media)'}</div>
           </div>
         ))}
-        {threads.length === 0 && <div style={{ padding: 20, color: '#999' }}>No threads found</div>}
+        {loadingThreads ? (
+          <div style={{ padding: 20, textAlign: 'center', color: '#999' }}>
+            <FaSpinner className={styles.spinner} size={24} />
+          </div>
+        ) : (
+          threads.length === 0 && <div style={{ padding: 20, color: '#999' }}>No threads found</div>
+        )}
       </div>
 
       {/* Column 3: Chat */}
@@ -301,7 +301,9 @@ export default function Home() {
             <div className={styles.chatHeader} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 {activeThread.title}
-                <span style={{ fontSize: '0.8rem', color: '#999', marginLeft: '10px' }}>({activeThread.file_count} pages)</span>
+                <span style={{ fontSize: '0.8rem', color: '#666', marginLeft: '10px' }}>
+                  (Page {page} of {activeThread.file_count || 1})
+                </span>
               </div>
               <input
                 type="text"

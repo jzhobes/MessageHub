@@ -119,9 +119,7 @@ export default function MessageItem({
                   }}
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (onQuoteClick) {
-                      onQuoteClick();
-                    }
+                    onQuoteClick?.();
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', fontWeight: 600, opacity: 0.8 }}>

@@ -19,6 +19,7 @@ export default function App({ Component, pageProps }: AppProps) {
       <Head>
         <title>MessageHub</title>
         <meta name="description" content="Personal message archive viewer for Facebook, Instagram, Google Chat, and Google Voice" />
+        <link rel="icon" href="/favicon.png" />
       </Head>
       <div className={`${geistSans.variable} ${geistMono.variable}`}>
         <Component {...pageProps} />

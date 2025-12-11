@@ -100,17 +100,36 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
   const platformStr = Array.isArray(platform) ? platform[0] : platform;
 
   // Identify "Me"
-  const profilePath = path.join(process.cwd(), '../data/Facebook/profile_information/profile_information.json');
-  let myName = '';
-  try {
-    if (fs.existsSync(profilePath)) {
-      const profileData = JSON.parse(fs.readFileSync(profilePath, 'utf8'));
-      myName = profileData?.profile_v2?.name?.full_name || myName;
+  const myNamesSet = new Set<string>();
+  const profileSources = [
+    {
+      path: path.join(process.cwd(), '../data/Facebook/profile_information/profile_information.json'),
+      extract: (data: any) => data?.profile_v2?.name?.full_name,
+    },
+    {
+      path: path.join(process.cwd(), '../data/Instagram/personal_information/personal_information.json'),
+      extract: (data: any) => data?.profile_user?.[0]?.string_map_data?.Name?.value,
+    },
+    {
+      path: path.join(process.cwd(), '../data/Google Chat/Users/User 100858821545879890647/user_info.json'),
+      extract: (data: any) => data?.user?.name,
+    },
+  ];
+
+  for (const source of profileSources) {
+    try {
+      if (fs.existsSync(source.path)) {
+        const fileData = JSON.parse(fs.readFileSync(source.path, 'utf8'));
+        const foundName = source.extract(fileData);
+        if (foundName) {
+          myNamesSet.add(foundName);
+        }
+      }
+    } catch (e) {
+      console.error(`Failed to load profile info from ${source.path}`, e);
     }
-  } catch (e) {
-    console.error('Failed to load profile info', e);
   }
-  const myNames = [myName];
+  const myNames = Array.from(myNamesSet);
 
   // Google Chat Handling
   if (platformStr === 'Google Chat') {
@@ -162,7 +181,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
         if (m.annotations) {
           m.annotations.forEach((a) => {
             if (a.url_metadata) {
-              const url = a.url_metadata.url?.private_do_not_access_or_else_safe_url_wrapped_value || a.url_metadata.image_url;
+              const url = a.url_metadata.image_url;
               if (url) {
                 photos.push({ uri: url });
               }
