@@ -93,7 +93,7 @@ def get_thread_info(thread_dir):
 
 def main():
     if not os.path.exists(DATA_ROOT):
-        print(f"Error: {DATA_ROOT} not found. Run this from virtual-me/data/Instagram directory context.")
+        print(f"Error: {DATA_ROOT} not found.")
         return
 
     threads = []

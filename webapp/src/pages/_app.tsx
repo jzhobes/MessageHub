@@ -17,7 +17,7 @@ export default function App({ Component, pageProps }: AppProps) {
   return (
     <>
       <Head>
-        <title>Virtual Me - Message Archive</title>
+        <title>MessageHub</title>
         <meta name="description" content="Personal message archive viewer for Facebook, Instagram, Google Chat, and Google Voice" />
       </Head>
       <div className={`${geistSans.variable} ${geistMono.variable}`}>

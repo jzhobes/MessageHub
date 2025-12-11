@@ -101,7 +101,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
 
   // Identify "Me"
   const profilePath = path.join(process.cwd(), '../data/Facebook/profile_information/profile_information.json');
-  let myName = 'John Ho';
+  let myName = '';
   try {
     if (fs.existsSync(profilePath)) {
       const profileData = JSON.parse(fs.readFileSync(profilePath, 'utf8'));
@@ -110,7 +110,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
   } catch (e) {
     console.error('Failed to load profile info', e);
   }
-  const myNames = [myName, 'Virtual Me'];
+  const myNames = [myName];
 
   // Google Chat Handling
   if (platformStr === 'Google Chat') {

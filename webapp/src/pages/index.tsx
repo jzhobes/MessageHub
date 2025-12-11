@@ -252,13 +252,10 @@ export default function Home() {
           el.style.backgroundColor = originalBg;
         }, 1000);
       } else {
-        // Maybe it's in the list but not rendered (virtualization)?
-        // But we don't use virtualization yet.
-        console.log('Element not found in DOM');
+        console.error('Element not found in DOM');
       }
     } else {
-      console.log('Message not found in loaded history');
-      // Could trigger loadMore here automatically? Too complex for now.
+      console.error('Message not found in loaded history');
     }
   };
 
@@ -270,7 +267,7 @@ export default function Home() {
     <div className={styles.container}>
       {/* Column 1: Platforms */}
       <div className={styles.sidebar}>
-        <div className={styles.sidebarTitle}>Virtual Me</div>
+        <div className={styles.sidebarTitle}>MessageHub</div>
         {[
           { name: 'Facebook', icon: <FaFacebook size={20} color="#1877F2" /> },
           { name: 'Instagram', icon: <FaInstagram size={18} color="#E4405F" /> },
