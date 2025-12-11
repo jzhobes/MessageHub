@@ -88,6 +88,30 @@ interface Message {
   };
 }
 
+interface FacebookProfile {
+  profile_v2?: {
+    name?: {
+      full_name?: string;
+    };
+  };
+}
+
+interface InstagramProfile {
+  profile_user?: {
+    string_map_data?: {
+      Name?: {
+        value?: string;
+      };
+    };
+  }[];
+}
+
+interface GoogleChatUserInfo {
+  user?: {
+    name?: string;
+  };
+}
+
 export default function handler(req: NextApiRequest, res: NextApiResponse) {
   const { threadId, page = '1', platform } = req.query;
 
@@ -104,15 +128,15 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
   const profileSources = [
     {
       path: path.join(process.cwd(), '../data/Facebook/profile_information/profile_information.json'),
-      extract: (data: any) => data?.profile_v2?.name?.full_name,
+      extract: (data: FacebookProfile) => data?.profile_v2?.name?.full_name,
     },
     {
       path: path.join(process.cwd(), '../data/Instagram/personal_information/personal_information.json'),
-      extract: (data: any) => data?.profile_user?.[0]?.string_map_data?.Name?.value,
+      extract: (data: InstagramProfile) => data?.profile_user?.[0]?.string_map_data?.Name?.value,
     },
     {
       path: path.join(process.cwd(), '../data/Google Chat/Users/User 100858821545879890647/user_info.json'),
-      extract: (data: any) => data?.user?.name,
+      extract: (data: GoogleChatUserInfo) => data?.user?.name,
     },
   ];
 
