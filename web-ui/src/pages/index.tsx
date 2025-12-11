@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
-import { FaFacebook, FaInstagram, FaPhone } from 'react-icons/fa';
+import { FaFacebook, FaInstagram, FaPhone, FaQuoteLeft } from 'react-icons/fa';
 import { SiGooglechat } from 'react-icons/si';
 import styles from '../styles/index.module.css';
 
@@ -22,7 +22,16 @@ interface Reaction {
   actor: string;
 }
 
+interface QuotedMessageMetadata {
+  creator?: {
+    name: string;
+  };
+  text?: string;
+}
+
 interface Message {
+  id?: string;
+  is_sender?: boolean;
   sender_name: string;
   timestamp_ms: number;
   content?: string;
@@ -37,9 +46,10 @@ interface Message {
     share_text?: string;
   };
   reactions?: Reaction[];
+  quoted_message_metadata?: QuotedMessageMetadata;
 }
 
-function LinkPreview({ url, onImageFound, hasTextContent = true }: { url: string; onImageFound?: () => void; hasTextContent?: boolean }) {
+function LinkPreview({ url, onImageFound, style }: { url: string; onImageFound?: () => void; style?: React.CSSProperties }) {
   const [data, setData] = useState<{ image?: string; title?: string; description?: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [isVisible, setIsVisible] = useState(false);
@@ -53,24 +63,21 @@ function LinkPreview({ url, onImageFound, hasTextContent = true }: { url: string
           observer.disconnect();
         }
       },
-      { rootMargin: '100px' },
+      { rootMargin: '50px' },
     );
 
     if (containerRef.current) {
       observer.observe(containerRef.current);
     }
 
-    return () => {
-      observer.disconnect();
-    };
+    return () => observer.disconnect();
   }, []);
 
   useEffect(() => {
-    if (!isVisible) {
-      return;
-    }
-
     let mounted = true;
+    if (isVisible) {
+      fetchPreview();
+    }
     async function fetchPreview() {
       try {
         const res = await fetch(`/api/preview?url=${encodeURIComponent(url)}`);
@@ -91,15 +98,26 @@ function LinkPreview({ url, onImageFound, hasTextContent = true }: { url: string
         }
       }
     }
-    fetchPreview();
     return () => {
       mounted = false;
     };
-  }, [url, onImageFound, isVisible]);
+  }, [isVisible, url, onImageFound]);
 
   if (loading) {
     return (
-      <div ref={containerRef} style={{ marginTop: '8px', padding: '10px', backgroundColor: 'rgba(0,0,0,0.05)', borderRadius: '8px', fontSize: '0.9rem', maxWidth: '300px' }}>
+      <div
+        ref={containerRef}
+        style={{
+          marginTop: '0',
+          padding: '10px',
+          backgroundColor: '#fff',
+          borderRadius: '12px',
+          border: '1px solid #e5e5ea',
+          fontSize: '0.9rem',
+          maxWidth: '300px',
+          ...style,
+        }}
+      >
         <a href={url} target="_blank" rel="noopener noreferrer" style={{ color: '#007aff', textDecoration: 'none' }}>
           {url}
         </a>
@@ -108,45 +126,76 @@ function LinkPreview({ url, onImageFound, hasTextContent = true }: { url: string
     );
   }
 
-  // If we have an image, render visually rich card
-  if (data && data.image) {
+  // Render logic
+  const hasImage = data && data.image;
+  const hasTitle = data && (data.title || data.description);
+
+  if (!loading && !hasImage && !hasTitle) {
+    // Fallback: Just show the URL as a card so it's not invisible
     return (
       <div
         style={{
-          marginTop: hasTextContent ? '12px' : '-10px',
-          marginLeft: '-16px',
-          marginRight: '-16px',
-          marginBottom: '-10px',
-          width: 'calc(100% + 32px)',
-          maxWidth: '300px',
-          display: 'flex',
-          flexDirection: 'column',
+          margin: '0',
+          width: '100%',
+          maxWidth: '300px', // Strict width for fallback too
+          borderRadius: '12px',
+          border: '1px solid #e5e5ea',
+          backgroundColor: '#fff',
+          padding: '10px',
+          ...style,
         }}
       >
-        {/* Preview Image */}
-        <a href={url} target="_blank" rel="noopener noreferrer" style={{ display: 'block', width: '100%' }}>
-          <img
-            src={data.image}
-            alt="Preview"
-            style={{
-              width: '100%',
-              height: 'auto',
-              display: 'block',
-              // If we have dimensions, we could use aspect-ratio, but strict max-height + cover is bad for vertical images.
-              // Let's remove max-height to let it fit naturally, or ensure it's contained if we force a height.
-              // For now, removing constraints to let image define its size usually looks best in modern chats.
-            }}
-          />
+        <a href={url} target="_blank" rel="noopener noreferrer" style={{ color: '#007aff', textDecoration: 'none', wordBreak: 'break-all', fontSize: '0.9rem' }}>
+          {url}
         </a>
-        {/* Text Content */}
-        <div style={{ padding: '10px 12px', backgroundColor: '#f0f0f5', borderTop: '1px solid rgba(0,0,0,0.05)' }}>
-          <div style={{ fontWeight: 600, fontSize: '0.9rem', marginBottom: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: '#000' }}>{data.title || url}</div>
-        </div>
       </div>
     );
   }
 
-  // Fallback if no preview fetch success
+  // If we have data (image OR title), render visually rich card
+  if (hasImage || hasTitle) {
+    return (
+      <div
+        style={{
+          margin: '0',
+          width: '100%',
+          maxWidth: '300px', // Strict width as requested
+          borderRadius: '12px',
+          overflow: 'hidden',
+          border: '1px solid #e5e5ea',
+          display: 'flex',
+          flexDirection: 'column',
+          ...style,
+        }}
+      >
+        {/* Preview Image */}
+        {hasImage && data?.image && (
+          <a href={url} target="_blank" rel="noopener noreferrer" style={{ display: 'block', width: '100%' }}>
+            <img
+              src={data.image}
+              alt="Preview"
+              style={{
+                width: '100%',
+                height: 'auto',
+                display: 'block',
+                borderBottom: hasTitle ? '1px solid #eee' : 'none',
+              }}
+            />
+          </a>
+        )}
+
+        {/* Text Content */}
+        {hasTitle && (
+          <div style={{ padding: '10px 12px', backgroundColor: '#f0f0f5' }}>
+            {data?.title && (
+              <div style={{ fontWeight: 600, fontSize: '0.9rem', marginBottom: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: '#000' }}>{data.title}</div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return null;
 }
 
@@ -161,6 +210,8 @@ const MessageItem = ({
   activePlatform,
   showTimestamp,
   timestampStr,
+  previewBubbleStyle,
+  onQuoteClick,
 }: {
   msg: Message;
   isMyMsg: boolean;
@@ -172,7 +223,10 @@ const MessageItem = ({
   activePlatform: string;
   showTimestamp: boolean;
   timestampStr: string;
+  previewBubbleStyle?: React.CSSProperties;
+  onQuoteClick?: () => void;
 }) => {
+  const hasTextContent = !!msg.content;
   // Helper to format text with links
   const formatMessageContent = (text: string) => {
     const urlRegex = /(https?:\/\/[^\s]+)/g;
@@ -193,8 +247,10 @@ const MessageItem = ({
     return new Date(ms).toLocaleString();
   };
 
-  // Calculate if we're showing text content
-  const hasTextContent = !!(msg.content && (!msg.share || !/sent an attachment\.?$/i.test(msg.content)));
+  // Determine shared link (priority: explicit share > content link)
+  const urlRegex = /(https?:\/\/[^\s]+)/;
+  const contentLinkMatch = msg.content ? msg.content.match(urlRegex) : null;
+  const previewUrl = msg.share?.link || (contentLinkMatch ? contentLinkMatch[0] : null);
 
   return (
     <div
@@ -229,111 +285,121 @@ const MessageItem = ({
           {showName && <div className={styles.senderNameOutside}>{msg.sender_name}</div>}
 
           {/* Bubble */}
-          <div
-            className={`${styles.messageBubble} ${isMyMsg ? styles.sentBubble : styles.receivedBubble} ${isMediaOnly ? styles.mediaBubble : ''}`}
-            title={formatTime(msg.timestamp_ms)}
-            style={{
-              ...borderRadiusStyle,
-              maxWidth: msg.share?.link ? '300px' : undefined,
-            }}
-          >
-            {hasTextContent && msg.content && <div>{formatMessageContent(msg.content)}</div>}
-
-            {/* Photos */}
-            {msg.photos &&
-              msg.photos.map((p, idx) => (
+          {(hasTextContent || (msg.photos && msg.photos.length > 0) || (msg.videos && msg.videos.length > 0) || (msg.gifs && msg.gifs.length > 0) || msg.sticker || msg.quoted_message_metadata) && (
+            <div
+              className={`${styles.messageBubble} ${isMyMsg ? styles.sentBubble : styles.receivedBubble} ${isMediaOnly ? styles.mediaBubble : ''}`}
+              title={formatTime(msg.timestamp_ms)}
+              style={{
+                ...borderRadiusStyle,
+              }}
+            >
+              {msg.quoted_message_metadata && (
                 <div
-                  key={`p-${idx}`}
                   style={{
-                    marginTop: hasTextContent ? 5 : 0,
+                    marginBottom: '8px',
+                    marginLeft: '-10px',
+                    marginRight: '-10px',
+                    marginTop: '-5px',
+                    padding: '8px 12px',
+                    backgroundColor: 'rgba(0,0,0,0.2)',
+                    borderRadius: '12px 12px 2px 2px',
+                    fontSize: '0.9rem',
+                    color: 'inherit',
+                    textAlign: 'left',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '4px',
+                    cursor: 'pointer',
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (onQuoteClick) {
+                      onQuoteClick();
+                    }
                   }}
                 >
-                  <img
-                    src={`/api/media?path=${encodeURIComponent(p.uri)}&platform=${activePlatform}`}
-                    alt="Photo"
-                    style={{
-                      maxWidth: '100%',
-                      borderRadius: '12px',
-                      maxHeight: '300px',
-                      display: 'block',
-                    }}
-                    loading="lazy"
-                  />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', fontWeight: 600, opacity: 0.8 }}>
+                    <FaQuoteLeft size={10} />
+                    <div
+                      style={{
+                        width: '16px',
+                        height: '16px',
+                        borderRadius: '50%',
+                        backgroundColor: '#888',
+                        color: '#fff',
+                        fontSize: '10px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      {(msg.quoted_message_metadata.creator?.name || '?').charAt(0).toUpperCase()}
+                    </div>
+                    <div>{msg.quoted_message_metadata.creator?.name || 'Unknown'}</div>
+                  </div>
+                  <div style={{ opacity: 0.95, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', lineHeight: '1.3' }}>
+                    {msg.quoted_message_metadata.text}
+                  </div>
                 </div>
-              ))}
-            {/* Videos */}
-            {msg.videos &&
-              msg.videos.map((v, idx) => (
-                <div
-                  key={`v-${idx}`}
-                  style={{
-                    marginTop: hasTextContent ? 5 : 0,
-                  }}
-                >
-                  <video
-                    src={`/api/media?path=${encodeURIComponent(v.uri)}&platform=${activePlatform}`}
-                    controls
-                    preload="none"
-                    style={{
-                      maxWidth: '100%',
-                      borderRadius: '12px',
-                      maxHeight: '300px',
-                      display: 'block',
-                    }}
-                  />
-                </div>
-              ))}
-            {/* GIFs */}
-            {msg.gifs &&
-              msg.gifs.map((g, idx) => (
-                <div
-                  key={`g-${idx}`}
-                  style={{
-                    marginTop: hasTextContent ? 5 : 0,
-                  }}
-                >
-                  <img
-                    src={`/api/media?path=${encodeURIComponent(g.uri)}&platform=${activePlatform}`}
-                    alt="GIF"
-                    style={{
-                      maxWidth: '100%',
-                      borderRadius: '12px',
-                      maxHeight: '300px',
-                      display: 'block',
-                    }}
-                    loading="lazy"
-                  />
-                </div>
-              ))}
+              )}
+              {hasTextContent && msg.content && <div>{formatMessageContent(msg.content)}</div>}
 
-            {/* Stickers */}
-            {msg.sticker && (
-              <div
-                style={{
-                  marginTop: hasTextContent ? 5 : 0,
-                }}
-              >
-                <img
-                  src={`/api/media?path=${encodeURIComponent(msg.sticker.uri)}&platform=${activePlatform}`}
-                  alt="Sticker"
-                  style={{
-                    maxWidth: '120px',
-                    borderRadius: '0',
-                    display: 'block',
-                  }}
-                  loading="lazy"
-                />
-              </div>
-            )}
-
-            {/* Shared Content */}
-            {msg.share && msg.share.link && (
-              <>
-                {/\.(gif|jpe?g|png|webp)($|\?)/i.test(msg.share.link) ? (
-                  <div style={{ marginTop: '5px' }}>
+              {/* Photos */}
+              {msg.photos &&
+                msg.photos.map((p, idx) => (
+                  <div
+                    key={`p-${idx}`}
+                    style={{
+                      marginTop: hasTextContent ? 5 : 0,
+                    }}
+                  >
                     <img
-                      src={msg.share.link}
-                      alt="Shared Image"
+                      src={p.uri.startsWith('http') ? p.uri : `/api/media?path=${encodeURIComponent(p.uri)}&platform=${activePlatform}`}
+                      alt="Photo"
+                      style={{
+                        maxWidth: '100%',
+                        ...borderRadiusStyle,
+                        maxHeight: '300px',
+                        display: 'block',
+                      }}
+                      loading="lazy"
+                    />
+                  </div>
+                ))}
+              {/* Videos */}
+              {msg.videos &&
+                msg.videos.map((v, idx) => (
+                  <div
+                    key={`v-${idx}`}
+                    style={{
+                      marginTop: hasTextContent ? 5 : 0,
+                    }}
+                  >
+                    <video
+                      src={`/api/media?path=${encodeURIComponent(v.uri)}&platform=${activePlatform}`}
+                      controls
+                      preload="none"
+                      style={{
+                        maxWidth: '100%',
+                        ...borderRadiusStyle,
+                        maxHeight: '300px',
+                        display: 'block',
+                      }}
+                    />
+                  </div>
+                ))}
+              {/* GIFs */}
+              {msg.gifs &&
+                msg.gifs.map((g, idx) => (
+                  <div
+                    key={`g-${idx}`}
+                    style={{
+                      marginTop: hasTextContent ? 5 : 0,
+                    }}
+                  >
+                    <img
+                      src={`/api/media?path=${encodeURIComponent(g.uri)}&platform=${activePlatform}`}
+                      alt="GIF"
                       style={{
                         maxWidth: '100%',
                         borderRadius: '12px',
@@ -343,12 +409,51 @@ const MessageItem = ({
                       loading="lazy"
                     />
                   </div>
-                ) : (
-                  <LinkPreview url={msg.share.link} hasTextContent={hasTextContent} />
-                )}
-              </>
-            )}
-          </div>
+                ))}
+
+              {/* Stickers */}
+              {msg.sticker && (
+                <div
+                  style={{
+                    marginTop: hasTextContent ? 5 : 0,
+                  }}
+                >
+                  <img
+                    src={`/api/media?path=${encodeURIComponent(msg.sticker.uri)}&platform=${activePlatform}`}
+                    alt="Sticker"
+                    style={{
+                      maxWidth: '120px',
+                      borderRadius: '0',
+                      display: 'block',
+                    }}
+                    loading="lazy"
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Shared Content / Link Preview Bubble */}
+          {previewUrl && (
+            <div style={{ marginTop: '4px', maxWidth: '300px' }}>
+              {/\.(gif|jpe?g|png|webp)($|\?)/i.test(previewUrl) ? (
+                <img
+                  src={previewUrl}
+                  alt="Shared Image"
+                  style={{
+                    maxWidth: '100%',
+                    borderRadius: '12px',
+                    maxHeight: '300px',
+                    display: 'block',
+                    ...previewBubbleStyle,
+                  }}
+                  loading="lazy"
+                />
+              ) : (
+                <LinkPreview url={previewUrl} style={previewBubbleStyle} />
+              )}
+            </div>
+          )}
 
           {/* Reactions */}
           {msg.reactions && msg.reactions.length > 0 && (
@@ -442,18 +547,28 @@ export default function Home() {
       return;
     }
 
+    let ignore = false;
+
     async function loadThreads() {
+      // Clear threads immediately to avoid showing stale platform data
+      setThreads([]);
       try {
         const res = await fetch(`/api/threads?platform=${encodeURIComponent(activePlatform)}`);
         if (res.ok) {
           const data = await res.json();
-          setThreads(data);
+          if (!ignore) {
+            setThreads(data);
+          }
         }
       } catch (e) {
         console.error('Failed to load threads', e);
       }
     }
     loadThreads();
+
+    return () => {
+      ignore = true;
+    };
   }, [activePlatform, isRouterReady]);
 
   const handlePlatformSelect = (p: string) => {
@@ -533,8 +648,6 @@ export default function Home() {
     loadMessagesManual(activeThread.id, nextPage);
   };
 
-  const isMe = (name: string) => name === 'John Ho' || name === 'Virtual Me';
-
   const filteredMessages = messages.filter((msg) => {
     if (!msg.content) {
       return true;
@@ -544,6 +657,49 @@ export default function Home() {
     }
     return true;
   });
+
+  // Scroll to message logic
+  const handleQuoteClick = (quoteMetadata: QuotedMessageMetadata | undefined) => {
+    if (!quoteMetadata) {
+      return;
+    }
+
+    // Use filteredMessages since that's what's visible? Or messages (all loaded)?
+    // Use messages to catch even if filtered out? But filter logic is for search.
+    // If not visible, we can't scroll to it.
+    // Let's search 'filteredMessages' (rendered list) first.
+
+    // Heuristic: Match content AND sender
+    const match = filteredMessages.find((m) => {
+      const quoteName = quoteMetadata.creator?.name;
+      // Check sender match (handling "You" logic roughly by name match)
+      const senderMatch = m.sender_name === quoteName;
+
+      return senderMatch && m.content === quoteMetadata.text;
+    });
+
+    if (match) {
+      const elId = `msg-${match.id || match.timestamp_ms}`;
+      const el = document.getElementById(elId);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // Flash effect
+        el.style.transition = 'background-color 0.5s';
+        const originalBg = el.style.backgroundColor;
+        el.style.backgroundColor = 'rgba(255, 215, 0, 0.2)';
+        setTimeout(() => {
+          el.style.backgroundColor = originalBg;
+        }, 1000);
+      } else {
+        // Maybe it's in the list but not rendered (virtualization)?
+        // But we don't use virtualization yet.
+        console.log('Element not found in DOM');
+      }
+    } else {
+      console.log('Message not found in loaded history');
+      // Could trigger loadMore here automatically? Too complex for now.
+    }
+  };
 
   if (!isRouterReady) {
     return <div>Loading...</div>;
@@ -591,29 +747,40 @@ export default function Home() {
             <div className={styles.messagesContainer}>
               {loading && messages.length === 0 && <div style={{ padding: '20px', textAlign: 'center', color: '#999' }}>Loading messages...</div>}
               {filteredMessages.map((msg, i) => {
-                const isMyMsg = isMe(msg.sender_name);
+                // Determine if my message
+                const isMyMsg = !!msg.is_sender;
                 const prevMsg = filteredMessages[i + 1];
                 const nextMsg = filteredMessages[i - 1];
                 const isTop = !prevMsg || prevMsg.sender_name !== msg.sender_name;
                 const isBottom = !nextMsg || nextMsg.sender_name !== msg.sender_name;
 
-                let borderRadiusStyle = {};
-                const R = '18px';
-                const F = '4px';
+                // Determine if there is a preview attached
+                const urlRegex = /(https?:\/\/[^\s]+)/;
+                const contentLinkMatch = msg.content ? msg.content.match(urlRegex) : null;
+                const previewUrl = msg.share?.link || (contentLinkMatch ? contentLinkMatch[0] : null);
 
-                if (isMyMsg) {
-                  borderRadiusStyle = {
-                    borderTopRightRadius: isTop ? R : F,
-                    borderBottomRightRadius: isBottom ? R : F,
-                    borderTopLeftRadius: R,
-                    borderBottomLeftRadius: R,
-                  };
-                } else {
-                  borderRadiusStyle = {
-                    borderTopLeftRadius: isTop ? R : F,
-                    borderBottomLeftRadius: isBottom ? R : F,
-                    borderTopRightRadius: R,
-                    borderBottomRightRadius: R,
+                let borderRadiusStyle = {};
+                let previewBubbleStyle: React.CSSProperties = {};
+                const radiusRound = '18px';
+                const radiusFlat = '4px';
+
+                const dynamicTop = isTop ? radiusRound : radiusFlat;
+                const dynamicBottom = isBottom ? (previewUrl ? radiusFlat : radiusRound) : radiusFlat;
+
+                borderRadiusStyle = {
+                  borderTopLeftRadius: isMyMsg ? radiusRound : dynamicTop,
+                  borderBottomLeftRadius: isMyMsg ? radiusRound : dynamicBottom,
+                  borderTopRightRadius: isMyMsg ? dynamicTop : radiusRound,
+                  borderBottomRightRadius: isMyMsg ? dynamicBottom : radiusRound,
+                };
+
+                if (previewUrl) {
+                  const previewBottom = isBottom ? radiusRound : radiusFlat;
+                  previewBubbleStyle = {
+                    borderTopLeftRadius: isMyMsg ? radiusRound : radiusFlat,
+                    borderBottomLeftRadius: isMyMsg ? radiusRound : previewBottom,
+                    borderTopRightRadius: isMyMsg ? radiusFlat : radiusRound,
+                    borderBottomRightRadius: isMyMsg ? previewBottom : radiusRound,
                   };
                 }
 
@@ -624,12 +791,17 @@ export default function Home() {
                 const isMediaOnly = hasMedia && !msg.content;
 
                 let showTimestamp = false;
-                if (i === messages.length - 1) {
+                if (i === filteredMessages.length - 1) {
                   showTimestamp = true;
-                } else if (messages[i + 1]) {
+                } else if (filteredMessages[i + 1]) {
                   const currentDate = new Date(msg.timestamp_ms);
-                  const prevDate = new Date(messages[i + 1].timestamp_ms);
-                  if (currentDate.getHours() !== prevDate.getHours() || currentDate.getDate() !== prevDate.getDate() || currentDate.getMonth() !== prevDate.getMonth()) {
+                  const prevDate = new Date(filteredMessages[i + 1].timestamp_ms);
+                  if (
+                    currentDate.getHours() !== prevDate.getHours() ||
+                    currentDate.getDate() !== prevDate.getDate() ||
+                    currentDate.getMonth() !== prevDate.getMonth() ||
+                    currentDate.getFullYear() !== prevDate.getFullYear()
+                  ) {
                     showTimestamp = true;
                   }
                 }
@@ -644,19 +816,22 @@ export default function Home() {
                 });
 
                 return (
-                  <MessageItem
-                    key={i}
-                    msg={msg}
-                    isMyMsg={isMyMsg}
-                    isBottom={isBottom}
-                    showAvatar={showAvatar}
-                    showName={showName}
-                    borderRadiusStyle={borderRadiusStyle}
-                    isMediaOnly={!!isMediaOnly}
-                    activePlatform={activePlatform}
-                    showTimestamp={showTimestamp}
-                    timestampStr={timestampStr}
-                  />
+                  <div id={`msg-${msg.id || msg.timestamp_ms}`} key={i}>
+                    <MessageItem
+                      msg={msg}
+                      isMyMsg={isMyMsg}
+                      isBottom={isBottom}
+                      showAvatar={showAvatar}
+                      showName={showName}
+                      borderRadiusStyle={borderRadiusStyle}
+                      isMediaOnly={!!isMediaOnly}
+                      activePlatform={activePlatform}
+                      showTimestamp={showTimestamp}
+                      timestampStr={timestampStr}
+                      previewBubbleStyle={previewBubbleStyle}
+                      onQuoteClick={() => handleQuoteClick(msg.quoted_message_metadata)}
+                    />
+                  </div>
                 );
               })}
 

@@ -1,5 +1,6 @@
 import '@/styles/globals.css';
 import type { AppProps } from 'next/app';
+import Head from 'next/head';
 import { Geist, Geist_Mono } from 'next/font/google';
 
 const geistSans = Geist({
@@ -14,8 +15,14 @@ const geistMono = Geist_Mono({
 
 export default function App({ Component, pageProps }: AppProps) {
   return (
-    <div className={`${geistSans.variable} ${geistMono.variable}`}>
-      <Component {...pageProps} />
-    </div>
+    <>
+      <Head>
+        <title>Virtual Me - Message Archive</title>
+        <meta name="description" content="Personal message archive viewer for Facebook, Instagram, Google Chat, and Google Voice" />
+      </Head>
+      <div className={`${geistSans.variable} ${geistMono.variable}`}>
+        <Component {...pageProps} />
+      </div>
+    </>
   );
 }

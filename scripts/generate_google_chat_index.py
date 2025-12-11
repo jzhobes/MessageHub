@@ -1,14 +1,33 @@
 
 import os
 import json
-import datetime
+import glob
+import subprocess
 from dateutil import parser  # We might need this, or custom parsing if dateutil isn't available
 
 # Resolve paths relative to this script
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 DATA_ROOT = os.path.join(PROJECT_ROOT, "data/Google Chat/Groups")
+USERS_ROOT = os.path.join(PROJECT_ROOT, "data/Google Chat/Users")
 OUTPUT_FILE = os.path.join(PROJECT_ROOT, "data/google_chat_threads_index.json")
+
+# Auto-detect user name from Google Chat export
+def get_user_name():
+    try:
+        # Search recursively for the user_info.json file
+        pattern = os.path.join(USERS_ROOT, "**", "user_info.json")
+        matches = glob.glob(pattern, recursive=True)
+        if matches:
+            with open(matches[0], "r", encoding="utf-8") as f:
+                user_data = json.load(f)
+                return user_data.get("user", {}).get("name", "You")
+    except Exception as e:
+        print(f"Warning: Could not auto-detect user name: {e}")
+    return "You"
+
+USER_NAME = get_user_name()
+print(f"Detected user: {USER_NAME}")
 
 def parse_timestamp(date_str):
     try:
@@ -25,9 +44,10 @@ def parse_timestamp(date_str):
         # print(f"Date parse error: {date_str} - {e}")
         return 0
 
+
 def get_thread_info(thread_dir):
-    # Check for messages.json
-    msg_path = os.path.join(thread_dir, "messages.json")
+    # All groups should have message_1.json after processing
+    msg_path = os.path.join(thread_dir, "message_1.json")
     info_path = os.path.join(thread_dir, "group_info.json")
     
     if not os.path.exists(msg_path):
@@ -40,17 +60,24 @@ def get_thread_info(thread_dir):
         if os.path.exists(info_path):
             with open(info_path, 'r', encoding='utf-8') as f:
                 info_data = json.load(f)
+                
+                # Prefer explicit group name if it exists
+                if 'name' in info_data and info_data['name']:
+                    title = info_data['name']
+                
+                # Get participants for fallback title
                 members = info_data.get('members', [])
                 participants = [m.get('name', 'Unknown') for m in members]
                 
-        # If no explicit title (Google Chat groups usually don't have one unless named), derive from participants
-        # Exclude "John Ho" (User) from title usually, but let's keep all for now or filter
-        # Assuming "John Ho" is the user
-        others = [p for p in participants if p != "John Ho" and p != "Virtual Me"]
-        if not others:
-            title = "John Ho (You)" # Self chat?
-        else:
-            title = ", ".join(others)
+        # If no explicit title, derive from participants
+        if not title:
+            # Exclude the user from title
+            others = [p for p in participants if p != USER_NAME]
+            if not others:
+                title = f"{USER_NAME} (You)"  # Self chat
+            else:
+                title = ", ".join(others)
+
 
         # Read Messages for Snippet/Time
         with open(msg_path, 'r', encoding='utf-8') as f:
@@ -60,15 +87,15 @@ def get_thread_info(thread_dir):
         if not messages:
             return None # Empty thread
             
-        # Get LAST message (Google Chat export messages seem chronological, so last is at end?)
-        # Let's check the sample... valid, sample started 2018, ended 2023. So index 0 is OLDEST.
-        # We want the NEWEST for the snippet/sorting. So messages[-1].
-        last_msg = messages[-1]
+        # After splitting, message_1.json contains the NEWEST messages in reverse order
+        # So messages[0] is the most recent message
+        last_msg = messages[0]
+
         
         timestamp = parse_timestamp(last_msg.get('created_date', ''))
         
         sender = last_msg.get('creator', {}).get('name', 'Unknown')
-        if sender == 'John Ho' or sender == 'Virtual Me':
+        if sender == USER_NAME:
             name = "You"
         else:
             name = sender.split(' ')[0]
@@ -85,13 +112,17 @@ def get_thread_info(thread_dir):
             else:
                 content = f"{name} sent a message"
         
+        # Count message files (message_1.json, message_2.json, etc.)
+        json_files = [f for f in os.listdir(thread_dir) if f.startswith('message_') and f.endswith('.json')]
+        file_count = len(json_files) if json_files else 1
+        
         return {
             "id": os.path.basename(thread_dir),
             "title": title,
             "participants": participants,
             "timestamp": timestamp,
             "snippet": content,
-            "file_count": 1, # Google Chat usually puts everything in one file per group
+            "file_count": file_count,
             "folder_path": thread_dir
         }
     except Exception as e:
@@ -103,6 +134,18 @@ def main():
         print(f"Error: {DATA_ROOT} not found.")
         return
 
+    # Run the splitter first
+    print("Step 1: Splitting large Google Chat message files...")
+    splitter_script = os.path.join(SCRIPT_DIR, "split_google_chat_messages.py")
+    try:
+        subprocess.run(["python3", splitter_script], check=True)
+    except subprocess.CalledProcessError as e:
+        print(f"Warning: Splitter failed: {e}")
+    except FileNotFoundError:
+        print("Warning: Could not run splitter (python3 not found)")
+    
+    print("\nStep 2: Indexing Google Chat threads...")
+    
     threads = []
     subdirs = [os.path.join(DATA_ROOT, d) for d in os.listdir(DATA_ROOT) if os.path.isdir(os.path.join(DATA_ROOT, d))]
     

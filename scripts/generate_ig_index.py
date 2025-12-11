@@ -3,10 +3,26 @@ import os
 import json
 import datetime
 
+# Load user info from Instagram personal_information export
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PERSONAL_INFO_PATH = os.path.join(PROJECT_ROOT, "data/Instagram/personal_information/personal_information.json")
+try:
+    with open(PERSONAL_INFO_PATH, "r", encoding="utf-8") as f:
+        pi_data = json.load(f)
+        # Navigate to the first profile_user entry
+        profile = pi_data.get("profile_user", [{}])[0]
+        string_map = profile.get("string_map_data", {})
+        USER_NAME = string_map.get("Name", {}).get("value", "You")
+        USER_INSTAGRAM = string_map.get("Username", {}).get("value", "")
+except Exception as e:
+    print(f"Warning: Could not load Instagram personal information: {e}")
+    USER_NAME = "You"
+    USER_INSTAGRAM = ""
+
 # Resolve paths relative to this script
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
-DATA_ROOT = os.path.join(PROJECT_ROOT, "data/your_instagram_activity/messages/inbox")
+DATA_ROOT = os.path.join(PROJECT_ROOT, "data/Instagram/your_instagram_activity/messages/inbox")
 OUTPUT_FILE = os.path.join(PROJECT_ROOT, "data/ig_threads_index.json")
 
 def get_thread_info(thread_dir):
@@ -31,8 +47,8 @@ def get_thread_info(thread_dir):
         
         # Determine sender name for snippet
         sender = last_msg.get('sender_name', '')
-        if sender == 'John Ho' or sender == 'jzhobes' or sender == 'Virtual Me':
-             name = "You"
+        if sender == USER_NAME or sender == USER_INSTAGRAM:
+            name = "You"
         else:
             name = sender.split(' ')[0]
 

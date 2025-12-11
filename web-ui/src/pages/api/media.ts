@@ -3,15 +3,36 @@ import fs from 'fs';
 import path from 'path';
 
 export default function handler(req: NextApiRequest, res: NextApiResponse) {
-  const { path: filePathParam } = req.query;
+  const { path: filePathParam, platform } = req.query;
   const filePath = Array.isArray(filePathParam) ? filePathParam[0] : filePathParam;
+  const platformStr = Array.isArray(platform) ? platform[0] : platform;
 
   if (!filePath) {
     return res.status(400).send('Missing path');
   }
 
   const baseDir = path.resolve(process.cwd(), '../data');
-  const absolutePath = path.join(baseDir, filePath);
+  let relativePath = filePath;
+
+  // Platform-specific path adjustments
+  if (platformStr === 'Facebook') {
+    relativePath = path.join('Facebook', filePath.startsWith('your_facebook_activity') ? '' : 'your_facebook_activity', filePath);
+  } else if (platformStr === 'Instagram') {
+    relativePath = path.join('Instagram', filePath.startsWith('your_instagram_activity') ? '' : 'your_instagram_activity', filePath);
+  } else if (platformStr === 'Google Chat') {
+    // Google Chat logic if needed, usually direct mapping or handled elsewhere
+    relativePath = path.join('Google Chat', filePath);
+  }
+
+  // First try the constructed path
+  let absolutePath = path.join(baseDir, relativePath);
+
+  // Fallback: If not found, try the raw path (in case it was already correct or different structure)
+  if (!fs.existsSync(absolutePath)) {
+    if (fs.existsSync(path.join(baseDir, filePath))) {
+      absolutePath = path.join(baseDir, filePath);
+    }
+  }
 
   if (!absolutePath.startsWith(baseDir)) {
     return res.status(403).send('Access denied');

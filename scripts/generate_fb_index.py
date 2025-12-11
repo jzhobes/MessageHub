@@ -3,11 +3,28 @@ import os
 import json
 import datetime
 
+# Load user name from Facebook profile information export
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PROFILE_INFO_PATH = os.path.join(PROJECT_ROOT, "data/Facebook/profile_information/profile_information.json")
+try:
+    with open(PROFILE_INFO_PATH, "r", encoding="utf-8") as f:
+        fb_data = json.load(f)
+        # Assuming top-level contains 'profile_user' similar to Instagram
+        profile = fb_data.get('profile_user', [{}])[0]
+        string_map = profile.get('string_map_data', {})
+        USER_NAME = string_map.get('Name', {}).get('value', 'You')
+except Exception as e:
+    print(f"Warning: Could not load Facebook profile information: {e}")
+    USER_NAME = "You"
+
 # Resolve paths relative to this script
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
-DATA_ROOT = os.path.join(PROJECT_ROOT, "data/your_facebook_activity/messages/inbox")
+MESSAGES_ROOT = os.path.join(PROJECT_ROOT, "data/Facebook/your_facebook_activity/messages")
 OUTPUT_FILE = os.path.join(PROJECT_ROOT, "data/fb_threads_index.json")
+
+# Folders to scan for threads
+FOLDERS_TO_SCAN = ["inbox", "archived_threads", "legacy_threads", "e2ee_cutover"]
 
 def get_thread_info(thread_dir):
     # Try reading message_1.json
@@ -31,7 +48,7 @@ def get_thread_info(thread_dir):
         
         # Determine sender name for snippet
         sender = last_msg.get('sender_name', '')
-        if sender == 'John Ho' or sender == 'Virtual Me':
+        if sender == USER_NAME:
             name = "You"
         else:
             name = sender.split(' ')[0]
@@ -76,27 +93,35 @@ def get_thread_info(thread_dir):
         return None
 
 def main():
-    if not os.path.exists(DATA_ROOT):
-        print(f"Error: {DATA_ROOT} not found. Run this from virtual-me/data/FB directory.")
+    if not os.path.exists(MESSAGES_ROOT):
+        print(f"Error: {MESSAGES_ROOT} not found.")
         return
 
-    threads = []
-    subdirs = [os.path.join(DATA_ROOT, d) for d in os.listdir(DATA_ROOT) if os.path.isdir(os.path.join(DATA_ROOT, d))]
+    all_threads = []
     
-    print(f"Scanning {len(subdirs)} threads...")
-    
-    for d in subdirs:
-        info = get_thread_info(d)
-        if info:
-            threads.append(info)
+    for folder_name in FOLDERS_TO_SCAN:
+        folder_path = os.path.join(MESSAGES_ROOT, folder_name)
+        
+        if not os.path.exists(folder_path):
+            print(f"Warning: {folder_name} not found, skipping...")
+            continue
+            
+        subdirs = [os.path.join(folder_path, d) for d in os.listdir(folder_path) if os.path.isdir(os.path.join(folder_path, d))]
+        
+        print(f"Scanning {len(subdirs)} threads in {folder_name}...")
+        
+        for d in subdirs:
+            info = get_thread_info(d)
+            if info:
+                all_threads.append(info)
             
     # Sort by timestamp desc
-    threads.sort(key=lambda x: x['timestamp'], reverse=True)
+    all_threads.sort(key=lambda x: x['timestamp'], reverse=True)
     
     with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
-        json.dump(threads, f, indent=2)
+        json.dump(all_threads, f, indent=2)
         
-    print(f"Indexed {len(threads)} threads to {OUTPUT_FILE}")
+    print(f"Indexed {len(all_threads)} total threads to {OUTPUT_FILE}")
 
 if __name__ == "__main__":
     main()

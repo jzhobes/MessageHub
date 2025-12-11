@@ -50,13 +50,49 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   console.log(`[Preview] CACHE MISS - Fetching ${targetUrl}`);
 
   try {
-    const response = await fetch(targetUrl, {
-      headers: {
-        'User-Agent': 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)',
-      },
+    const headers: Record<string, string> = {
+      'User-Agent': 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)',
+    };
+
+    // Inject Instagram Auth Cookies if available
+    if (targetUrl.includes('instagram.com') && process.env.INSTAGRAM_AUTH) {
+      try {
+        const authData = JSON.parse(process.env.INSTAGRAM_AUTH);
+        let cookieString = '';
+
+        // Handle object format (e.g. {x: 'y'})
+        cookieString = Object.entries(authData)
+          .map(([k, v]) => `${k}=${v}`)
+          .join('; ');
+
+        if (cookieString) {
+          headers['Cookie'] = cookieString;
+          // Add helpful headers for scraping
+          headers['Accept'] = 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8';
+          headers['Accept-Language'] = 'en-US,en;q=0.5';
+          console.log('[Preview] Using Authenticated Instagram Fetch');
+        }
+      } catch (e) {
+        console.error('[Preview] Failed to parse INSTAGRAM_AUTH cookies', e);
+      }
+    }
+
+    let response = await fetch(targetUrl, {
+      headers,
       // Shorter timeout to fail fast if site is slow
       signal: AbortSignal.timeout(5000),
     });
+
+    if (response.status === 403 || response.status === 401) {
+      console.log(`[Preview] ${response.status} with scraper UA, retrying with Browser UA...`);
+      response = await fetch(targetUrl, {
+        headers: {
+          ...headers,
+          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        },
+        signal: AbortSignal.timeout(5000),
+      });
+    }
 
     if (!response.ok) {
       return res.status(response.status).json({ error: 'Failed to fetch' });

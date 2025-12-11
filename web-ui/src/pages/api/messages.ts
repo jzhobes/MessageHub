@@ -11,6 +11,7 @@ interface GoogleChatReaction {
   emoji: {
     unicode: string;
   };
+  reactor_emails?: string[];
 }
 
 interface GoogleChatCreator {
@@ -18,11 +19,32 @@ interface GoogleChatCreator {
 }
 
 interface GoogleChatMessage {
-  created_date: string;
+  created_date?: string;
+  updated_date?: string;
   text?: string;
   creator?: GoogleChatCreator;
   attached_files?: GoogleChatAttachedFile[];
   reactions?: GoogleChatReaction[];
+  quoted_message_metadata?: {
+    creator?: GoogleChatCreator;
+    text?: string;
+  };
+  quotes_message_metadata?: {
+    creator?: GoogleChatCreator;
+    text?: string;
+  };
+  message_id?: string;
+  annotations?: {
+    length: number;
+    start_index: number;
+    url_metadata?: {
+      title?: string;
+      image_url?: string;
+      url?: {
+        private_do_not_access_or_else_safe_url_wrapped_value?: string;
+      };
+    };
+  }[];
 }
 
 interface GoogleChatData {
@@ -31,6 +53,39 @@ interface GoogleChatData {
 
 interface MediaItem {
   uri: string;
+}
+
+interface FacebookMessage {
+  sender_name: string;
+  timestamp_ms: number;
+  content?: string;
+  is_sender?: boolean;
+  photos?: MediaItem[];
+  videos?: MediaItem[];
+  reactions?: { reaction: string; actor: string }[];
+}
+
+interface FacebookData {
+  messages: FacebookMessage[];
+  [key: string]: unknown;
+}
+
+interface Message {
+  id?: string;
+  is_sender?: boolean;
+  sender_name: string;
+  timestamp_ms: number;
+  content?: string;
+  photos?: MediaItem[];
+  videos?: MediaItem[];
+  gifs?: MediaItem[];
+  sticker?: { uri: string };
+  share?: { link?: string; share_text?: string };
+  reactions?: { reaction: string; actor: string }[];
+  quoted_message_metadata?: {
+    creator?: { name: string };
+    text?: string;
+  };
 }
 
 export default function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -44,23 +99,24 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
   const pageStr = Array.isArray(page) ? page[0] : page;
   const platformStr = Array.isArray(platform) ? platform[0] : platform;
 
-  let inboxPath;
-  if (platformStr === 'Facebook') {
-    inboxPath = path.join(process.cwd(), '../data/your_facebook_activity/messages/inbox');
-  } else if (platformStr === 'Google Chat') {
-    inboxPath = path.join(process.cwd(), '../data/Google Chat/Groups');
-  } else {
-    // Default to FB if undefined but fail if unknown?
-    if (!platformStr) {
-      inboxPath = path.join(process.cwd(), '../data/your_facebook_activity/messages/inbox');
-    } else {
-      return res.status(400).json({ error: 'Invalid platform' });
+  // Identify "Me"
+  const profilePath = path.join(process.cwd(), '../data/Facebook/profile_information/profile_information.json');
+  let myName = 'John Ho';
+  try {
+    if (fs.existsSync(profilePath)) {
+      const profileData = JSON.parse(fs.readFileSync(profilePath, 'utf8'));
+      myName = profileData?.profile_v2?.name?.full_name || myName;
     }
+  } catch (e) {
+    console.error('Failed to load profile info', e);
   }
+  const myNames = [myName, 'Virtual Me'];
 
   // Google Chat Handling
   if (platformStr === 'Google Chat') {
-    const msgPath = path.join(inboxPath, threadIdStr, 'messages.json');
+    const inboxPath = path.join(process.cwd(), '../data/Google Chat/Groups');
+    const msgPath = path.join(inboxPath, threadIdStr, `message_${pageStr}.json`);
+
     console.log(`[Google Chat] Loading messages from: ${msgPath}`);
     try {
       if (!fs.existsSync(msgPath)) {
@@ -77,18 +133,17 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
         }
         try {
           // "Saturday, July 9, 2022 at 2:03:54 PM UTC"
-          const clean = dateStr
-            .replace(' at ', ' ')
-            .replace(' UTC', '')
-            .replace(/\u202f/g, ' ');
+          const clean = dateStr.replace(' at ', ' ').replace(/\u202f/g, ' ');
           return new Date(clean).getTime();
         } catch {
           return 0;
         }
       };
 
-      const messages = rawMessages.map((m: GoogleChatMessage) => {
-        const ms = googleDateToMs(m.created_date);
+      const messages = rawMessages.flatMap((m: GoogleChatMessage) => {
+        const dateStr = m.created_date || m.updated_date || '';
+        const ms = googleDateToMs(dateStr);
+        const sender = m.creator?.name || 'Unknown';
 
         const attached = m.attached_files || [];
         const photos: MediaItem[] = [];
@@ -104,23 +159,95 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
           }
         });
 
-        const reactions = (m.reactions || []).map((r: GoogleChatReaction) => ({
-          reaction: r.emoji.unicode,
-          actor: 'Unknown',
-        }));
+        if (m.annotations) {
+          m.annotations.forEach((a) => {
+            if (a.url_metadata) {
+              const url = a.url_metadata.url?.private_do_not_access_or_else_safe_url_wrapped_value || a.url_metadata.image_url;
+              if (url) {
+                photos.push({ uri: url });
+              }
+            }
+          });
+        }
 
-        return {
-          sender_name: m.creator ? m.creator.name : 'Unknown',
-          timestamp_ms: ms,
-          content: m.text,
-          photos: photos.length > 0 ? photos : undefined,
-          videos: videos.length > 0 ? videos : undefined,
-          reactions: reactions.length > 0 ? reactions : undefined,
-        };
+        const reactions = (m.reactions || []).flatMap((r: GoogleChatReaction) => {
+          const emails = r.reactor_emails || [];
+          if (emails.length === 0) {
+            // Fallback for missing reactor info
+            return [
+              {
+                reaction: r.emoji.unicode,
+                actor: 'Unknown',
+              },
+            ];
+          }
+          // Create one reaction entry per reactor
+          return emails.map((email) => ({
+            reaction: r.emoji.unicode,
+            actor: email, // display email as actor for now; usually no name in this part of export
+          }));
+        });
+
+        const result: Message[] = [];
+        const hasMedia = photos.length > 0 || videos.length > 0;
+
+        // Determine where to attach reactions (Media prefers, otherwise Text)
+        const reactionsForMedia = hasMedia && reactions.length > 0 ? reactions : undefined;
+        const reactionsForText = !hasMedia && reactions.length > 0 ? reactions : undefined;
+
+        // Order in array: [Newest (Bottom), ..., Oldest (Top)] (due to column-reverse)
+        // We want Text (Oldest/Top) -> Media (Newest/Bottom)
+        // So push Media first, then Text.
+
+        if (hasMedia) {
+          result.push({
+            id: m.message_id ? `${m.message_id}_media` : undefined,
+            is_sender: myNames.includes(sender),
+            sender_name: sender,
+            timestamp_ms: ms,
+            content: undefined,
+            photos: photos.length > 0 ? photos : undefined,
+            videos: videos.length > 0 ? videos : undefined,
+            reactions: reactionsForMedia,
+          });
+        }
+
+        if (m.text || m.quoted_message_metadata) {
+          result.push({
+            id: m.message_id,
+            is_sender: myNames.includes(sender),
+            sender_name: sender,
+            timestamp_ms: ms,
+            content: m.text,
+            reactions: reactionsForText,
+            quoted_message_metadata: m.quoted_message_metadata
+              ? {
+                  creator: m.quoted_message_metadata.creator,
+                  text: m.quoted_message_metadata.text,
+                }
+              : undefined,
+          });
+        }
+
+        // If neither (e.g. unsupported attachment only), keep original behavior (empty text/media) to avoid data loss?
+        // But original would show an empty bubble.
+        // If result is empty, let's create a placeholder if it originally existed?
+        // Actually, if m.text is empty string and no photos, original code returned object with empty content.
+        // Let's replicate that if both ignored.
+        if (result.length === 0) {
+          // Fallback to empty text message to behave like before (or could be unsupported file)
+          result.push({
+            sender_name: sender,
+            timestamp_ms: ms,
+            content: m.text || '', // likely empty string
+            reactions: reactions.length > 0 ? reactions : undefined,
+          });
+        }
+
+        return result;
       });
 
-      messages.reverse();
-
+      // Messages are already in correct order (newest first) from split files
       return res.status(200).json({ messages });
     } catch (e) {
       console.error('Error reading Google Chat messages:', e);
@@ -128,54 +255,86 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
     }
   }
 
-  // Construct path for FB/IG
-  const msgPath = path.join(inboxPath, threadIdStr, `message_${pageStr}.json`);
+  // Facebook/Instagram Handling - search across all folders
+  if (platformStr === 'Facebook' || platformStr === 'Instagram' || !platformStr) {
+    let msgPath: string | null = null;
 
-  try {
-    if (!fs.existsSync(msgPath)) {
+    if (platformStr === 'Instagram') {
+      const messagesRoot = path.join(process.cwd(), '../data/Instagram/your_instagram_activity/messages/inbox');
+      const candidatePath = path.join(messagesRoot, threadIdStr, `message_${pageStr}.json`);
+      if (fs.existsSync(candidatePath)) {
+        msgPath = candidatePath;
+      }
+    } else {
+      // Facebook
+      const messagesRoot = path.join(process.cwd(), '../data/Facebook/your_facebook_activity/messages');
+      const foldersToSearch = ['inbox', 'archived_threads', 'legacy_threads', 'e2ee_cutover'];
+
+      // Try to find the thread in each folder
+      for (const folder of foldersToSearch) {
+        const candidatePath = path.join(messagesRoot, folder, threadIdStr, `message_${pageStr}.json`);
+        if (fs.existsSync(candidatePath)) {
+          msgPath = candidatePath;
+          break;
+        }
+      }
+    }
+
+    if (!msgPath) {
       return res.status(404).json({ error: 'Message file not found' });
     }
 
-    const fileContents = fs.readFileSync(msgPath, 'utf8');
-    const data = JSON.parse(fileContents);
+    try {
+      const fileContents = fs.readFileSync(msgPath, 'utf8');
+      const data = JSON.parse(fileContents);
 
-    // Type for arbitrary JSON values
-    type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+      // Type for arbitrary JSON values
+      type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 
-    // Facebook exports use Latin-1 encoding instead of UTF-8, causing emoji and special characters to be corrupted.
-    // This function recursively walks the entire JSON structure and fixes all string values.
-    const fixString = (str: string) => {
-      try {
-        let decoded = Buffer.from(str, 'latin1').toString('utf8');
-        decoded = decoded.replace(/\u2764(?!\uFE0F)/g, '\u2764\uFE0F');
-        return decoded;
-      } catch {
-        return str;
-      }
-    };
-
-    const fixEncodingRecursive = (obj: JsonValue): JsonValue => {
-      if (typeof obj === 'string') {
-        return fixString(obj);
-      } else if (Array.isArray(obj)) {
-        return obj.map(fixEncodingRecursive);
-      } else if (obj && typeof obj === 'object') {
-        const newObj: { [key: string]: JsonValue } = {};
-        for (const key in obj) {
-          if (Object.prototype.hasOwnProperty.call(obj, key)) {
-            newObj[key] = fixEncodingRecursive(obj[key]);
-          }
+      // Facebook exports use Latin-1 encoding instead of UTF-8, causing emoji and special characters to be corrupted.
+      // This function recursively walks the entire JSON structure and fixes all string values.
+      const fixString = (str: string) => {
+        try {
+          let decoded = Buffer.from(str, 'latin1').toString('utf8');
+          decoded = decoded.replace(/\u2764(?!\uFE0F)/g, '\u2764\uFE0F');
+          return decoded;
+        } catch {
+          return str;
         }
-        return newObj;
+      };
+
+      const fixEncodingRecursive = (obj: JsonValue): JsonValue => {
+        if (typeof obj === 'string') {
+          return fixString(obj);
+        } else if (Array.isArray(obj)) {
+          return obj.map(fixEncodingRecursive);
+        } else if (obj && typeof obj === 'object') {
+          const newObj: { [key: string]: JsonValue } = {};
+          for (const key in obj) {
+            if (Object.prototype.hasOwnProperty.call(obj, key)) {
+              newObj[key] = fixEncodingRecursive(obj[key]);
+            }
+          }
+          return newObj;
+        }
+        return obj;
+      };
+
+      const fixedData = fixEncodingRecursive(data) as unknown as FacebookData;
+
+      // Inject is_sender for Facebook messages
+      if (fixedData.messages && Array.isArray(fixedData.messages)) {
+        fixedData.messages.forEach((m) => {
+          m.is_sender = myNames.includes(m.sender_name);
+        });
       }
-      return obj;
-    };
 
-    const fixedData = fixEncodingRecursive(data);
-
-    return res.status(200).json(fixedData);
-  } catch (error) {
-    console.error('Error reading message file:', error);
-    return res.status(500).json({ error: 'Failed to load messages' });
+      return res.status(200).json(fixedData);
+    } catch (error) {
+      console.error('Error reading message file:', error);
+      return res.status(500).json({ error: 'Failed to load messages' });
+    }
   }
+
+  return res.status(400).json({ error: 'Invalid platform' });
 }
