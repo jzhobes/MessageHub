@@ -156,11 +156,6 @@ export default function MessageItem({
           {previewUrl && (
             <div className={styles.previewContainer}>
               {/\.(gif|jpe?g|png|webp)($|\?)/i.test(previewUrl) ? (
-                // Image Share Fallback using radius logic?
-                // For simplicity, we just use a rounded image.
-                // Or we can try to apply the 'flat top' logic here too?
-                // The requirements say 'previewUrl' implies flat bottom on message.
-                // This component should ideally start with flat top.
                 <img src={previewUrl} alt="Shared Image" className={`${styles.previewImage} ${isMyMsg ? styles.previewBubbleSent : styles.previewBubbleReceived}`} loading="lazy" />
               ) : (
                 <LinkPreview url={previewUrl} isMyMsg={isMyMsg} />

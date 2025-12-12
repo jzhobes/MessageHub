@@ -23,6 +23,7 @@ MessageHub/
 │   ├── generate_fb_index.py
 │   ├── generate_ig_index.py
 │   ├── generate_google_chat_index.py
+│   ├── process_messages.py
 │   ├── split_google_chat_messages.py
 │   └── utils.py           # Shared logic (Encoding fixes, parsing)
 ├── webapp/                # Next.js frontend application
@@ -36,36 +37,76 @@ MessageHub/
 
 ## Setup & Usage
 
-### 1. Prepare Data
+### 1. Data Export & Prerequisites
 
-Export your data from the respective platforms and place the unzipped content into the `data/` directory.
+#### Exporting Data
 
-**Expected Directory Structure:**
+**Facebook:**
 
-```
-data/
-├── Facebook/
-│   └── your_facebook_activity/
-├── Instagram/
-│   └── your_instagram_activity/
-└── Google Chat/
-    └── Groups/
+1. Go to [**Accounts Center** > **Your information and permissions** > **Export your information**](https://accountscenter.facebook.com/info_and_permissions/dyi).
+2. **Create export** > **Facebook** > **Export to device**
+3. **Customize information** (make sure the following are selected)
+   - **Your Facebook activity** > **Messages**
+   - **Personal information** > **Profile information**
+4. **Date range** > **All time** (or any custom range)
+5. **Format** > **JSON**
+6. **Media quality** > **Higher quality** (optional, but recommended)
+7. **Start export**
+
+**Instagram:**
+
+1. Go to [**Accounts Center** > **Your information and permissions** > **Export your information**](https://accountscenter.facebook.com/info_and_permissions/dyi).
+2. **Create export** > **Instagram** > **Export to device**
+3. **Customize information** (make sure the following are selected)
+   - **Your Instagram activity** > **Messages**
+   - **Personal information** > **Personal information** & **Information about you**
+4. **Date range** > **All time** (or any custom range)
+5. **Format** > **JSON**
+6. **Media quality** > **Higher quality** (optional, but recommended)
+7. **Start export**
+
+**Google:**
+
+1. Go to [Google Takeout](https://takeout.google.com/).
+2. Select **Google Chat**.
+3. Select **Voice**.
+4. Click **Next Step**.
+5. Change filze size to 4 GB.
+6. Click **Create export**.
+
+#### Environment Setup (.env)
+
+To enable rich link previews for Instagram links (bypassing login walls), you need to provide your Instagram cookies.
+
+1. Go to [Instagram](https://instagram.com).
+2. Log in if you haven't already.
+3. Open Developer Tools (F12) -> Network Tab.
+4. Refresh the page and click on any request to `instagram.com` (should be the first request).
+5. Copy the `Cookie` header value, paste it into a temporary file, then look for the **sessionId** and **csrftoken** values.
+6. Create a new file called `.env` in the root directory of the project.
+7. Copy the values into the `.env` file in the following format:
+
+```bash
+INSTAGRAM_AUTH={"sessionid":"<sessionid>","csrftoken":"<csrftoken>"}
 ```
 
 ### 2. Process Data
 
-Run the index generation scripts for each platform. These scripts scan your data, **fix encoding issues** (Latin-1 to UTF-8), and create JSON index files.
+Run the processing and index generation scripts. The `process_messages.py` script fixes text encoding issues (like mojibake emojis) by creating `.processed.json` files, which the index generators then use to build the JSON indexes.
 
 **Run Scripts:**
 
 ```bash
-# Facebook
+# Fix text encoding (Facebook & Instagram)
+python3 scripts/process_messages.py
+
+# Facebook Index
 python3 scripts/generate_fb_index.py
 
-# Instagram
+# Instagram Index
 python3 scripts/generate_ig_index.py
 
-# Google Chat (Also splits large files)
+# Google Chat Index (Also splits large files)
 python3 scripts/generate_google_chat_index.py
 ```
 

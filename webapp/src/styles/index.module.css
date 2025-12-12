@@ -450,6 +450,13 @@
   border-bottom-left-radius: 18px;
 }
 
+.linkPreviewImage {
+  width: 100%;
+  max-height: 300px;
+  object-fit: cover;
+  display: block;
+}
+
 /* LinkPreview Inner Styling */
 .linkPreviewCard {
   margin: 0;

@@ -1,8 +1,11 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import fs from 'fs';
+import { promises as fs } from 'fs';
 import path from 'path';
 import { getInstagramHeaders } from '../../utils/instagram';
 
+/**
+ * Metadata extracted from a URL's OpenGraph tags.
+ */
 interface PreviewMetadata {
   url: string;
   image: string | null;
@@ -12,27 +15,40 @@ interface PreviewMetadata {
 
 const CACHE_FILE = path.join(process.cwd(), 'preview_cache.json');
 
-// Helper to read cache safely
-function readCache(): Record<string, PreviewMetadata> {
+/**
+ * Reads the preview cache from disk.
+ * @returns A promise that resolves to the cache object.
+ */
+async function readCache(): Promise<Record<string, PreviewMetadata>> {
   try {
-    if (fs.existsSync(CACHE_FILE)) {
-      return JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8'));
-    }
-  } catch (e) {
-    console.error('Failed to read preview cache', e);
+    // Only try to read if file exists (catch error)
+    const data = await fs.readFile(CACHE_FILE, 'utf8');
+    return JSON.parse(data);
+  } catch {
+    // Ignore ENOENT (file not found), log others if strict
   }
   return {};
 }
 
-// Helper to write cache safely
-function writeCache(data: Record<string, PreviewMetadata>) {
+/**
+ * Writes the preview cache to disk.
+ * @param data - The cache data to write.
+ */
+async function writeCache(data: Record<string, PreviewMetadata>) {
   try {
-    fs.writeFileSync(CACHE_FILE, JSON.stringify(data, null, 2));
+    await fs.writeFile(CACHE_FILE, JSON.stringify(data, null, 2));
   } catch (e) {
     console.error('Failed to write preview cache', e);
   }
 }
 
+/**
+ * API Handler to fetch OpenGraph preview data for a URL.
+ * Checks a local JSON cache first before making a network request.
+ *
+ * @param req - Next.js API request
+ * @param res - Next.js API response
+ */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { url } = req.query;
   const targetUrl = Array.isArray(url) ? url[0] : url;
@@ -41,8 +57,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ error: 'Missing url' });
   }
 
-  // 1. Check Cache
-  const cache = readCache();
+  // Check cache first
+  const cache = await readCache();
   if (cache[targetUrl]) {
     console.log(`[Preview] CACHE HIT for ${targetUrl}`);
     return res.status(200).json(cache[targetUrl]);
@@ -51,14 +67,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   console.log(`[Preview] CACHE MISS - Fetching ${targetUrl}`);
 
   try {
-    const headers: Record<string, string> = {};
+    let headers: Record<string, string> = {};
 
     // Inject Instagram Auth Cookies if available
-    if (targetUrl.includes('instagram.com') && process.env.INSTAGRAM_AUTH) {
+    let isInstagram = false;
+    try {
+      const u = new URL(targetUrl);
+      isInstagram = u.hostname.includes('instagram.com');
+    } catch {
+      // invalid url
+    }
+
+    if (isInstagram && process.env.INSTAGRAM_AUTH) {
       const igHeaders = getInstagramHeaders(process.env.INSTAGRAM_AUTH);
 
       // Merge into existing headers
-      Object.assign(headers, igHeaders);
+      headers = { ...headers, ...igHeaders };
 
       console.log('[Preview] Using Authenticated Instagram Fetch');
     }
@@ -69,19 +93,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       signal: AbortSignal.timeout(5000),
     });
 
-    if (response.status === 403 || response.status === 401) {
-      console.error(`❌ [Preview] url ${targetUrl} returned ${response.status}`);
-      // console.log(`[Preview] url ${targetUrl} returned ${response.status} with scraper UA, retrying with Browser UA...`);
-      // response = await fetch(targetUrl, {
-      //   headers: {
-      //     ...headers,
-      //     'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      //   },
-      //   signal: AbortSignal.timeout(5000),
-      // });
-    }
-
     if (!response.ok) {
+      console.error(`❌ [Preview] url ${targetUrl} returned ${response.status}`);
       return res.status(response.status).json({ error: 'Failed to fetch' });
     }
 
@@ -139,15 +152,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       description,
     };
 
-    // 2. Write to Cache (refetch fresh cache in case of race conditions, though simple overwrite is usually fine for local)
+    // Write to cache (refetch fresh cache in case of race conditions, though simple overwrite is usually fine for local)
     // For simplicity in this context:
-    const freshCache = readCache();
+    const freshCache = await readCache();
     freshCache[targetUrl] = result;
-    writeCache(freshCache);
+    await writeCache(freshCache);
 
     return res.status(200).json(result);
-  } catch (error) {
-    console.error('Preview fetch error:', error);
+  } catch (e) {
+    console.error('Preview fetch error:', e);
     return res.status(500).json({ error: 'Internal Error' });
   }
 }

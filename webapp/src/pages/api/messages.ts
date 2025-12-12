@@ -1,13 +1,15 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import fs from 'fs';
+import { promises as fs } from 'fs';
 import path from 'path';
 import { getDataDir } from '../../utils/config';
 
 // Google Chat type definitions
+/** Represents a file attached to a Google Chat message */
 interface GoogleChatAttachedFile {
   export_name: string;
 }
 
+/** Represents a reaction to a Google Chat message */
 interface GoogleChatReaction {
   emoji: {
     unicode: string;
@@ -15,10 +17,12 @@ interface GoogleChatReaction {
   reactor_emails?: string[];
 }
 
+/** Represents a creator/sender in Google Chat */
 interface GoogleChatCreator {
   name: string;
 }
 
+/** Raw Google Chat message structure from export */
 interface GoogleChatMessage {
   created_date?: string;
   updated_date?: string;
@@ -48,14 +52,17 @@ interface GoogleChatMessage {
   }[];
 }
 
+/** Wrapper for Google Chat export file */
 interface GoogleChatData {
   messages: GoogleChatMessage[];
 }
 
+/** Unified media item for internal use */
 interface MediaItem {
   uri: string;
 }
 
+/** Raw Facebook message structure */
 interface FacebookMessage {
   sender_name: string;
   timestamp_ms: number;
@@ -66,11 +73,13 @@ interface FacebookMessage {
   reactions?: { reaction: string; actor: string }[];
 }
 
+/** Wrapper for Facebook/Instagram export file */
 interface FacebookData {
   messages: FacebookMessage[];
   [key: string]: unknown;
 }
 
+/** Unified Message structure used by the frontend */
 interface Message {
   id?: string;
   is_sender?: boolean;
@@ -89,6 +98,7 @@ interface Message {
   };
 }
 
+/** Facebook Profile Information structure */
 interface FacebookProfile {
   profile_v2?: {
     name?: {
@@ -97,6 +107,7 @@ interface FacebookProfile {
   };
 }
 
+/** Instagram Profile Information structure */
 interface InstagramProfile {
   profile_user?: {
     string_map_data?: {
@@ -107,13 +118,21 @@ interface InstagramProfile {
   }[];
 }
 
+/** Google Chat User Information structure */
 interface GoogleChatUserInfo {
   user?: {
     name?: string;
   };
 }
 
-export default function handler(req: NextApiRequest, res: NextApiResponse) {
+/**
+ * API Handler to retrieve messages for a specific thread and platform.
+ * Normalizes data from different platform export formats into a unified Message structure.
+ *
+ * @param req - Next.js API request containing 'threadId', 'page', and 'platform' query params.
+ * @param res - Next.js API response
+ */
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { threadId, page = '1', platform } = req.query;
 
   if (!threadId) {
@@ -139,15 +158,17 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
   let googleChatUserPath = '';
   const gcUsersDir = path.join(dataDir, 'Google Chat/Users');
   try {
-    if (fs.existsSync(gcUsersDir)) {
-      const folders = fs.readdirSync(gcUsersDir);
-      for (const folder of folders) {
-        if (folder.startsWith('User ')) {
-          const candidate = path.join(gcUsersDir, folder, 'user_info.json');
-          if (fs.existsSync(candidate)) {
-            googleChatUserPath = candidate;
-            break;
-          }
+    await fs.access(gcUsersDir);
+    const folders = await fs.readdir(gcUsersDir);
+    for (const folder of folders) {
+      if (folder.startsWith('User ')) {
+        const candidate = path.join(gcUsersDir, folder, 'user_info.json');
+        try {
+          await fs.access(candidate);
+          googleChatUserPath = candidate;
+          break;
+        } catch {
+          // continue
         }
       }
     }
@@ -172,15 +193,15 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
 
   for (const source of profileSources) {
     try {
-      if (fs.existsSync(source.path)) {
-        const fileData = JSON.parse(fs.readFileSync(source.path, 'utf8'));
-        const foundName = source.extract(fileData);
-        if (foundName) {
-          myNamesSet.add(foundName);
-        }
+      // Trying to read file will fail if not exists, so just try read
+      const fileContent = await fs.readFile(source.path, 'utf8');
+      const fileData = JSON.parse(fileContent);
+      const foundName = source.extract(fileData);
+      if (foundName) {
+        myNamesSet.add(foundName);
       }
     } catch (e) {
-      console.error(`Failed to load profile info from ${source.path}`, e);
+      console.warn(`Failed to load profile info from ${source.path}`, e);
     }
   }
   const myNames = Array.from(myNamesSet);
@@ -191,15 +212,18 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
     const msgPathOriginal = path.join(inboxPath, threadIdStr, `message_${pageStr}.json`);
     const msgPathProcessed = path.join(inboxPath, threadIdStr, `message_${pageStr}.processed.json`);
     // Prefer processed if exists
-    const msgPath = fs.existsSync(msgPathProcessed) ? msgPathProcessed : msgPathOriginal;
+    let msgPath = msgPathOriginal;
+    try {
+      await fs.access(msgPathProcessed);
+      msgPath = msgPathProcessed;
+    } catch {
+      // processed invalid, use original
+    }
 
     console.log(`[Google Chat] Loading messages from: ${msgPath}`);
     try {
-      if (!fs.existsSync(msgPath)) {
-        console.error(`[Google Chat] File not found: ${msgPath}`);
-        return res.status(404).json({ error: 'Message file not found' });
-      }
-      const data: GoogleChatData = JSON.parse(fs.readFileSync(msgPath, 'utf8'));
+      const fileContent = await fs.readFile(msgPath, 'utf8');
+      const data: GoogleChatData = JSON.parse(fileContent);
       const rawMessages = data.messages || [];
       console.log(`[Google Chat] Found ${rawMessages.length} raw messages`);
 
@@ -337,10 +361,16 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
       const processed = path.join(messagesRoot, threadIdStr, `${filenameBase}.processed.json`);
       const original = path.join(messagesRoot, threadIdStr, `${filenameBase}.json`);
 
-      if (fs.existsSync(processed)) {
+      try {
+        await fs.access(processed);
         msgPath = processed;
-      } else if (fs.existsSync(original)) {
-        msgPath = original;
+      } catch {
+        try {
+          await fs.access(original);
+          msgPath = original;
+        } catch {
+          // neither found
+        }
       }
     } else {
       // Facebook
@@ -353,14 +383,17 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
         const processed = path.join(messagesRoot, folder, threadIdStr, `${filenameBase}.processed.json`);
         const original = path.join(messagesRoot, folder, threadIdStr, `${filenameBase}.json`);
 
-        if (fs.existsSync(processed)) {
+        try {
+          await fs.access(processed);
           msgPath = processed;
           break;
-        }
-        if (fs.existsSync(original)) {
+        } catch {}
+
+        try {
+          await fs.access(original);
           msgPath = original;
           break;
-        }
+        } catch {}
       }
     }
 
@@ -369,7 +402,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
     }
 
     try {
-      const fileContents = fs.readFileSync(msgPath, 'utf8');
+      const fileContents = await fs.readFile(msgPath, 'utf8');
       const data = JSON.parse(fileContents);
 
       const fixedData = data as unknown as FacebookData;
@@ -382,8 +415,8 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
       }
 
       return res.status(200).json(fixedData);
-    } catch (error) {
-      console.error('Error reading message file:', error);
+    } catch (e) {
+      console.error('Error reading message file:', e);
       return res.status(500).json({ error: 'Failed to load messages' });
     }
   }

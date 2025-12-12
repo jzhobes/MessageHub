@@ -1,9 +1,16 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import fs from 'fs';
+import { promises as fs } from 'fs';
 import path from 'path';
 import { getDataDir } from '../../utils/config';
 
-export default function handler(req: NextApiRequest, res: NextApiResponse) {
+/**
+ * API Handler to serve media files (images, videos) from the local data directory.
+ * Prevents path traversal and handles platform-specific path structures.
+ *
+ * @param req - Next.js API request containing 'path' and 'platform' query parameters.
+ * @param res - Next.js API response
+ */
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { path: pathParam, platform } = req.query;
 
   if (!pathParam || !platform) {
@@ -42,9 +49,16 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
   let absolutePath = path.join(baseDir, relativePath);
 
   // Fallback: If not found, try the raw path (in case it was already correct or different structure)
-  if (!fs.existsSync(absolutePath)) {
-    if (fs.existsSync(path.join(baseDir, pathStr))) {
-      absolutePath = path.join(baseDir, pathStr);
+  try {
+    await fs.access(absolutePath);
+  } catch {
+    // Original path failed, try valid fallback
+    const altPath = path.join(baseDir, pathStr);
+    try {
+      await fs.access(altPath);
+      absolutePath = altPath;
+    } catch {
+      // Both failed
     }
   }
 
@@ -52,12 +66,8 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
     return res.status(403).send('Access denied');
   }
 
-  if (!fs.existsSync(absolutePath)) {
-    return res.status(404).send('File not found');
-  }
-
   try {
-    const fileBuffer = fs.readFileSync(absolutePath);
+    const fileBuffer = await fs.readFile(absolutePath);
 
     const ext = path.extname(absolutePath).toLowerCase();
     let contentType = 'application/octet-stream';
@@ -76,8 +86,11 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
     res.setHeader('Content-Type', contentType);
     res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
     res.send(fileBuffer);
-  } catch (error) {
-    console.error('Error serving media:', error);
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === 'ENOENT') {
+      return res.status(404).send('File not found');
+    }
+    console.error('Error serving media:', e);
     return res.status(500).send('Internal Error');
   }
 }

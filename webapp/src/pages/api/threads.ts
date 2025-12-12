@@ -1,9 +1,16 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import fs from 'fs';
+import { promises as fs } from 'fs';
 import path from 'path';
 import { getDataDir } from '../../utils/config';
 
-export default function handler(req: NextApiRequest, res: NextApiResponse) {
+/**
+ * API Handler to list message threads for a specific platform.
+ * Reads from the pre-generated index JSON files.
+ *
+ * @param req - Next.js API request containing 'platform' query parameter.
+ * @param res - Next.js API response
+ */
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { platform } = req.query;
   const platformStr = Array.isArray(platform) ? platform[0] : platform;
 
@@ -21,16 +28,17 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
   }
 
   try {
-    if (!fs.existsSync(indexPath)) {
-      return res.status(200).json([]);
-    }
-    const fileContents = fs.readFileSync(indexPath, 'utf8');
+    // Attempt read directly, will throw ENOENT if missing
+    const fileContents = await fs.readFile(indexPath, 'utf8');
     const data = JSON.parse(fileContents);
 
     // Data is already fixed by Python script
     return res.status(200).json(data);
-  } catch (error) {
-    console.error('Error reading index:', error);
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === 'ENOENT') {
+      return res.status(200).json([]);
+    }
+    console.error('Error reading index:', e);
     return res.status(500).json({ error: 'Failed to load threads' });
   }
 }

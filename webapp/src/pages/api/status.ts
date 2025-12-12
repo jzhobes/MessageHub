@@ -1,16 +1,34 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import fs from 'fs';
+import { promises as fs } from 'fs';
 import path from 'path';
 import { getDataDir } from '../../utils/config';
 
-export default function handler(req: NextApiRequest, res: NextApiResponse) {
+/**
+ * API Handler to check the status of processed data availability.
+ * Returns boolean flags indicating if thread index files exist for each platform.
+ *
+ * @param req - Next.js API request
+ * @param res - Next.js API response
+ */
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const dataDir = getDataDir();
 
+  const check = async (filename: string) => {
+    try {
+      await fs.access(path.join(dataDir, filename));
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   // Check for the existence of the generated JSON index files
+  const [facebook, instagram, googleChat] = await Promise.all([check('fb_threads_index.json'), check('ig_threads_index.json'), check('google_chat_threads_index.json')]);
+
   const status = {
-    Facebook: fs.existsSync(path.join(dataDir, 'fb_threads_index.json')),
-    Instagram: fs.existsSync(path.join(dataDir, 'ig_threads_index.json')),
-    'Google Chat': fs.existsSync(path.join(dataDir, 'google_chat_threads_index.json')),
+    Facebook: facebook,
+    Instagram: instagram,
+    'Google Chat': googleChat,
     'Google Voice': false, // placeholder/unimplemented
   };
 
