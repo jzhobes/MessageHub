@@ -1,10 +1,19 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import LazyView from './LazyView';
+import styles from '../styles/index.module.css';
 
-export default function LinkPreview({ url, style }: { url: string; style?: React.CSSProperties }) {
+interface LinkPreviewProps {
+  url: string;
+  isMyMsg: boolean; // required to determine radius class
+}
+
+export default function LinkPreview({ url, isMyMsg }: LinkPreviewProps) {
   const [data, setData] = useState<{ image?: string; title?: string; description?: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const isMounted = useRef(true);
+
+  // Determine radius class based on sender
+  const radiusClass = isMyMsg ? styles.previewBubbleSent : styles.previewBubbleReceived;
 
   useEffect(() => {
     return () => {
@@ -32,21 +41,8 @@ export default function LinkPreview({ url, style }: { url: string; style?: React
 
   if (loading) {
     return (
-      <LazyView
-        onEnter={fetchPreview}
-        rootMargin="50px"
-        style={{
-          marginTop: '0',
-          padding: '10px',
-          backgroundColor: '#fff',
-          borderRadius: '12px',
-          border: '1px solid #e5e5ea',
-          fontSize: '0.9rem',
-          maxWidth: '300px',
-          ...style,
-        }}
-      >
-        <a href={url} target="_blank" rel="noopener noreferrer" style={{ color: '#007aff', textDecoration: 'none' }}>
+      <LazyView onEnter={fetchPreview} rootMargin="50px" className={`${styles.linkPreviewLazy} ${radiusClass}`}>
+        <a href={url} target="_blank" rel="noopener noreferrer" className={styles.linkPreviewLink}>
           {url}
         </a>
         <div style={{ fontSize: '0.8rem', color: '#999', marginTop: '4px' }}>Loading preview...</div>
@@ -59,53 +55,28 @@ export default function LinkPreview({ url, style }: { url: string; style?: React
   const hasTitle = data && (data.title || data.description);
 
   if (!loading && !hasImage && !hasTitle) {
-    // Fallback: Just show the URL as a card so it's not invisible
+    // Fallback
     return (
-      <div
-        style={{
-          margin: '0',
-          width: '100%',
-          maxWidth: '300px', // Strict width for fallback too
-          borderRadius: '12px',
-          border: '1px solid #e5e5ea',
-          backgroundColor: '#fff',
-          padding: '10px',
-          ...style,
-        }}
-      >
-        <a href={url} target="_blank" rel="noopener noreferrer" style={{ color: '#007aff', textDecoration: 'none', wordBreak: 'break-all', fontSize: '0.9rem' }}>
+      <div className={`${styles.linkPreviewFallback} ${radiusClass}`}>
+        <a href={url} target="_blank" rel="noopener noreferrer" className={styles.linkPreviewLink}>
           {url}
         </a>
       </div>
     );
   }
 
-  // If we have data (image OR title), render visually rich card
+  // If we have data
   if (hasImage || hasTitle) {
     return (
-      <div
-        style={{
-          margin: '0',
-          width: '100%',
-          maxWidth: '300px', // Strict width as requested
-          borderRadius: '12px',
-          overflow: 'hidden',
-          border: '1px solid #e5e5ea',
-          display: 'flex',
-          flexDirection: 'column',
-          ...style,
-        }}
-      >
+      <div className={`${styles.linkPreviewCard} ${radiusClass}`}>
         {/* Preview Image */}
         {hasImage && data?.image && (
           <a href={url} target="_blank" rel="noopener noreferrer" style={{ display: 'block', width: '100%' }}>
             <img
               src={data.image}
               alt="Preview"
+              className={styles.linkPreviewImage}
               style={{
-                width: '100%',
-                height: 'auto',
-                display: 'block',
                 borderBottom: hasTitle ? '1px solid #eee' : 'none',
               }}
             />
@@ -113,13 +84,7 @@ export default function LinkPreview({ url, style }: { url: string; style?: React
         )}
 
         {/* Text Content */}
-        {hasTitle && (
-          <div style={{ padding: '10px 12px', backgroundColor: '#f0f0f5' }}>
-            {data?.title && (
-              <div style={{ fontWeight: 600, fontSize: '0.9rem', marginBottom: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: '#000' }}>{data.title}</div>
-            )}
-          </div>
-        )}
+        {hasTitle && <div className={styles.linkPreviewTitleArea}>{data?.title && <div className={styles.linkPreviewTitle}>{data.title}</div>}</div>}
       </div>
     );
   }

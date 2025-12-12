@@ -1,0 +1,3 @@
+[tool.ruff]
+# Same as Black.
+line-length = 120

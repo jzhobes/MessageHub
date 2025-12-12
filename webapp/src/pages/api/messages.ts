@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import fs from 'fs';
 import path from 'path';
+import { getDataDir } from '../../utils/config';
 
 // Google Chat type definitions
 interface GoogleChatAttachedFile {
@@ -123,19 +124,48 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
   const pageStr = Array.isArray(page) ? page[0] : page;
   const platformStr = Array.isArray(platform) ? platform[0] : platform;
 
+  // SECURITY: Prevent path traversal
+  // Allow alphanumeric, underscores, hyphens, dots, and spaces (for Google Chat folder names)
+  // Rejects ".." "/" "\"
+  if (!/^[a-zA-Z0-9_\-\. ]+$/.test(threadIdStr)) {
+    return res.status(400).json({ error: 'Invalid thread ID' });
+  }
+
   // Identify "Me"
   const myNamesSet = new Set<string>();
+  const dataDir = getDataDir();
+
+  // Dynamically find Google Chat user info
+  let googleChatUserPath = '';
+  const gcUsersDir = path.join(dataDir, 'Google Chat/Users');
+  try {
+    if (fs.existsSync(gcUsersDir)) {
+      const folders = fs.readdirSync(gcUsersDir);
+      for (const folder of folders) {
+        if (folder.startsWith('User ')) {
+          const candidate = path.join(gcUsersDir, folder, 'user_info.json');
+          if (fs.existsSync(candidate)) {
+            googleChatUserPath = candidate;
+            break;
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('[Messages] Failed to search Google Chat users directory', e);
+  }
+
   const profileSources = [
     {
-      path: path.join(process.cwd(), '../data/Facebook/profile_information/profile_information.json'),
+      path: path.join(dataDir, 'Facebook/profile_information/profile_information.json'),
       extract: (data: FacebookProfile) => data?.profile_v2?.name?.full_name,
     },
     {
-      path: path.join(process.cwd(), '../data/Instagram/personal_information/personal_information.json'),
+      path: path.join(dataDir, 'Instagram/personal_information/personal_information.json'),
       extract: (data: InstagramProfile) => data?.profile_user?.[0]?.string_map_data?.Name?.value,
     },
     {
-      path: path.join(process.cwd(), '../data/Google Chat/Users/User 100858821545879890647/user_info.json'),
+      path: googleChatUserPath, // Dynamic path (empty string if not found, handled by existsSync check below)
       extract: (data: GoogleChatUserInfo) => data?.user?.name,
     },
   ];
@@ -157,8 +187,11 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
 
   // Google Chat Handling
   if (platformStr === 'Google Chat') {
-    const inboxPath = path.join(process.cwd(), '../data/Google Chat/Groups');
-    const msgPath = path.join(inboxPath, threadIdStr, `message_${pageStr}.json`);
+    const inboxPath = path.join(dataDir, 'Google Chat/Groups');
+    const msgPathOriginal = path.join(inboxPath, threadIdStr, `message_${pageStr}.json`);
+    const msgPathProcessed = path.join(inboxPath, threadIdStr, `message_${pageStr}.processed.json`);
+    // Prefer processed if exists
+    const msgPath = fs.existsSync(msgPathProcessed) ? msgPathProcessed : msgPathOriginal;
 
     console.log(`[Google Chat] Loading messages from: ${msgPath}`);
     try {
@@ -227,7 +260,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
           // Create one reaction entry per reactor
           return emails.map((email) => ({
             reaction: r.emoji.unicode,
-            actor: email, // display email as actor for now; usually no name in this part of export
+            actor: email, // display email as actor since name is unavailable here
           }));
         });
 
@@ -272,17 +305,12 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
           });
         }
 
-        // If neither (e.g. unsupported attachment only), keep original behavior (empty text/media) to avoid data loss?
-        // But original would show an empty bubble.
-        // If result is empty, let's create a placeholder if it originally existed?
-        // Actually, if m.text is empty string and no photos, original code returned object with empty content.
-        // Let's replicate that if both ignored.
+        // If message is empty (e.g. unsupported attachment), fallback to empty string to prevent data loss.
         if (result.length === 0) {
-          // Fallback to empty text message to behave like before (or could be unsupported file)
           result.push({
             sender_name: sender,
             timestamp_ms: ms,
-            content: m.text || '', // likely empty string
+            content: m.text || '',
             reactions: reactions.length > 0 ? reactions : undefined,
           });
         }
@@ -303,21 +331,34 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
     let msgPath: string | null = null;
 
     if (platformStr === 'Instagram') {
-      const messagesRoot = path.join(process.cwd(), '../data/Instagram/your_instagram_activity/messages/inbox');
-      const candidatePath = path.join(messagesRoot, threadIdStr, `message_${pageStr}.json`);
-      if (fs.existsSync(candidatePath)) {
-        msgPath = candidatePath;
+      const messagesRoot = path.join(dataDir, 'Instagram/your_instagram_activity/messages/inbox');
+      const filenameBase = `message_${pageStr}`;
+
+      const processed = path.join(messagesRoot, threadIdStr, `${filenameBase}.processed.json`);
+      const original = path.join(messagesRoot, threadIdStr, `${filenameBase}.json`);
+
+      if (fs.existsSync(processed)) {
+        msgPath = processed;
+      } else if (fs.existsSync(original)) {
+        msgPath = original;
       }
     } else {
       // Facebook
-      const messagesRoot = path.join(process.cwd(), '../data/Facebook/your_facebook_activity/messages');
+      const messagesRoot = path.join(dataDir, 'Facebook/your_facebook_activity/messages');
       const foldersToSearch = ['inbox', 'archived_threads', 'legacy_threads', 'e2ee_cutover'];
 
       // Try to find the thread in each folder
       for (const folder of foldersToSearch) {
-        const candidatePath = path.join(messagesRoot, folder, threadIdStr, `message_${pageStr}.json`);
-        if (fs.existsSync(candidatePath)) {
-          msgPath = candidatePath;
+        const filenameBase = `message_${pageStr}`;
+        const processed = path.join(messagesRoot, folder, threadIdStr, `${filenameBase}.processed.json`);
+        const original = path.join(messagesRoot, folder, threadIdStr, `${filenameBase}.json`);
+
+        if (fs.existsSync(processed)) {
+          msgPath = processed;
+          break;
+        }
+        if (fs.existsSync(original)) {
+          msgPath = original;
           break;
         }
       }
@@ -331,39 +372,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
       const fileContents = fs.readFileSync(msgPath, 'utf8');
       const data = JSON.parse(fileContents);
 
-      // Type for arbitrary JSON values
-      type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
-
-      // Facebook exports use Latin-1 encoding instead of UTF-8, causing emoji and special characters to be corrupted.
-      // This function recursively walks the entire JSON structure and fixes all string values.
-      const fixString = (str: string) => {
-        try {
-          let decoded = Buffer.from(str, 'latin1').toString('utf8');
-          decoded = decoded.replace(/\u2764(?!\uFE0F)/g, '\u2764\uFE0F');
-          return decoded;
-        } catch {
-          return str;
-        }
-      };
-
-      const fixEncodingRecursive = (obj: JsonValue): JsonValue => {
-        if (typeof obj === 'string') {
-          return fixString(obj);
-        } else if (Array.isArray(obj)) {
-          return obj.map(fixEncodingRecursive);
-        } else if (obj && typeof obj === 'object') {
-          const newObj: { [key: string]: JsonValue } = {};
-          for (const key in obj) {
-            if (Object.prototype.hasOwnProperty.call(obj, key)) {
-              newObj[key] = fixEncodingRecursive(obj[key]);
-            }
-          }
-          return newObj;
-        }
-        return obj;
-      };
-
-      const fixedData = fixEncodingRecursive(data) as unknown as FacebookData;
+      const fixedData = data as unknown as FacebookData;
 
       // Inject is_sender for Facebook messages
       if (fixedData.messages && Array.isArray(fixedData.messages)) {

@@ -1,10 +1,10 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
-import { FaFacebook, FaInstagram, FaPhone, FaSpinner } from 'react-icons/fa';
-import { SiGooglechat } from 'react-icons/si';
 import styles from '../styles/index.module.css';
-import MessageItem from '../components/MessageItem';
-import { Message, QuotedMessageMetadata, Thread } from '../types';
+import { Message, Thread } from '../types';
+import Sidebar from '../sections/Sidebar';
+import ThreadList from '../sections/ThreadList';
+import ChatWindow from '../sections/ChatWindow';
 
 export default function Home() {
   const router = useRouter();
@@ -16,11 +16,38 @@ export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingThreads, setLoadingThreads] = useState(false);
+
+  // Platform Availability State
+  const [availability, setAvailability] = useState<Record<string, boolean>>({
+    Facebook: true,
+    Instagram: true,
+    'Google Chat': true,
+    'Google Voice': false,
+  });
+
+  // Check backend status on mount
+  useEffect(() => {
+    fetch('/api/status')
+      .then((res) => res.json())
+      .then((data) => {
+        setAvailability(data);
+        // If current active platform is now disabled, switch to first available
+        if (!data[activePlatform]) {
+          if (data['Facebook']) {
+            setActivePlatform('Facebook');
+          } else if (data['Instagram']) {
+            setActivePlatform('Instagram');
+          } else if (data['Google Chat']) {
+            setActivePlatform('Google Chat');
+          }
+        }
+      })
+      .catch((err) => console.error('Failed to fetch status', err));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Run once on mount
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [isRouterReady, setIsRouterReady] = useState(false);
-
-  const loadMoreRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (router.isReady) {
@@ -190,243 +217,27 @@ export default function Home() {
     loadMessagesManual(activeThread.id, nextPage);
   };
 
-  // Autoload effect
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting && hasMore && !loading) {
-          handleLoadMore();
-        }
-      },
-      { threshold: 0.1 },
-    );
-
-    if (loadMoreRef.current) {
-      observer.observe(loadMoreRef.current);
-    }
-
-    return () => {
-      observer.disconnect();
-    };
-  }, [hasMore, loading]);
-
-  const filteredMessages = messages.filter((msg) => {
-    if (!msg.content) {
-      return !searchQuery; // Hide media-only if searching text
-    }
-    if (/reacted\s+.+?\s+to your message/i.test(msg.content)) {
-      return false;
-    }
-    if (searchQuery) {
-      return msg.content.toLowerCase().includes(searchQuery.toLowerCase()) || msg.sender_name.toLowerCase().includes(searchQuery.toLowerCase());
-    }
-    return true;
-  });
-
-  // Scroll to message logic
-  const handleQuoteClick = (quoteMetadata: QuotedMessageMetadata | undefined) => {
-    if (!quoteMetadata) {
-      return;
-    }
-
-    // TODO: Search 'messages' (all loaded) if not found in 'filteredMessages'
-
-    // Heuristic: Match content AND sender
-    const match = filteredMessages.find((m) => {
-      const quoteName = quoteMetadata.creator?.name;
-      // Check sender match (handling "You" logic roughly by name match)
-      const senderMatch = m.sender_name === quoteName;
-
-      return senderMatch && m.content === quoteMetadata.text;
-    });
-
-    if (match) {
-      const elId = `msg-${match.id || match.timestamp_ms}`;
-      const el = document.getElementById(elId);
-      if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      } else {
-        console.error('Element not found in DOM');
-      }
-    } else {
-      console.error('Message not found in loaded history');
-    }
-  };
-
   if (!isRouterReady) {
     return <div>Loading...</div>;
   }
 
   return (
     <div className={styles.container}>
-      {/* Column 1: Platforms */}
-      <div className={styles.sidebar}>
-        <div className={styles.sidebarTitle}>💬 MessageHub</div>
-        {[
-          { name: 'Facebook', icon: <FaFacebook size={20} color="#1877F2" /> },
-          { name: 'Instagram', icon: <FaInstagram size={18} color="#E4405F" /> },
-          { name: 'Google Chat', icon: <SiGooglechat size={18} color="#00AC47" /> },
-          { name: 'Google Voice', icon: <FaPhone size={18} color="#34A853" /> },
-        ].map((p) => (
-          <div key={p.name} className={`${styles.navItem} ${activePlatform === p.name ? styles.navItemActive : ''}`} onClick={() => handlePlatformSelect(p.name)}>
-            <span style={{ marginRight: '10px', display: 'flex', alignItems: 'center' }}>{p.icon}</span>
-            {p.name}
-          </div>
-        ))}
-      </div>
+      <Sidebar activePlatform={activePlatform} onPlatformSelect={handlePlatformSelect} availability={availability} />
 
-      {/* Column 2: Threads */}
-      <div className={styles.threadList}>
-        <div className={styles.threadListHeader}>{activePlatform} Messages</div>
-        {threads.map((thread) => (
-          <div key={thread.id} className={`${styles.threadItem} ${activeThread?.id === thread.id ? styles.threadItemActive : ''}`} onClick={() => handleThreadSelect(thread)}>
-            <div className={styles.threadName}>{thread.title}</div>
-            <div className={styles.threadTime}>{new Date(thread.timestamp).toLocaleDateString()}</div>
-            <div className={styles.threadSnippet}>{thread.snippet || '(Media)'}</div>
-          </div>
-        ))}
-        {loadingThreads ? (
-          <div style={{ padding: 20, textAlign: 'center', color: '#999' }}>
-            <FaSpinner className={styles.spinner} size={24} />
-          </div>
-        ) : (
-          threads.length === 0 && <div style={{ padding: 20, color: '#999' }}>No threads found</div>
-        )}
-      </div>
+      <ThreadList activePlatform={activePlatform} threads={threads} activeThread={activeThread} loading={loadingThreads} onThreadSelect={handleThreadSelect} />
 
-      {/* Column 3: Chat */}
-      <div className={styles.chatArea}>
-        {activeThread ? (
-          <>
-            <div className={styles.chatHeader} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                {activeThread.title}
-                <span style={{ fontSize: '0.8rem', color: '#666', marginLeft: '10px' }}>
-                  (Page {page} of {activeThread.file_count || 1})
-                </span>
-              </div>
-              <input
-                type="text"
-                placeholder="Search active chat..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                style={{
-                  padding: '6px 12px',
-                  borderRadius: '16px',
-                  border: '1px solid #ccc',
-                  fontSize: '0.9rem',
-                  outline: 'none',
-                  backgroundColor: 'rgba(255,255,255,0.9)',
-                  color: '#000',
-                  width: '200px',
-                }}
-              />
-            </div>
-            <div className={styles.messagesContainer}>
-              {filteredMessages.map((msg, i) => {
-                // Determine if my message
-                const isMyMsg = !!msg.is_sender;
-                const prevMsg = filteredMessages[i + 1];
-                const nextMsg = filteredMessages[i - 1];
-                const isTop = !prevMsg || prevMsg.sender_name !== msg.sender_name;
-                const isBottom = !nextMsg || nextMsg.sender_name !== msg.sender_name;
-
-                // Determine if there is a preview attached
-                const urlRegex = /(https?:\/\/[^\s]+)/;
-                const contentLinkMatch = msg.content ? msg.content.match(urlRegex) : null;
-                const previewUrl = msg.share?.link || (contentLinkMatch ? contentLinkMatch[0] : null);
-
-                let borderRadiusStyle = {};
-                let previewBubbleStyle: React.CSSProperties = {};
-                const radiusRound = '18px';
-                const radiusFlat = '4px';
-
-                const dynamicTop = isTop ? radiusRound : radiusFlat;
-                const dynamicBottom = isBottom ? (previewUrl ? radiusFlat : radiusRound) : radiusFlat;
-
-                borderRadiusStyle = {
-                  borderTopLeftRadius: isMyMsg ? radiusRound : dynamicTop,
-                  borderBottomLeftRadius: isMyMsg ? radiusRound : dynamicBottom,
-                  borderTopRightRadius: isMyMsg ? dynamicTop : radiusRound,
-                  borderBottomRightRadius: isMyMsg ? dynamicBottom : radiusRound,
-                };
-
-                if (previewUrl) {
-                  const previewBottom = isBottom ? radiusRound : radiusFlat;
-                  previewBubbleStyle = {
-                    borderTopLeftRadius: isMyMsg ? radiusRound : radiusFlat,
-                    borderBottomLeftRadius: isMyMsg ? radiusRound : previewBottom,
-                    borderTopRightRadius: isMyMsg ? radiusFlat : radiusRound,
-                    borderBottomRightRadius: isMyMsg ? previewBottom : radiusRound,
-                  };
-                }
-
-                const showAvatar = !isMyMsg && isBottom;
-                const showName = !isMyMsg && isTop;
-                const isImageShare = msg.share && msg.share.link && /\.(gif|jpe?g|png|webp)($|\?)/i.test(msg.share.link);
-                const hasMedia = (msg.photos && msg.photos.length > 0) || (msg.videos && msg.videos.length > 0) || (msg.gifs && msg.gifs.length > 0) || msg.sticker || isImageShare;
-                const isMediaOnly = hasMedia && !msg.content;
-
-                let showTimestamp = false;
-                if (i === filteredMessages.length - 1) {
-                  showTimestamp = true;
-                } else if (filteredMessages[i + 1]) {
-                  const currentDate = new Date(msg.timestamp_ms);
-                  const prevDate = new Date(filteredMessages[i + 1].timestamp_ms);
-                  if (
-                    currentDate.getHours() !== prevDate.getHours() ||
-                    currentDate.getDate() !== prevDate.getDate() ||
-                    currentDate.getMonth() !== prevDate.getMonth() ||
-                    currentDate.getFullYear() !== prevDate.getFullYear()
-                  ) {
-                    showTimestamp = true;
-                  }
-                }
-
-                const timestampStr = new Date(msg.timestamp_ms).toLocaleString('en-US', {
-                  weekday: 'short',
-                  month: 'short',
-                  day: 'numeric',
-                  year: 'numeric',
-                  hour: 'numeric',
-                  minute: '2-digit',
-                });
-
-                return (
-                  <div id={`msg-${msg.id || msg.timestamp_ms}`} key={i}>
-                    <MessageItem
-                      msg={msg}
-                      isMyMsg={isMyMsg}
-                      isBottom={isBottom}
-                      showAvatar={showAvatar}
-                      showName={showName}
-                      borderRadiusStyle={borderRadiusStyle}
-                      isMediaOnly={!!isMediaOnly}
-                      activePlatform={activePlatform}
-                      showTimestamp={showTimestamp}
-                      timestampStr={timestampStr}
-                      previewBubbleStyle={previewBubbleStyle}
-                      onQuoteClick={() => handleQuoteClick(msg.quoted_message_metadata)}
-                    />
-                  </div>
-                );
-              })}
-              {(hasMore || loading) && (
-                <div ref={loadMoreRef} style={{ display: 'flex', justifyContent: 'center', padding: '10px', alignItems: 'center', gap: '8px', color: '#999' }}>
-                  {loading && (
-                    <>
-                      <FaSpinner className={styles.spinner} size={24} />
-                      <span>Loading messages...</span>
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
-          </>
-        ) : (
-          <div className={styles.emptyState}>Select a conversation to view</div>
-        )}
-      </div>
+      <ChatWindow
+        activeThread={activeThread}
+        messages={messages}
+        loading={loading}
+        hasMore={hasMore}
+        page={page}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        onLoadMore={handleLoadMore}
+        activePlatform={activePlatform}
+      />
     </div>
   );
 }

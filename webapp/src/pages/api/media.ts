@@ -1,27 +1,41 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import fs from 'fs';
 import path from 'path';
+import { getDataDir } from '../../utils/config';
 
 export default function handler(req: NextApiRequest, res: NextApiResponse) {
-  const { path: filePathParam, platform } = req.query;
-  const filePath = Array.isArray(filePathParam) ? filePathParam[0] : filePathParam;
+  const { path: pathParam, platform } = req.query;
+
+  if (!pathParam || !platform) {
+    return res.status(400).send('Missing path or platform');
+  }
+
+  const pathStr = Array.isArray(pathParam) ? pathParam[0] : pathParam;
+
+  // SECURITY: Prevent path traversal
+  // This is critical since this API reads arbitrary files from disk
+  if (pathStr.includes('..')) {
+    return res.status(400).send('Invalid path');
+  }
+
   const platformStr = Array.isArray(platform) ? platform[0] : platform;
 
-  if (!filePath) {
+  if (!pathStr) {
+    // Changed from !filePath to !pathStr
     return res.status(400).send('Missing path');
   }
 
-  const baseDir = path.resolve(process.cwd(), '../data');
-  let relativePath = filePath;
+  const baseDir = getDataDir();
+  let relativePath = pathStr;
 
   // Platform-specific path adjustments
   if (platformStr === 'Facebook') {
-    relativePath = path.join('Facebook', filePath.startsWith('your_facebook_activity') ? '' : 'your_facebook_activity', filePath);
+    relativePath = path.join('Facebook', pathStr.startsWith('your_facebook_activity') ? '' : 'your_facebook_activity', pathStr);
   } else if (platformStr === 'Instagram') {
-    relativePath = path.join('Instagram', filePath.startsWith('your_instagram_activity') ? '' : 'your_instagram_activity', filePath);
+    relativePath = path.join('Instagram', pathStr.startsWith('your_instagram_activity') ? '' : 'your_instagram_activity', pathStr);
   } else if (platformStr === 'Google Chat') {
-    // Google Chat logic if needed, usually direct mapping or handled elsewhere
-    relativePath = path.join('Google Chat', filePath);
+    // Google Chat paths are direct mappings
+    relativePath = path.join('Google Chat', pathStr);
   }
 
   // First try the constructed path
@@ -29,8 +43,8 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
 
   // Fallback: If not found, try the raw path (in case it was already correct or different structure)
   if (!fs.existsSync(absolutePath)) {
-    if (fs.existsSync(path.join(baseDir, filePath))) {
-      absolutePath = path.join(baseDir, filePath);
+    if (fs.existsSync(path.join(baseDir, pathStr))) {
+      absolutePath = path.join(baseDir, pathStr);
     }
   }
 

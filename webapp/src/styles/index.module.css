@@ -47,6 +47,24 @@
   color: #fff;
 }
 
+.sidebarButton {
+  background: none;
+  border: none;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  color: inherit;
+}
+
+.sidebarIconWrapper {
+  margin-right: 10px;
+  display: flex;
+  align-items: center;
+}
+
 /* Col 2: Thread List */
 .threadList {
   width: 350px;
@@ -109,6 +127,27 @@
   float: right;
 }
 
+.loadingContainer {
+  padding: 20px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 10px;
+  color: #6b7280;
+}
+
+.loadingText {
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.noThreads {
+  padding: 20px;
+  color: #999;
+}
+
 /* Col 3: Messages */
 .chatArea {
   flex: 1;
@@ -126,11 +165,29 @@
   border-bottom: 1px solid #e5e5ea;
   display: flex;
   align-items: center;
+  justify-content: space-between;
   padding: 0 20px;
   font-weight: 600;
   font-size: 1.1rem;
   color: #000;
   background-color: rgba(255, 255, 255, 0.95);
+}
+
+.pageIndicator {
+  font-size: 0.8rem;
+  color: #666;
+  margin-left: 10px;
+}
+
+.searchInput {
+  padding: 6px 12px;
+  border-radius: 16px;
+  border: 1px solid #ccc;
+  font-size: 0.9rem;
+  outline: none;
+  background-color: rgba(255, 255, 255, 0.9);
+  color: #000;
+  width: 200px;
 }
 
 .messagesContainer {
@@ -141,6 +198,15 @@
   display: flex;
   flex-direction: column-reverse;
   /* Scroll from bottom */
+}
+
+.loadMoreContainer {
+  display: flex;
+  justify-content: center;
+  padding: 10px;
+  align-items: center;
+  gap: 8px;
+  color: #6b7280;
 }
 
 /* Message Row System */
@@ -198,6 +264,14 @@
   /* Ensure stack handles z-indexing */
 }
 
+.alignRight {
+  align-items: flex-end;
+}
+
+.alignLeft {
+  align-items: flex-start;
+}
+
 .hasReactions {
   margin-bottom: 15px;
   /* Add space ONLY if reactions are present to prevent overlap */
@@ -215,6 +289,7 @@
   /* Slight offset */
 }
 
+/* Bubbles & Radius Logic */
 .messageBubble {
   padding: 10px 16px;
   border-radius: 18px;
@@ -228,53 +303,206 @@
   overflow: hidden;
 }
 
-.mediaBubble {
-  padding: 0 !important;
-  background-color: transparent !important;
-  overflow: hidden;
-}
-
-.mediaBubble img,
-.mediaBubble video {
-  display: block;
-  /* Remove inline gap */
-  border-radius: inherit;
-}
-
 .sentBubble {
   background-color: #007aff;
   color: white;
-  border-bottom-right-radius: 4px;
+  /* Base: TL=18, TR=4, BR=4, BL=18 */
+  border-radius: 18px 4px 4px 18px;
+}
+
+.sentBubble.first {
+  border-top-right-radius: 18px;
+}
+
+.sentBubble.last {
+  border-bottom-right-radius: 18px;
+}
+
+.sentBubble.hasPreview {
+  border-bottom-right-radius: 4px !important;
 }
 
 .receivedBubble {
   background-color: #e5e5ea;
   color: black;
-  border-bottom-left-radius: 4px;
+  /* Base: TL=4, TR=18, BR=18, BL=4 */
+  border-radius: 4px 18px 18px 4px;
 }
 
-/* Adjust corners for consecutive messages if desired, 
-   but user only asked for profile pic logic. 
-   We will keep bubbles distinct for now. */
+.receivedBubble.first {
+  border-top-left-radius: 18px;
+}
 
-.emptyState {
+.receivedBubble.last {
+  border-bottom-left-radius: 18px;
+}
+
+.receivedBubble.hasPreview {
+  border-bottom-left-radius: 4px !important;
+}
+
+.mediaBubble {
+  padding: 0 !important;
+  background-color: transparent !important;
+  overflow: hidden;
+  border-radius: inherit; /* Inherit from the parent styling which handles radius */
+}
+
+/* Media Content */
+.msgImage,
+.msgVideo,
+.msgGif {
+  max-width: 100%;
+  max-height: 300px;
+  display: block;
+  /* Radius will be handled by container bubble inheritance or explicit logic */
+  border-radius: inherit;
+}
+.msgSticker {
+  max-width: 120px;
+  display: block;
+  border-radius: 0;
+}
+
+.mediaMargin {
+  margin-top: 5px;
+}
+
+/* Quotes */
+.quoteContainer {
+  margin-bottom: 8px;
+  margin-left: -10px;
+  margin-right: -10px;
+  margin-top: -5px;
+  padding: 8px 12px;
+  background-color: rgba(0, 0, 0, 0.2);
+  border-radius: 12px 12px 2px 2px;
+  font-size: 0.9rem;
+  color: inherit;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.quoteHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  opacity: 0.8;
+}
+
+.quoteAvatar {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background-color: #888;
+  color: #fff;
+  font-size: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 100%;
-  color: #8e8e93;
-  font-size: 1.2rem;
 }
 
-.loadMore {
-  align-self: center;
-  margin: 10px;
-  padding: 8px 16px;
-  background: #f2f2f7;
-  border-radius: 20px;
-  cursor: pointer;
+.quoteText {
+  opacity: 0.95;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  line-height: 1.3;
+}
+
+/* Link Preview (Bubble-adjacent) */
+.previewContainer {
+  margin-top: 4px;
+  max-width: 300px;
+  overflow: hidden;
+}
+
+.previewImage {
+  max-width: 100%;
+  border-radius: 12px;
+  max-height: 300px;
+  display: block;
+}
+
+/* Specific Preview Bubble Corner Logic for LinkPreview component overrides */
+.previewBubble {
+  border-radius: 12px; /* fallback */
+}
+/* Sent Preview: TL=18, TR=4, BR=18, BL=18 */
+.previewBubbleSent {
+  border-top-left-radius: 18px;
+  border-top-right-radius: 4px;
+  border-bottom-right-radius: 18px;
+  border-bottom-left-radius: 18px;
+}
+/* Received Preview: TL=4, TR=18, BR=18, BL=18 */
+.previewBubbleReceived {
+  border-top-left-radius: 4px;
+  border-top-right-radius: 18px;
+  border-bottom-right-radius: 18px;
+  border-bottom-left-radius: 18px;
+}
+
+/* LinkPreview Inner Styling */
+.linkPreviewCard {
+  margin: 0;
+  width: 100%;
+  max-width: 300px;
+  border-radius: inherit; /* Important for corner logic */
+  overflow: hidden;
+  border: 1px solid #e5e5ea;
+  display: flex;
+  flex-direction: column;
+  background-color: #fff;
+}
+
+.linkPreviewLazy {
+  margin-top: 0;
+  padding: 10px;
+  background-color: #fff;
+  border-radius: inherit;
+  border: 1px solid #e5e5ea;
   font-size: 0.9rem;
+  max-width: 300px;
+}
+
+.linkPreviewFallback {
+  margin: 0;
+  width: 100%;
+  max-width: 300px;
+  border-radius: inherit;
+  border: 1px solid #e5e5ea;
+  background-color: #fff;
+  padding: 10px;
+}
+
+.linkPreviewLink {
   color: #007aff;
+  text-decoration: none;
+  word-break: break-all;
+  font-size: 0.9rem;
+}
+
+.linkPreviewTitleArea {
+  padding: 10px 12px;
+  background-color: #f0f0f5;
+}
+
+.linkPreviewTitle {
+  font-weight: 600;
+  font-size: 0.9rem;
+  margin-bottom: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #000;
 }
 
 .reactionContainer {
@@ -310,6 +538,15 @@
   color: #8e8e93;
   margin: 16px 0 8px 0;
   font-weight: 500;
+}
+
+.emptyState {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #8e8e93;
+  font-size: 1.2rem;
 }
 
 @keyframes spin {
