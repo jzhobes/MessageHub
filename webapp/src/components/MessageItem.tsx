@@ -57,6 +57,9 @@ export default function MessageItem({
   const contentLinkMatch = msg.content ? msg.content.match(urlRegex) : null;
   const previewUrl = msg.share?.link || (contentLinkMatch ? contentLinkMatch[0] : null);
 
+  // Filter photos if we are showing a link preview (avoids duplicates)
+  const displayPhotos = previewUrl && msg.photos ? [] : msg.photos || [];
+
   // Construct Class Names for Bubble
   const bubbleClasses = [
     styles.messageBubble,
@@ -97,7 +100,7 @@ export default function MessageItem({
           {showName && <div className={styles.senderNameOutside}>{msg.sender_name}</div>}
 
           {/* Bubble */}
-          {(hasTextContent || (msg.photos && msg.photos.length > 0) || (msg.videos && msg.videos.length > 0) || (msg.gifs && msg.gifs.length > 0) || msg.sticker || msg.quoted_message_metadata) && (
+          {(hasTextContent || displayPhotos.length > 0 || (msg.videos && msg.videos.length > 0) || (msg.gifs && msg.gifs.length > 0) || msg.sticker || msg.quoted_message_metadata) && (
             <div className={bubbleClasses} title={formatTime(msg.timestamp_ms)}>
               {msg.quoted_message_metadata && (
                 <div
@@ -118,8 +121,8 @@ export default function MessageItem({
               {hasTextContent && msg.content && <div>{formatMessageContent(msg.content)}</div>}
 
               {/* Photos */}
-              {msg.photos &&
-                msg.photos.map((p, idx) => (
+              {displayPhotos.length > 0 &&
+                displayPhotos.map((p, idx) => (
                   <div key={`p-${idx}`} className={hasTextContent ? styles.mediaMargin : ''}>
                     <img src={p.uri.startsWith('http') ? p.uri : `/api/media?path=${encodeURIComponent(p.uri)}&platform=${activePlatform}`} alt="Photo" className={styles.msgImage} loading="lazy" />
                   </div>
@@ -156,7 +159,10 @@ export default function MessageItem({
           {previewUrl && (
             <div className={styles.previewContainer}>
               {/\.(gif|jpe?g|png|webp)($|\?)/i.test(previewUrl) ? (
-                <img src={previewUrl} alt="Shared Image" className={`${styles.previewImage} ${isMyMsg ? styles.previewBubbleSent : styles.previewBubbleReceived}`} loading="lazy" />
+                // Only show standalone image preview IF no photo attachments exist
+                !msg.photos?.length && (
+                  <img src={previewUrl} alt="Shared Image" className={`${styles.previewImage} ${isMyMsg ? styles.previewBubbleSent : styles.previewBubbleReceived}`} loading="lazy" />
+                )
               ) : (
                 <LinkPreview url={previewUrl} isMyMsg={isMyMsg} />
               )}

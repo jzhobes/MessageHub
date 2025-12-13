@@ -6,30 +6,25 @@ MessageHub is a unified local viewer for your personal chat archives. It aggrega
 
 - **Unified Dashboard:** Toggle seamlessly between Facebook Messenger, Instagram DMs, and Google Chat histories.
 - **Rich Media Support:** View photos, videos, and reactions directly in the chat stream.
-- **Search:** Filter threads instantly by name or participant.
-- **Infinite Scroll:** Smoothly browse through years of message history with efficient pagination.
-- **Data Processing:** Custom scripts to handle massive export files (splitting large JSONs) and deduplicate file attachments.
-- **Privacy-First:** localized processing—your data stays on your machine.
+- **Instant Search:** Search across all messages and threads using a local SQLite backend.
+- **Automated Ingestion:** A single script handles Zip extraction, data merging, and database population.
 
 ## Project Structure
 
 ```
 MessageHub/
-├── data/                  # Your exported chat history data
+├── data/                  # Default location for your exported chat history data
 │   ├── Facebook/
 │   ├── Instagram/
-│   └── Google Chat/
+│   ├── Google Chat/
+│   └── messagehub.db      # SQLite database containing all message data
 ├── scripts/               # Python processing scripts
-│   ├── generate_fb_index.py
-│   ├── generate_ig_index.py
-│   ├── generate_google_chat_index.py
-│   ├── process_messages.py
-│   ├── split_google_chat_messages.py
-│   └── utils.py           # Shared logic (Encoding fixes, parsing)
+│   ├── ingest.py          # Main script: Zip extraction + DB Ingestion
+│   └── utils.py           # Shared logic
 ├── webapp/                # Next.js frontend application
 │   ├── src/
-│   │   ├── components/    # Reusable UI atoms (MessageItem, LinkPreview)
-│   │   ├── sections/      # Major page layout blocks (Sidebar, ChatWindow)
+│   │   ├── components/    # Reusable UI atoms
+│   │   ├── sections/      # Major page layout blocks
 │   │   ├── pages/         # Next.js pages and API routes
 │   │   └── styles/        # CSS Modules
 └── README.md              # This file
@@ -45,74 +40,78 @@ MessageHub/
 
 1. Go to [**Accounts Center** > **Your information and permissions** > **Export your information**](https://accountscenter.facebook.com/info_and_permissions/dyi).
 2. **Create export** > **Facebook** > **Export to device**
-3. **Customize information** (make sure the following are selected)
+3. **Customize information**:
    - **Your Facebook activity** > **Messages**
-   - **Personal information** > **Profile information**
-4. **Date range** > **All time** (or any custom range)
-5. **Format** > **JSON**
-6. **Media quality** > **Higher quality** (optional, but recommended)
-7. **Start export**
+   - **Personal information** > **Profile information** (Required for "You" detection)
+4. **Format** > **JSON**
+5. **Media quality** > **Higher quality** (optional, but recommended)
+6. **Start export**
 
 **Instagram:**
 
 1. Go to [**Accounts Center** > **Your information and permissions** > **Export your information**](https://accountscenter.facebook.com/info_and_permissions/dyi).
 2. **Create export** > **Instagram** > **Export to device**
-3. **Customize information** (make sure the following are selected)
+3. **Customize information**:
    - **Your Instagram activity** > **Messages**
-   - **Personal information** > **Personal information** & **Information about you**
-4. **Date range** > **All time** (or any custom range)
-5. **Format** > **JSON**
-6. **Media quality** > **Higher quality** (optional, but recommended)
-7. **Start export**
+   - **Personal information** > **Personal information**
+4. **Format** > **JSON**
+5. **Start export**
 
 **Google:**
 
 1. Go to [Google Takeout](https://takeout.google.com/).
-2. Select **Google Chat**.
-3. Select **Voice**.
-4. Click **Next Step**.
-5. Change filze size to 4 GB.
-6. Click **Create export**.
+2. Select **Google Chat**. (Select **Voice** if desired).
+3. Click **Next Step**.
+4. Change file size to 4 GB or larger to minimize split zips (though split zips are supported).
+5. Click **Create export**.
 
-#### Environment Setup (.env)
+---
 
-To enable rich link previews for Instagram links (bypassing login walls), you need to provide your Instagram cookies.
+### 2. Configuration (.env)
 
-1. Go to [Instagram](https://instagram.com).
-2. Log in if you haven't already.
-3. Open Developer Tools (F12) -> Network Tab.
-4. Refresh the page and click on any request to `instagram.com` (should be the first request).
-5. Copy the `Cookie` header value, paste it into a temporary file, then look for the **sessionId** and **csrftoken** values.
-6. Create a new file called `.env` in the root directory of the project.
-7. Copy the values into the `.env` file in the following format:
+Create a `.env` file in the **project root**. This configuration is used by both the ingestion script and the webapp.
 
 ```bash
+# Path to your data directory (where zips and database live)
+# Can be absolute (/Users/you/data) or relative (./data)
+DATA_PATH=data
+
+# Optional: Instagram Auth for unauthenticated link previews
 INSTAGRAM_AUTH={"sessionid":"<sessionid>","csrftoken":"<csrftoken>"}
 ```
 
-### 2. Process Data
+_If `DATA_PATH` is omitted, the `data/` folder in the project root is used by default._
 
-Run the processing and index generation scripts. The `process_messages.py` script fixes text encoding issues (like mojibake emojis) by creating `.processed.json` files, which the index generators then use to build the JSON indexes.
+#### (Optional) Getting Instagram Auth
 
-**Run Scripts:**
+To enable rich link previews for Instagram links (bypassing login walls):
+
+1. Log in to [Instagram](https://instagram.com).
+2. Open Developer Tools (F12) -> Network Tab.
+3. Refresh and find a request to `instagram.com`.
+4. Copy the `Cookie` header values for `sessionid` and `csrftoken`.
+
+---
+
+### 3. Ingest Data
+
+Move your downloaded `.zip` files into your configured data folder (or the project root). Then run the ingestion script:
 
 ```bash
-# Fix text encoding (Facebook & Instagram)
-python3 scripts/process_messages.py
-
-# Facebook Index
-python3 scripts/generate_fb_index.py
-
-# Instagram Index
-python3 scripts/generate_ig_index.py
-
-# Google Chat Index (Also splits large files)
-python3 scripts/generate_google_chat_index.py
+python3 scripts/ingest.py
 ```
 
-_Note: The scripts use a shared `utils.py` to handle common tasks like emoji normalization and text decoding._
+**What this script does:**
 
-### 3. Run the Viewer
+1.  **Scans** for `.zip` files (Facebook, Instagram, Google Chat).
+2.  **Extracts** them into organized, merged platform folders (`Facebook`, `Instagram`, etc.).
+3.  **Parses** message JSONs, fixing text encoding (mojibake) on the fly.
+4.  **Populates** a local SQLite database (`messagehub.db`) for fast access.
+5.  **Cleans up** bulky `messages.json` files for Facebook/Instagram to save disk space (media is preserved).
+
+---
+
+### 4. Run the Viewer
 
 Navigate to the webapp directory and start the dev server:
 
@@ -126,16 +125,11 @@ Open [http://localhost:3000](http://localhost:3000) to browse your messages.
 
 ## Technical Details
 
-- **Frontend:** [Next.js](https://nextjs.org/) (React) with a modular component architecture (`Sidebar`, `ThreadList`, `ChatWindow`).
-- **Styling:** CSS Modules with a robust theming system for message bubbles and layouts.
-- **Backend:** Next.js API Routes (Node.js) serve the local JSON data.
-- **Security:** API endpoints include path traversal protection and input validation.
-- **Performance:** Expensive text encoding fixes are handled at the preprocessing layer (Python), ensuring fast UI load times.
-
-## Latest Updates
-
-- **Refactored Architecture:** Split monolithic code into focused components (`ChatWindow`, `ThreadList`) for better maintainability.
-- **Encoding Fixes:** Moved Latin-1/UTF-8 decoding logic to Python scripts to fix "mojibake" characters (e.g., broken emojis) permanently.
-- **Security Hardening:** Patched potential path traversal vulnerabilities in the API.
-- **Google Chat Fixes:** Implemented chronological alignment logic to resolve filename mismatches.
-- **UI Polish:** Improved accessibility (keyboard nav), introduced CSS variables, and refined message bubble styling.
+- **Frontend:** [Next.js](https://nextjs.org/) (React) with a modular component architecture.
+- **Database:** SQLite (`messagehub.db`) used for high-performance querying and searching of messages + metadata.
+- **Backend:** Next.js API Routes (Node.js) serve data via SQLite queries.
+- **Ingestion:** Python-based pipeline (`ingest.py`) handles:
+  - Zip extraction and merging (handling split archives).
+  - Latin-1/UTF-8 mojibake correction.
+  - Media path resolution.
+  - Selective JSON cleanup.

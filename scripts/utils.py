@@ -1,14 +1,17 @@
 import os
-import json
+
 import re
+from datetime import datetime
+from pathlib import Path
 
 # -----------------------------------------------------------------------------
 # Configuration & Path Resolution
 # -----------------------------------------------------------------------------
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
+SCRIPT_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = SCRIPT_DIR.parent
 
-ENV_FILE = os.path.join(PROJECT_ROOT, ".env")
+
+ENV_FILE = PROJECT_ROOT / ".env"
 
 
 def get_data_dir():
@@ -21,7 +24,11 @@ def get_data_dir():
             with open(ENV_FILE, "r") as f:
                 for line in f:
                     if line.strip().startswith("DATA_PATH="):
-                        data_path = line.strip().split("=", 1)[1].strip().strip('"').strip("'")
+                        val = line.strip().split("=", 1)[1].strip()
+                        # Allow optional quotes
+                        if (val.startswith('"') and val.endswith('"')) or (val.startswith("'") and val.endswith("'")):
+                            val = val[1:-1]
+                        data_path = val
                         break
             if data_path:
                 print(f"Loaded config from {ENV_FILE}")
@@ -29,16 +36,31 @@ def get_data_dir():
             print(f"Warning: Failed to read {ENV_FILE}: {e}")
 
     if data_path:
-        # Handle Windows paths in WSL (e.g. D:\Projects -> /mnt/d/Projects)
-        if os.name == "posix" and ":" in data_path and "\\" in data_path:
-            drive, rest = data_path.split(":", 1)
-            # D:\Projects\MessageHub\data -> /mnt/d/Projects/MessageHub/data
-            formatted_rest = rest.replace("\\", "/")
-            wsl_path = f"/mnt/{drive.lower()}{formatted_rest}"
-            return wsl_path
-        return data_path
+        from pathlib import PureWindowsPath
 
-    return os.path.join(PROJECT_ROOT, "data")
+        # Handle Windows paths (e.g. D:\Projects) when running in POSIX (WSL/Mac)
+        if os.name == "posix" and (":" in data_path or "\\" in data_path):
+            try:
+                # Treat the string specifically as a Windows path
+                win_path = PureWindowsPath(data_path)
+
+                # If absolute Windows path with drive (e.g. D:/Project)
+                if win_path.drive:
+                    drive_letter = win_path.drive.rstrip(":").lower()
+                    # Convert remainder to posix style slashes (e.g. \Projects -> /Projects)
+                    # as_posix() on the relative part preserves hierarchy
+                    rel_path = win_path.relative_to(win_path.anchor).as_posix()
+                    return f"/mnt/{drive_letter}/{rel_path}"
+                else:
+                    # Just normal slash conversion if no drive letter
+                    return win_path.as_posix()
+            except Exception:
+                # Fallback if parsing fails
+                pass
+
+        return Path(data_path)
+
+    return PROJECT_ROOT / "data"
 
 
 DATA_DIR = get_data_dir()
@@ -65,97 +87,96 @@ def fix_text(text):
         return text
 
 
-def parse_thread_folder(thread_dir, my_names):
+def parse_iso_time(iso_str):
     """
-    Generic thread parser for FB/Instagram structure.
-    thread_dir: Path to specific thread folder
-    my_names: List of strings that represent "Me" (e.g. ["John Doe", "john_doe"])
+    Parses Google Chat ISO timestamp to milliseconds.
+    Example: "Monday, May 20, 2013 at 2:11:12 PM UTC"
     """
-    msg_path_original = os.path.join(thread_dir, "message_1.json")
-    msg_path_processed = os.path.join(thread_dir, "message_1.processed.json")
+    if not iso_str:
+        return 0
 
-    msg_path = None
-    is_processed = False
+    # Try dateutil first if available (robust)
+    try:
+        from dateutil import parser
 
-    if os.path.exists(msg_path_processed):
-        msg_path = msg_path_processed
-        is_processed = True
-    elif os.path.exists(msg_path_original):
-        msg_path = msg_path_original
+        dt = parser.parse(iso_str)
+        return int(dt.timestamp() * 1000)
+    except ImportError:
+        pass
+    except Exception:
+        pass
 
-    if not msg_path:
-        return None
+    # Fallback to naive parsing for the specific known format
+    # "Monday, May 20, 2013 at 2:11:12 PM UTC"
+    # Remove " at ", " UTC", " " (narrow nbsp)
+    clean = iso_str.replace(" at ", " ").replace(" UTC", "").replace("\u202f", " ")
 
     try:
-        with open(msg_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
+        # Format: "%A, %B %d, %Y %I:%M:%S %p"
+        dt = datetime.strptime(clean, "%A, %B %d, %Y %I:%M:%S %p")
+        return int(dt.timestamp() * 1000)
+    except ValueError:
+        return 0
 
-        participants = [p.get("name", "Unknown") for p in data.get("participants", [])]
-        title = data.get("title")
 
-        # fix encoding if not processed
-        if not is_processed:
-            if title:
-                title = fix_text(title)
-            participants = [fix_text(p) for p in participants]
+def clean_json_messages(directory, platforms=None):
+    """
+    Recursively deletes message JSON files from the specified directory
+    to save space / cleanup after ingestion.
 
-        if not title:
-            # Fallback title
-            others = [p for p in participants if p not in my_names]
-            if others:
-                title = ", ".join(others)
-            else:
-                title = "Unknown Chat"
+    platforms: List of strings (e.g. ["facebook", "instagram"]).
+               If None or empty, defaults to ["all"].
+    """
+    directory = Path(directory)
+    if not directory.exists():
+        return
 
-        # Messages
-        messages = data.get("messages", [])
-        last_msg = messages[0] if messages else {}
-        timestamp = last_msg.get("timestamp_ms", 0)
+    if not platforms:
+        platforms = ["all"]
 
-        sender = last_msg.get("sender_name", "")
-        sender_fixed = sender if is_processed else fix_text(sender)
+    # Normalize inputs
+    platforms = [p.lower() for p in platforms]
+    check_all = "all" in platforms
 
-        # Determine strict "You" check
-        if sender_fixed in my_names:
-            snippet_name = "You"
-        else:
-            snippet_name = sender_fixed.split(" ")[0]
+    deleted_count = 0
+    reclaimed_bytes = 0
 
-        raw_content = last_msg.get("content", "")
+    print(f"Cleaning JSON message files in {directory} (Targets: {', '.join(platforms)})...")
 
-        snippet = ""
-        if raw_content:
-            clean_content = raw_content if is_processed else fix_text(raw_content)
-            snippet = f"{snippet_name}: {clean_content}"
-        else:
-            # Determine media type
-            if last_msg.get("photos"):
-                action = "sent a photo"
-            elif last_msg.get("videos"):
-                action = "sent a video"
-            elif last_msg.get("gifs"):
-                action = "sent a gif"
-            elif last_msg.get("audio_files"):
-                action = "sent an audio message"
-            elif last_msg.get("sticker"):
-                action = "sent a sticker"
-            else:
-                action = "sent a message"
+    # Walk directory
+    for root, dirs, files in os.walk(directory):
+        root_path = Path(root)
 
-            snippet = f"{snippet_name} {action}"
+        # Filter by platform folder heuristic if specific platforms requested
+        if not check_all:
+            # Check if current path belongs to a requested platform
+            path_str = str(root_path).lower()
 
-        json_files = [f for f in os.listdir(thread_dir) if f.startswith("message_") and f.endswith(".json")]
+            is_target = False
+            for p in platforms:
+                # Map shorthand to folder names or partial path match
+                keyword = p
+                if p == "google":
+                    keyword = "google chat"
 
-        return {
-            "id": os.path.basename(thread_dir),
-            "title": title,
-            "participants": participants,
-            "timestamp": timestamp,
-            "snippet": snippet,
-            "file_count": len(json_files),
-            "folder_path": thread_dir,
-        }
+                if keyword in path_str:
+                    is_target = True
+                    break
 
-    except Exception as e:
-        print(f"Error parsing {thread_dir}: {e}")
-        return None
+            if not is_target:
+                continue
+
+        for f in files:
+            # Match standard Facebook/Instagram/Google patterns
+            if f == "messages.json" or (f.startswith("message_") and f.endswith(".json")):
+                file_path = root_path / f
+                try:
+                    size = file_path.stat().st_size
+                    file_path.unlink()
+                    deleted_count += 1
+                    reclaimed_bytes += size
+                except Exception as e:
+                    print(f"Error deleting {file_path}: {e}")
+
+    mb = reclaimed_bytes / (1024 * 1024)
+    print(f"Cleanup Complete. Deleted {deleted_count} files ({mb:.2f} MB).")

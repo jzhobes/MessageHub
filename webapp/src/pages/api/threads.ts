@@ -1,7 +1,14 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { promises as fs } from 'fs';
-import path from 'path';
-import { getDataDir } from '../../utils/config';
+import { getDb } from '../../utils/db';
+
+/**
+ * API Handler to list message threads for a specific platform.
+ * Reads from the pre-generated index JSON files.
+ *
+ * @param req - Next.js API request containing 'platform' query parameter.
+ * @param res - Next.js API response
+ */
+import { getMyNames } from '../../utils/identity';
 
 /**
  * API Handler to list message threads for a specific platform.
@@ -14,31 +21,81 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { platform } = req.query;
   const platformStr = Array.isArray(platform) ? platform[0] : platform;
 
-  const dataDir = getDataDir();
-  let indexPath;
+  const db = getDb();
 
-  if (platformStr === 'Facebook') {
-    indexPath = path.join(dataDir, 'fb_threads_index.json');
-  } else if (platformStr === 'Instagram') {
-    indexPath = path.join(dataDir, 'ig_threads_index.json');
-  } else if (platformStr === 'Google Chat') {
-    indexPath = path.join(dataDir, 'google_chat_threads_index.json');
-  } else {
-    return res.status(200).json([]);
+  // Retrieve 'My Names' for title filtering
+  const myNames = await getMyNames();
+
+  // Use correlated subquery to get message count efficiently
+  let query = `
+    SELECT t.*, (SELECT COUNT(*) FROM messages m WHERE m.thread_id = t.id) as msg_count 
+    FROM threads t
+  `;
+  const params: string[] = [];
+
+  if (platformStr) {
+    if (platformStr === 'Facebook') {
+      query += ' WHERE platform = ?';
+      params.push('facebook');
+    } else if (platformStr === 'Instagram') {
+      query += ' WHERE platform = ?';
+      params.push('instagram');
+    } else if (platformStr === 'Google Chat') {
+      query += ' WHERE platform = ?';
+      params.push('google_chat');
+    }
+    // If unknown platform, return empty or all? Current logic returned empty.
   }
 
-  try {
-    // Attempt read directly, will throw ENOENT if missing
-    const fileContents = await fs.readFile(indexPath, 'utf8');
-    const data = JSON.parse(fileContents);
+  query += ' ORDER BY last_activity_ms DESC';
 
-    // Data is already fixed by Python script
-    return res.status(200).json(data);
-  } catch (e) {
-    if ((e as NodeJS.ErrnoException).code === 'ENOENT') {
-      return res.status(200).json([]);
+  try {
+    interface ThreadRow {
+      id: string;
+      platform: string;
+      title: string | null;
+      participants_json: string;
+      is_group: number;
+      last_activity_ms: number;
+      snippet: string | null;
+      msg_count: number;
     }
-    console.error('Error reading index:', e);
+
+    const rows = db.prepare(query).all(...params) as ThreadRow[];
+    const PAGE_SIZE = 100;
+
+    const threads = rows.map((row) => {
+      const participants = JSON.parse(row.participants_json || '[]');
+      let title = row.title;
+
+      // Fallback title generation with filtering
+      if (!title || title.trim() === '') {
+        const others = participants.filter((p: string) => !myNames.includes(p));
+        if (others.length === 0) {
+          // Talking to self or only me in list
+          title = `${myNames[0] || 'Me'} (You)`;
+        } else {
+          title = others.join(', ');
+        }
+      }
+
+      return {
+        id: row.id,
+        title: title || 'Untitled',
+        participants,
+        timestamp: row.last_activity_ms || 0,
+        snippet: row.snippet || '',
+        is_group: !!row.is_group,
+        // platform: row.platform // Optional, frontend might use it
+        folder_path: '', // deprecated
+        // Map msg_count to page count (legacy prop name file_count used by frontend)
+        file_count: Math.ceil((row.msg_count || 0) / PAGE_SIZE),
+      };
+    });
+
+    return res.status(200).json(threads);
+  } catch (e) {
+    console.error('Error querying threads:', e);
     return res.status(500).json({ error: 'Failed to load threads' });
   }
 }

@@ -67,6 +67,8 @@ export default function Home() {
     // 1. Handle Platform Change
     if (platformParam && platformParam !== activePlatform) {
       setActivePlatform(platformParam);
+      setActiveThread(null);
+      setMessages([]);
       return;
     }
 
@@ -142,6 +144,8 @@ export default function Home() {
   const handlePlatformSelect = (p: string) => {
     updateUrl(p, undefined);
     setActivePlatform(p); // Optimistic update
+    setActiveThread(null);
+    setMessages([]);
   };
 
   const handleThreadSelect = (t: Thread) => {
@@ -210,6 +214,11 @@ export default function Home() {
 
   const handleLoadMore = () => {
     if (!activeThread) {
+      return;
+    }
+    // Prevent loading beyond calculated valid pages
+    if (activeThread.file_count && page >= activeThread.file_count) {
+      setHasMore(false);
       return;
     }
     const nextPage = page + 1;

@@ -2,81 +2,11 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { getDataDir } from '../../utils/config';
-
-// Google Chat type definitions
-/** Represents a file attached to a Google Chat message */
-interface GoogleChatAttachedFile {
-  export_name: string;
-}
-
-/** Represents a reaction to a Google Chat message */
-interface GoogleChatReaction {
-  emoji: {
-    unicode: string;
-  };
-  reactor_emails?: string[];
-}
-
-/** Represents a creator/sender in Google Chat */
-interface GoogleChatCreator {
-  name: string;
-}
-
-/** Raw Google Chat message structure from export */
-interface GoogleChatMessage {
-  created_date?: string;
-  updated_date?: string;
-  text?: string;
-  creator?: GoogleChatCreator;
-  attached_files?: GoogleChatAttachedFile[];
-  reactions?: GoogleChatReaction[];
-  quoted_message_metadata?: {
-    creator?: GoogleChatCreator;
-    text?: string;
-  };
-  quotes_message_metadata?: {
-    creator?: GoogleChatCreator;
-    text?: string;
-  };
-  message_id?: string;
-  annotations?: {
-    length: number;
-    start_index: number;
-    url_metadata?: {
-      title?: string;
-      image_url?: string;
-      url?: {
-        private_do_not_access_or_else_safe_url_wrapped_value?: string;
-      };
-    };
-  }[];
-}
-
-/** Wrapper for Google Chat export file */
-interface GoogleChatData {
-  messages: GoogleChatMessage[];
-}
+import { getDb } from '../../utils/db';
 
 /** Unified media item for internal use */
 interface MediaItem {
   uri: string;
-}
-
-/** Raw Facebook message structure */
-interface FacebookMessage {
-  sender_name: string;
-  timestamp_ms: number;
-  content?: string;
-  is_sender?: boolean;
-  photos?: MediaItem[];
-  videos?: MediaItem[];
-  reactions?: { reaction: string; actor: string }[];
-}
-
-/** Wrapper for Facebook/Instagram export file */
-interface FacebookData {
-  messages: FacebookMessage[];
-  [key: string]: unknown;
 }
 
 /** Unified Message structure used by the frontend */
@@ -125,32 +55,20 @@ interface GoogleChatUserInfo {
   };
 }
 
-/**
- * API Handler to retrieve messages for a specific thread and platform.
- * Normalizes data from different platform export formats into a unified Message structure.
- *
- * @param req - Next.js API request containing 'threadId', 'page', and 'platform' query params.
- * @param res - Next.js API response
- */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const { threadId, page = '1', platform } = req.query;
+  const { threadId, page = '1' } = req.query;
 
   if (!threadId) {
     return res.status(400).json({ error: 'Missing threadId' });
   }
 
   const threadIdStr = Array.isArray(threadId) ? threadId[0] : threadId;
-  const pageStr = Array.isArray(page) ? page[0] : page;
-  const platformStr = Array.isArray(platform) ? platform[0] : platform;
-
-  // SECURITY: Prevent path traversal
-  // Allow alphanumeric, underscores, hyphens, dots, and spaces (for Google Chat folder names)
-  // Rejects ".." "/" "\"
-  if (!/^[a-zA-Z0-9_\-\. ]+$/.test(threadIdStr)) {
-    return res.status(400).json({ error: 'Invalid thread ID' });
-  }
+  const pageNum = parseInt(Array.isArray(page) ? page[0] : page, 10) || 1;
+  const PAGE_SIZE = 100; // SQLite pagination size
+  const offset = (pageNum - 1) * PAGE_SIZE;
 
   // Identify "Me"
+  // TODO: cache this or move to a proper identity service
   const myNamesSet = new Set<string>();
   const dataDir = getDataDir();
 
@@ -158,17 +76,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   let googleChatUserPath = '';
   const gcUsersDir = path.join(dataDir, 'Google Chat/Users');
   try {
-    await fs.access(gcUsersDir);
-    const folders = await fs.readdir(gcUsersDir);
-    for (const folder of folders) {
-      if (folder.startsWith('User ')) {
-        const candidate = path.join(gcUsersDir, folder, 'user_info.json');
-        try {
-          await fs.access(candidate);
-          googleChatUserPath = candidate;
-          break;
-        } catch {
-          // continue
+    if (
+      await fs
+        .stat(gcUsersDir)
+        .then(() => true)
+        .catch(() => false)
+    ) {
+      const folders = await fs.readdir(gcUsersDir);
+      for (const folder of folders) {
+        if (folder.startsWith('User ')) {
+          const candidate = path.join(gcUsersDir, folder, 'user_info.json');
+          try {
+            await fs.access(candidate);
+            googleChatUserPath = candidate;
+            break;
+          } catch {
+            // continue
+          }
         }
       }
     }
@@ -178,248 +102,207 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const profileSources = [
     {
-      path: path.join(dataDir, 'Facebook/profile_information/profile_information.json'),
+      path: path.join(dataDir, 'Facebook/personal_information/profile_information/profile_information.json'),
       extract: (data: FacebookProfile) => data?.profile_v2?.name?.full_name,
     },
     {
-      path: path.join(dataDir, 'Instagram/personal_information/personal_information.json'),
+      path: path.join(dataDir, 'Instagram/personal_information/personal_information/personal_information.json'),
       extract: (data: InstagramProfile) => data?.profile_user?.[0]?.string_map_data?.Name?.value,
     },
     {
-      path: googleChatUserPath, // Dynamic path (empty string if not found, handled by existsSync check below)
+      path: googleChatUserPath,
       extract: (data: GoogleChatUserInfo) => data?.user?.name,
     },
   ];
 
   for (const source of profileSources) {
+    if (!source.path) {
+      continue;
+    }
     try {
-      // Trying to read file will fail if not exists, so just try read
       const fileContent = await fs.readFile(source.path, 'utf8');
       const fileData = JSON.parse(fileContent);
       const foundName = source.extract(fileData);
       if (foundName) {
         myNamesSet.add(foundName);
       }
-    } catch (e) {
-      console.warn(`Failed to load profile info from ${source.path}`, e);
-    }
+    } catch {}
   }
   const myNames = Array.from(myNamesSet);
 
-  // Google Chat Handling
-  if (platformStr === 'Google Chat') {
-    const inboxPath = path.join(dataDir, 'Google Chat/Groups');
-    const msgPathOriginal = path.join(inboxPath, threadIdStr, `message_${pageStr}.json`);
-    const msgPathProcessed = path.join(inboxPath, threadIdStr, `message_${pageStr}.processed.json`);
-    // Prefer processed if exists
-    let msgPath = msgPathOriginal;
-    try {
-      await fs.access(msgPathProcessed);
-      msgPath = msgPathProcessed;
-    } catch {
-      // processed invalid, use original
+  // Query DB
+  const db = getDb();
+
+  try {
+    interface MessageRow {
+      id: number;
+      thread_id: string;
+      sender_name: string;
+      timestamp_ms: number;
+      content: string | null;
+      media_json: string | null;
+      reactions_json: string | null;
+      share_json: string | null;
+      annotations_json: string | null;
     }
 
-    console.log(`[Google Chat] Loading messages from: ${msgPath}`);
-    try {
-      const fileContent = await fs.readFile(msgPath, 'utf8');
-      const data: GoogleChatData = JSON.parse(fileContent);
-      const rawMessages = data.messages || [];
-      console.log(`[Google Chat] Found ${rawMessages.length} raw messages`);
+    const rows = db
+      .prepare(
+        `
+        SELECT * FROM messages 
+        WHERE thread_id = ? 
+        ORDER BY timestamp_ms DESC 
+        LIMIT ? OFFSET ?
+    `,
+      )
+      .all(threadIdStr, PAGE_SIZE, offset) as MessageRow[];
 
-      const googleDateToMs = (dateStr: string) => {
-        if (!dateStr) {
-          return 0;
+    // If page 1 and empty, check if thread exists?
+
+    const messages: Message[] = rows.flatMap((row) => {
+      interface MediaJsonItem {
+        uri: string;
+        type: string;
+      }
+
+      const media: MediaJsonItem[] = JSON.parse(row.media_json || '[]');
+      const photos: MediaItem[] = media.filter((m) => m.type === 'photo' || m.type === 'image');
+      const videos: MediaItem[] = media.filter((m) => m.type === 'video');
+      const gifs: MediaItem[] = media.filter((m) => m.type === 'gif');
+      const stickers: MediaItem[] = media.filter((m) => m.type === 'sticker');
+      const files: MediaItem[] = media.filter((m) => m.type === 'file');
+
+      // Post-process 'files' (e.g. from Google Chat) to see if they are actually photos/videos
+      files.forEach((f) => {
+        const ext = path.extname(f.uri).toLowerCase();
+        if (['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.heic'].includes(ext)) {
+          photos.push(f);
+        } else if (['.mp4', '.mov', '.webm', '.mkv', '.avi'].includes(ext)) {
+          videos.push(f);
         }
-        try {
-          // "Saturday, July 9, 2022 at 2:03:54 PM UTC"
-          const clean = dateStr.replace(' at ', ' ').replace(/\u202f/g, ' ');
-          return new Date(clean).getTime();
-        } catch {
-          return 0;
-        }
-      };
-
-      const messages = rawMessages.flatMap((m: GoogleChatMessage) => {
-        const dateStr = m.created_date || m.updated_date || '';
-        const ms = googleDateToMs(dateStr);
-        const sender = m.creator?.name || 'Unknown';
-
-        const attached = m.attached_files || [];
-        const photos: MediaItem[] = [];
-        const videos: MediaItem[] = [];
-
-        attached.forEach((f: GoogleChatAttachedFile) => {
-          const ext = path.extname(f.export_name).toLowerCase();
-          const uri = `Google Chat/Groups/${threadIdStr}/${f.export_name}`;
-          if (['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(ext)) {
-            photos.push({ uri });
-          } else if (['.mp4', '.mov'].includes(ext)) {
-            videos.push({ uri });
-          }
-        });
-
-        if (m.annotations) {
-          m.annotations.forEach((a) => {
-            if (a.url_metadata) {
-              const url = a.url_metadata.image_url;
-              if (url) {
-                photos.push({ uri: url });
-              }
-            }
-          });
-        }
-
-        const reactions = (m.reactions || []).flatMap((r: GoogleChatReaction) => {
-          const emails = r.reactor_emails || [];
-          if (emails.length === 0) {
-            // Fallback for missing reactor info
-            return [
-              {
-                reaction: r.emoji.unicode,
-                actor: 'Unknown',
-              },
-            ];
-          }
-          // Create one reaction entry per reactor
-          return emails.map((email) => ({
-            reaction: r.emoji.unicode,
-            actor: email, // display email as actor since name is unavailable here
-          }));
-        });
-
-        const result: Message[] = [];
-        const hasMedia = photos.length > 0 || videos.length > 0;
-
-        // Determine where to attach reactions (Media prefers, otherwise Text)
-        const reactionsForMedia = hasMedia && reactions.length > 0 ? reactions : undefined;
-        const reactionsForText = !hasMedia && reactions.length > 0 ? reactions : undefined;
-
-        // Order in array: [Newest (Bottom), ..., Oldest (Top)] (due to column-reverse)
-        // We want Text (Oldest/Top) -> Media (Newest/Bottom)
-        // So push Media first, then Text.
-
-        if (hasMedia) {
-          result.push({
-            id: m.message_id ? `${m.message_id}_media` : undefined,
-            is_sender: myNames.includes(sender),
-            sender_name: sender,
-            timestamp_ms: ms,
-            content: undefined,
-            photos: photos.length > 0 ? photos : undefined,
-            videos: videos.length > 0 ? videos : undefined,
-            reactions: reactionsForMedia,
-          });
-        }
-
-        if (m.text || m.quoted_message_metadata) {
-          result.push({
-            id: m.message_id,
-            is_sender: myNames.includes(sender),
-            sender_name: sender,
-            timestamp_ms: ms,
-            content: m.text,
-            reactions: reactionsForText,
-            quoted_message_metadata: m.quoted_message_metadata
-              ? {
-                  creator: m.quoted_message_metadata.creator,
-                  text: m.quoted_message_metadata.text,
-                }
-              : undefined,
-          });
-        }
-
-        // If message is empty (e.g. unsupported attachment), fallback to empty string to prevent data loss.
-        if (result.length === 0) {
-          result.push({
-            sender_name: sender,
-            timestamp_ms: ms,
-            content: m.text || '',
-            reactions: reactions.length > 0 ? reactions : undefined,
-          });
-        }
-
-        return result;
       });
 
-      // Messages are already in correct order (newest first) from split files
-      return res.status(200).json({ messages });
-    } catch (e) {
-      console.error('Error reading Google Chat messages:', e);
-      return res.status(500).json({ error: 'Failed to load messages' });
-    }
-  }
-
-  // Facebook/Instagram Handling - search across all folders
-  if (platformStr === 'Facebook' || platformStr === 'Instagram' || !platformStr) {
-    let msgPath: string | null = null;
-
-    if (platformStr === 'Instagram') {
-      const messagesRoot = path.join(dataDir, 'Instagram/your_instagram_activity/messages/inbox');
-      const filenameBase = `message_${pageStr}`;
-
-      const processed = path.join(messagesRoot, threadIdStr, `${filenameBase}.processed.json`);
-      const original = path.join(messagesRoot, threadIdStr, `${filenameBase}.json`);
-
-      try {
-        await fs.access(processed);
-        msgPath = processed;
-      } catch {
-        try {
-          await fs.access(original);
-          msgPath = original;
-        } catch {
-          // neither found
+      // Handle Annotations (Google Chat Images)
+      if (row.annotations_json) {
+        interface AnnotationItem {
+          url_metadata?: {
+            image_url?: string;
+          };
         }
-      }
-    } else {
-      // Facebook
-      const messagesRoot = path.join(dataDir, 'Facebook/your_facebook_activity/messages');
-      const foldersToSearch = ['inbox', 'archived_threads', 'legacy_threads', 'e2ee_cutover'];
-
-      // Try to find the thread in each folder
-      for (const folder of foldersToSearch) {
-        const filenameBase = `message_${pageStr}`;
-        const processed = path.join(messagesRoot, folder, threadIdStr, `${filenameBase}.processed.json`);
-        const original = path.join(messagesRoot, folder, threadIdStr, `${filenameBase}.json`);
-
-        try {
-          await fs.access(processed);
-          msgPath = processed;
-          break;
-        } catch {}
-
-        try {
-          await fs.access(original);
-          msgPath = original;
-          break;
-        } catch {}
-      }
-    }
-
-    if (!msgPath) {
-      return res.status(404).json({ error: 'Message file not found' });
-    }
-
-    try {
-      const fileContents = await fs.readFile(msgPath, 'utf8');
-      const data = JSON.parse(fileContents);
-
-      const fixedData = data as unknown as FacebookData;
-
-      // Inject is_sender for Facebook messages
-      if (fixedData.messages && Array.isArray(fixedData.messages)) {
-        fixedData.messages.forEach((m) => {
-          m.is_sender = myNames.includes(m.sender_name);
+        const annotations: AnnotationItem[] = JSON.parse(row.annotations_json);
+        annotations.forEach((a) => {
+          if (a.url_metadata?.image_url) {
+            photos.push({ uri: a.url_metadata.image_url });
+          }
         });
       }
 
-      return res.status(200).json(fixedData);
-    } catch (e) {
-      console.error('Error reading message file:', e);
-      return res.status(500).json({ error: 'Failed to load messages' });
-    }
-  }
+      const share = row.share_json ? JSON.parse(row.share_json) : undefined;
+      let quoted_message_metadata = undefined;
+      let shareObj = undefined;
 
-  return res.status(400).json({ error: 'Invalid platform' });
+      if (share) {
+        if (share.quoted_message) {
+          // Map back to frontend expectation
+          quoted_message_metadata = {
+            creator:
+              typeof share.quoted_message.creator === 'string'
+                ? { name: share.quoted_message.creator } // Handle naive case if ingest stored string?
+                : share.quoted_message.creator, // Proper object case
+            text: share.quoted_message.text,
+          };
+        } else {
+          shareObj = share;
+        }
+      }
+
+      const reactions = row.reactions_json ? JSON.parse(row.reactions_json) : undefined;
+      const isSender = myNames.includes(row.sender_name);
+
+      const hasMedia = photos.length > 0 || videos.length > 0 || gifs.length > 0 || stickers.length > 0;
+      const hasText = !!row.content || !!quoted_message_metadata || !!shareObj;
+
+      const result: Message[] = [];
+
+      // Logic to split Text and Media into separate bubbles to match original UI behavior.
+      // However, if the message looks like a Link Preview (Text + 1 Photo), we keep them together
+      // so the frontend can deduplicate the image.
+      const hasLink = row.content && /(https?:\/\/[^\s]+)/.test(row.content);
+      const isLikelyPreview = hasText && hasMedia && hasLink && photos.length === 1 && videos.length === 0 && gifs.length === 0 && stickers.length === 0;
+      const shouldSplit = hasMedia && hasText && !isLikelyPreview;
+
+      if (shouldSplit) {
+        // Split Media and Text
+        result.push({
+          id: `${row.id}_media`,
+          is_sender: isSender,
+          sender_name: row.sender_name,
+          timestamp_ms: row.timestamp_ms,
+          content: undefined, // Image only
+          photos: photos.length ? photos : undefined,
+          videos: videos.length ? videos : undefined,
+          gifs: gifs.length ? gifs : undefined,
+          sticker: stickers.length > 0 ? stickers[0] : undefined,
+          reactions: reactions, // Attach reactions to media preference
+        });
+
+        result.push({
+          id: row.id.toString(),
+          is_sender: isSender,
+          sender_name: row.sender_name,
+          timestamp_ms: row.timestamp_ms,
+          content: row.content ?? undefined,
+          quoted_message_metadata,
+          share: shareObj,
+          reactions: undefined, // Reactions attached to media
+        });
+      } else {
+        // Unified Message (either single type, or merged preview)
+        result.push({
+          id: row.id.toString(),
+          is_sender: isSender,
+          sender_name: row.sender_name,
+          timestamp_ms: row.timestamp_ms,
+          content: row.content ?? undefined,
+          quoted_message_metadata,
+          share: shareObj,
+          photos: photos.length ? photos : undefined,
+          videos: videos.length ? videos : undefined,
+          gifs: gifs.length ? gifs : undefined,
+          sticker: stickers.length > 0 ? stickers[0] : undefined,
+          reactions: reactions,
+        });
+      }
+
+      // Fallback for empty (shouldn't happen with valid data)
+      if (result.length === 0) {
+        result.push({
+          id: row.id.toString(),
+          is_sender: isSender,
+          sender_name: row.sender_name,
+          timestamp_ms: row.timestamp_ms,
+          content: row.content || '',
+        });
+      }
+
+      return result;
+    });
+
+    // Reverse messages? No, usually API returns Newest First (DESC), UI might reverse it or use as is.
+    // The previous implementation read split files which were already DESC/ASC?
+    // "create_fb_index": messages in JSON are usually DESC (Newest top).
+    // Let's assume frontend expects DESC order.
+    // Wait, typical chat UI expects [Old -> New] if rendering top-down, or [New -> Old] if column-reverse.
+    // Google Chat split script said: "Create message_1.json with reversed messages".
+    // Let's stick to DESC (Newest First) and let UI handle it. This is standard for pagination.
+
+    // Return format: { messages: [...] } or just [...] ?
+    // Previous Google handler: res.status(200).json({ messages });
+    // Previous FB handler: res.status(200).json(fixedData); which has { messages: ... }
+
+    return res.status(200).json({ messages });
+  } catch (e) {
+    console.error('Error querying messages:', e);
+    return res.status(500).json({ error: 'Failed to load messages' });
+  }
 }

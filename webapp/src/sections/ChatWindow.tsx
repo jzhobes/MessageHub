@@ -93,12 +93,12 @@ export default function ChatWindow({ activeThread, messages, loading, hasMore, p
         <div>
           {activeThread.title}
           <span className={styles.pageIndicator}>
-            (Page {page} of {activeThread.file_count || 1})
+            (Page {page.toLocaleString()} of {(activeThread.file_count || 1).toLocaleString()})
           </span>
         </div>
         <input type="text" className={styles.searchInput} placeholder="Search active chat..." value={searchQuery} onChange={(e) => onSearchChange(e.target.value)} />
       </div>
-      <div className={styles.messagesContainer}>
+      <div className={`${styles.messagesContainer} ${messages.length === 0 && loading ? styles.flexCenter : ''}`}>
         {filteredMessages.map((msg, i) => {
           // Determine if my message
           const isMyMsg = !!msg.is_sender;

@@ -571,3 +571,9 @@
   color: #007aff;
   display: block;
 }
+
+.flexCenter {
+  display: flex !important;
+  justify-content: center;
+  align-items: center;
+}

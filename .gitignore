@@ -4,5 +4,10 @@ data/
 # env files (can opt-in for committing if needed)
 .env*
 
+.ruff_cache/
+
 # preview cache
 preview_cache.json
+
+# database
+data/messagehub.db

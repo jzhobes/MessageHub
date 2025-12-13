@@ -41,8 +41,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   } else if (platformStr === 'Instagram') {
     relativePath = path.join('Instagram', pathStr.startsWith('your_instagram_activity') ? '' : 'your_instagram_activity', pathStr);
   } else if (platformStr === 'Google Chat') {
-    // Google Chat paths are direct mappings
-    relativePath = path.join('Google Chat', pathStr);
+    // Google Chat paths are usually in Groups subdirectory
+    relativePath = path.join('Google Chat/Groups', pathStr);
   }
 
   // First try the constructed path

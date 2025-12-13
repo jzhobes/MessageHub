@@ -5,9 +5,10 @@ import styles from '../styles/index.module.css';
 interface LinkPreviewProps {
   url: string;
   isMyMsg: boolean; // required to determine radius class
+  suppressImage?: boolean;
 }
 
-export default function LinkPreview({ url, isMyMsg }: LinkPreviewProps) {
+export default function LinkPreview({ url, isMyMsg, suppressImage }: LinkPreviewProps) {
   const [data, setData] = useState<{ image?: string; title?: string; description?: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const isMounted = useRef(true);
@@ -51,18 +52,12 @@ export default function LinkPreview({ url, isMyMsg }: LinkPreviewProps) {
   }
 
   // Render logic
-  const hasImage = data && data.image;
+  const hasImage = data && data.image && !suppressImage;
   const hasTitle = data && (data.title || data.description);
 
   if (!loading && !hasImage && !hasTitle) {
-    // Fallback
-    return (
-      <div className={`${styles.linkPreviewFallback} ${radiusClass}`}>
-        <a href={url} target="_blank" rel="noopener noreferrer" className={styles.linkPreviewLink}>
-          {url}
-        </a>
-      </div>
-    );
+    // Fallback - don't show separate bubble, just let the text link stand alone
+    return null;
   }
 
   // If we have data

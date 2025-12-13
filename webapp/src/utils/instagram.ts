@@ -10,7 +10,6 @@ export function getInstagramHeaders(authEnv: string): Record<string, string> {
         .join('; ');
     }
   } catch {
-    // Ignore, assume string
     console.warn('Warning: Failed to parse INSTAGRAM_AUTH as JSON, treating as raw string.');
   }
 

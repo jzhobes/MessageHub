@@ -69,79 +69,105 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     let headers: Record<string, string> = {};
 
+    let title: string | null = null;
+    let image: string | null = null;
+    let description: string | null = null;
+
     // Inject Instagram Auth Cookies if available
     let isInstagram = false;
+    let isReddit = false;
     try {
       const u = new URL(targetUrl);
       isInstagram = u.hostname.includes('instagram.com');
+      isReddit = u.hostname.includes('reddit.com');
     } catch {
       // invalid url
     }
 
-    if (isInstagram && process.env.INSTAGRAM_AUTH) {
-      const igHeaders = getInstagramHeaders(process.env.INSTAGRAM_AUTH);
+    if (isReddit) {
+      // Special handling for Reddit: Fetch .json version to bypass HTML scraping blocks
+      try {
+        const u = new URL(targetUrl);
+        // Append .json to pathname (handling trailing slash)
+        u.pathname = u.pathname.replace(/\/$/, '') + '.json';
+        const jsonUrl = u.toString();
 
-      // Merge into existing headers
-      headers = { ...headers, ...igHeaders };
+        console.log(`[Preview] Reddit URL detected. Fetching JSON: ${jsonUrl}`);
 
-      console.log('[Preview] Using Authenticated Instagram Fetch');
+        const response = await fetch(jsonUrl, { headers, signal: AbortSignal.timeout(5000) });
+        if (response.ok) {
+          const data = await response.json();
+          // Reddit JSON structure: [ { kind: 't3', data: { ...post... } }, ... ]
+          const post = data[0]?.data?.children?.[0]?.data;
+          if (post) {
+            title = post.title;
+            description = post.selftext?.substring(0, 200);
+            image = (post.url_overridden_by_dest || post.preview?.images?.[0]?.source?.url)?.replace(/&amp;/g, '&');
+
+            // Fallback for self posts without images
+            if (!image && post.thumbnail && post.thumbnail !== 'self' && post.thumbnail !== 'default') {
+              image = post.thumbnail;
+            }
+
+            if (!image) {
+              image = 'https://upload.wikimedia.org/wikipedia/en/thumb/b/bd/Reddit_Logo_Icon.svg/220px-Reddit_Logo_Icon.svg.png';
+            }
+
+            console.log(`[Preview] Reddit JSON success: ${title}`);
+          }
+        }
+      } catch (e) {
+        console.error('[Preview] Reddit JSON fetch failed, falling back to HTML', e);
+      }
+    } else {
+      if (isInstagram && process.env.INSTAGRAM_AUTH) {
+        headers = { ...headers, ...getInstagramHeaders(process.env.INSTAGRAM_AUTH) };
+        console.log('[Preview] Using Authenticated Instagram Fetch');
+      }
+
+      const response = await fetch(targetUrl, { headers, signal: AbortSignal.timeout(5000) });
+
+      if (response.ok) {
+        const html = await response.text();
+
+        const decodeHtmlEntities = (str: string) => {
+          return str
+            .replace(/&#(\d+);/g, (match, dec) => String.fromCharCode(parseInt(dec, 10)))
+            .replace(/&#x([0-9a-f]+);/gi, (match, hex) => String.fromCharCode(parseInt(hex, 16)))
+            .replace(/&quot;/g, '"')
+            .replace(/&amp;/g, '&')
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/&apos;/g, "'");
+        };
+
+        const getMeta = (propName: string) => {
+          const p1 = new RegExp(`<meta\\s+[^>]*property=["']${propName}["']\\s+[^>]*content=["']([^"']+)["']`, 'i').exec(html);
+          if (p1) {
+            return decodeHtmlEntities(p1[1]);
+          }
+          const p2 = new RegExp(`<meta\\s+[^>]*content=["']([^"']+)["']\\s+[^>]*property=["']${propName}["']`, 'i').exec(html);
+          if (p2) {
+            return decodeHtmlEntities(p2[1]);
+          }
+          const p3 = new RegExp(`<meta\\s+[^>]*name=["']${propName}["']\\s+[^>]*content=["']([^"']+)["']`, 'i').exec(html);
+          if (p3) {
+            return decodeHtmlEntities(p3[1]);
+          }
+          const p4 = new RegExp(`<meta\\s+[^>]*content=["']([^"']+)["']\\s+[^>]*name=["']${propName}["']`, 'i').exec(html);
+          if (p4) {
+            return decodeHtmlEntities(p4[1]);
+          }
+          return null;
+        };
+
+        image = getMeta('og:image') || getMeta('twitter:image');
+        title = getMeta('og:title') || getMeta('twitter:title');
+        description = getMeta('og:description') || getMeta('twitter:description') || getMeta('description');
+      } else {
+        console.error(`❌ [Preview] url ${targetUrl} returned ${response.status}`);
+      }
     }
-
-    const response = await fetch(targetUrl, {
-      headers,
-      // Shorter timeout to fail fast if site is slow
-      signal: AbortSignal.timeout(5000),
-    });
-
-    if (!response.ok) {
-      console.error(`❌ [Preview] url ${targetUrl} returned ${response.status}`);
-      return res.status(response.status).json({ error: 'Failed to fetch' });
-    }
-
-    const html = await response.text();
-
-    const decodeHtmlEntities = (str: string) => {
-      return str
-        .replace(/&#(\d+);/g, (match, dec) => String.fromCharCode(parseInt(dec, 10)))
-        .replace(/&#x([0-9a-f]+);/gi, (match, hex) => String.fromCharCode(parseInt(hex, 16)))
-        .replace(/&quot;/g, '"')
-        .replace(/&amp;/g, '&')
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/&apos;/g, "'");
-    };
-
-    // Isolate helper
-    const getMeta = (propName: string) => {
-      // Try property first
-      const p1 = new RegExp(`<meta\\s+[^>]*property=["']${propName}["']\\s+[^>]*content=["']([^"']+)["']`, 'i').exec(html);
-      if (p1) {
-        return decodeHtmlEntities(p1[1]);
-      }
-
-      // Try content first
-      const p2 = new RegExp(`<meta\\s+[^>]*content=["']([^"']+)["']\\s+[^>]*property=["']${propName}["']`, 'i').exec(html);
-      if (p2) {
-        return decodeHtmlEntities(p2[1]);
-      }
-
-      // Try name attribute
-      const p3 = new RegExp(`<meta\\s+[^>]*name=["']${propName}["']\\s+[^>]*content=["']([^"']+)["']`, 'i').exec(html);
-      if (p3) {
-        return decodeHtmlEntities(p3[1]);
-      }
-
-      const p4 = new RegExp(`<meta\\s+[^>]*content=["']([^"']+)["']\\s+[^>]*name=["']${propName}["']`, 'i').exec(html);
-      if (p4) {
-        return decodeHtmlEntities(p4[1]);
-      }
-
-      return null;
-    };
-
-    const image = getMeta('og:image') || getMeta('twitter:image');
-    const title = getMeta('og:title') || getMeta('twitter:title');
-    const description = getMeta('og:description') || getMeta('twitter:description') || getMeta('description');
 
     console.log(`[Preview] LIVE RESULT for ${targetUrl}: title=${title ? 'found' : 'missing'}, image=${image ? 'found' : 'missing'}`);
 
@@ -152,8 +178,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       description,
     };
 
-    // Write to cache (refetch fresh cache in case of race conditions, though simple overwrite is usually fine for local)
-    // For simplicity in this context:
+    // Write to cache
     const freshCache = await readCache();
     freshCache[targetUrl] = result;
     await writeCache(freshCache);
