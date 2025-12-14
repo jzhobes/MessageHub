@@ -10,13 +10,12 @@ interface ChatWindowProps {
   loading: boolean;
   hasMore: boolean;
   page: number;
-  searchQuery: string;
-  onSearchChange: (query: string) => void;
   onLoadMore: () => void;
   activePlatform: string;
+  targetMessageId?: string | null;
 }
 
-export default function ChatWindow({ activeThread, messages, loading, hasMore, page, searchQuery, onSearchChange, onLoadMore, activePlatform }: ChatWindowProps) {
+export default function ChatWindow({ activeThread, messages, loading, hasMore, page, onLoadMore, activePlatform, targetMessageId }: ChatWindowProps) {
   const loadMoreRef = useRef<HTMLDivElement>(null);
 
   // Autoload effect
@@ -39,18 +38,21 @@ export default function ChatWindow({ activeThread, messages, loading, hasMore, p
     };
   }, [hasMore, loading, onLoadMore]);
 
-  const filteredMessages = messages.filter((msg) => {
-    if (!msg.content) {
-      return !searchQuery; // Hide media-only if searching text
+  // Scroll to target message effect
+  useEffect(() => {
+    if (targetMessageId && !loading && messages.length > 0) {
+      // Wait for render
+      const timer = setTimeout(() => {
+        const el = document.getElementById(`msg-${targetMessageId}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'auto', block: 'center' });
+          el.classList.add(styles.highlightFlash);
+          setTimeout(() => el.classList.remove(styles.highlightFlash), 1500);
+        }
+      }, 500);
+      return () => clearTimeout(timer);
     }
-    if (/reacted\s+.+?\s+to your message/i.test(msg.content)) {
-      return false;
-    }
-    if (searchQuery) {
-      return msg.content.toLowerCase().includes(searchQuery.toLowerCase()) || msg.sender_name.toLowerCase().includes(searchQuery.toLowerCase());
-    }
-    return true;
-  });
+  }, [targetMessageId, messages, loading]);
 
   // Scroll to message logic
   const handleQuoteClick = (quoteMetadata: QuotedMessageMetadata | undefined) => {
@@ -59,7 +61,7 @@ export default function ChatWindow({ activeThread, messages, loading, hasMore, p
     }
 
     // Heuristic: Match content AND sender
-    const match = filteredMessages.find((m) => {
+    const match = messages.find((m) => {
       const quoteName = quoteMetadata.creator?.name;
       // Check sender match (handling "You" logic roughly by name match)
       const senderMatch = m.sender_name === quoteName;
@@ -70,7 +72,9 @@ export default function ChatWindow({ activeThread, messages, loading, hasMore, p
       const elId = `msg-${match.id || match.timestamp_ms}`;
       const el = document.getElementById(elId);
       if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.scrollIntoView({ behavior: 'auto', block: 'center' });
+        el.classList.add(styles.highlightFlash);
+        setTimeout(() => el.classList.remove(styles.highlightFlash), 1500);
       } else {
         console.error('Element not found in DOM');
       }
@@ -96,14 +100,13 @@ export default function ChatWindow({ activeThread, messages, loading, hasMore, p
             (Page {page.toLocaleString()} of {(activeThread.file_count || 1).toLocaleString()})
           </span>
         </div>
-        <input type="text" className={styles.searchInput} placeholder="Search active chat..." value={searchQuery} onChange={(e) => onSearchChange(e.target.value)} />
       </div>
       <div className={`${styles.messagesContainer} ${messages.length === 0 && loading ? styles.flexCenter : ''}`}>
-        {filteredMessages.map((msg, i) => {
+        {messages.map((msg, i) => {
           // Determine if my message
           const isMyMsg = !!msg.is_sender;
-          const prevMsg = filteredMessages[i + 1];
-          const nextMsg = filteredMessages[i - 1];
+          const prevMsg = messages[i + 1];
+          const nextMsg = messages[i - 1];
           // Use safer checks for top/bottom detection
           const isTop = !prevMsg || prevMsg.sender_name !== msg.sender_name;
           const isBottom = !nextMsg || nextMsg.sender_name !== msg.sender_name;
@@ -121,11 +124,11 @@ export default function ChatWindow({ activeThread, messages, loading, hasMore, p
           const isMediaOnly = hasMedia && !msg.content;
 
           let showTimestamp = false;
-          if (i === filteredMessages.length - 1) {
+          if (i === messages.length - 1) {
             showTimestamp = true;
-          } else if (filteredMessages[i + 1]) {
+          } else if (messages[i + 1]) {
             const currentDate = new Date(msg.timestamp_ms);
-            const prevDate = new Date(filteredMessages[i + 1].timestamp_ms);
+            const prevDate = new Date(messages[i + 1].timestamp_ms);
             if (
               currentDate.getHours() !== prevDate.getHours() ||
               currentDate.getDate() !== prevDate.getDate() ||

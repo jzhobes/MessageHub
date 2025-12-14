@@ -2,7 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { getDb } from '../../utils/db';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const { q, page = '1' } = req.query;
+  const { q, page = '1', platform, threadId } = req.query;
 
   if (!q || typeof q !== 'string') {
     return res.status(400).json({ error: 'Missing search query' });
@@ -26,19 +26,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       content: string;
     }
 
-    // Simple LIKE query for MVP. FTS5 can be added later for performance.
-    const rows = db
-      .prepare(
-        `
+    let sql = `
         SELECT m.*, t.platform, t.title as thread_title
         FROM messages m
         JOIN threads t ON m.thread_id = t.id
         WHERE m.content LIKE ?
-        ORDER BY m.timestamp_ms DESC
-        LIMIT ? OFFSET ?
-    `,
-      )
-      .all(`%${queryStr}%`, PAGE_SIZE, offset) as SearchRow[];
+    `;
+
+    const params: (string | number)[] = [`%${queryStr}%`];
+
+    if (platform) {
+      sql += ' AND t.platform = ?';
+      // Map frontend platform name to DB value: lowercase, space to underscore
+      const pStr = (Array.isArray(platform) ? platform[0] : platform).toLowerCase().replace(' ', '_');
+      params.push(pStr);
+    }
+
+    if (threadId) {
+      sql += ' AND m.thread_id = ?';
+      params.push(Array.isArray(threadId) ? threadId[0] : threadId);
+    }
+
+    sql += ' ORDER BY m.timestamp_ms DESC LIMIT ? OFFSET ?';
+    params.push(PAGE_SIZE, offset);
+
+    const rows = db.prepare(sql).all(...params) as SearchRow[];
 
     const results = rows.map((row) => ({
       message_id: row.id,

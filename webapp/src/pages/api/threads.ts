@@ -34,17 +34,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const params: string[] = [];
 
   if (platformStr) {
-    if (platformStr === 'Facebook') {
-      query += ' WHERE platform = ?';
-      params.push('facebook');
-    } else if (platformStr === 'Instagram') {
-      query += ' WHERE platform = ?';
-      params.push('instagram');
-    } else if (platformStr === 'Google Chat') {
-      query += ' WHERE platform = ?';
-      params.push('google_chat');
-    }
-    // If unknown platform, return empty or all? Current logic returned empty.
+    query += ' WHERE platform = ?';
+    // Normalize: "Google Chat" -> "google_chat", "Facebook" -> "facebook"
+    params.push(platformStr.toLowerCase().replace(' ', '_'));
   }
 
   query += ' ORDER BY last_activity_ms DESC';
