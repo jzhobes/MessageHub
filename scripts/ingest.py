@@ -227,13 +227,7 @@ def extract_zips_found(search_dirs, target_root):
                             if src.exists():
                                 merge_folders(src, dst)
 
-                        # Try to remove empty Takeout folder
-                        try:
-                            takeout_root = dest_dir / "Takeout"
-                            if takeout_root.exists() and not any(takeout_root.iterdir()):
-                                takeout_root.rmdir()
-                        except Exception:
-                            pass
+                        # Takeout folder cleanup will be performed after all zip files are processed
 
                         is_processed = True
 
@@ -261,6 +255,15 @@ def extract_zips_found(search_dirs, target_root):
 
             except Exception as e:
                 print(f"  Error inspecting/extracting {zip_path.name}: {e}")
+
+    # Final cleanup: remove empty Takeout folder after all zips are processed
+    try:
+        takeout_root = target_root / "Takeout"
+        if takeout_root.exists() and not any(takeout_root.iterdir()):
+            takeout_root.rmdir()
+            print(f"Removed empty Takeout folder: {takeout_root}")
+    except Exception as e:
+        print(f"Could not remove Takeout folder: {e}")
 
     return processed, detected_platforms
 

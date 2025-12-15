@@ -104,4 +104,13 @@
   margin-right: 10px;
   display: flex;
   align-items: center;
+  padding-left: 0px;
+  transition:
+    padding-left 0.2s ease;
+}
+
+.sidebarCollapsed .sidebarIconWrapper {
+  padding-left: 6px;
+  transition:
+    padding-left 0.2s ease;
 }

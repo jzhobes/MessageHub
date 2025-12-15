@@ -50,22 +50,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
     const thread = db.prepare('SELECT platform FROM threads WHERE id = ?').get(msg.thread_id) as ThreadRow;
 
-    // Convert DB platform (google_chat) back to Frontend format if needed?
-    // Frontend handles "Google Chat" -> "google_chat" mapping usually?
-    // The frontend state expects "Google Chat", "Facebook", "Instagram".
-
-    let platformDisplay = thread.platform;
-    if (thread.platform === 'google_chat') {
-      platformDisplay = 'Google Chat';
-    } else if (thread.platform === 'facebook') {
-      platformDisplay = 'Facebook';
-    } else if (thread.platform === 'instagram') {
-      platformDisplay = 'Instagram';
-    }
-
     return res.status(200).json({
       threadId: msg.thread_id,
-      platform: platformDisplay,
+      platform: thread.platform,
       page: page,
       timestamp: msg.timestamp_ms,
     });

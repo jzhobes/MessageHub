@@ -24,27 +24,31 @@ export default function Sidebar({ activePlatform, onPlatformSelect, availability
       {platforms.map((p) => {
         const isAvailable = availability[p.name];
         return (
-          <div key={p.name} className={`${styles.navItem} ${activePlatform === p.name ? styles.navItemActive : ''} ${!isAvailable ? styles.navItemDisabled : ''}`}>
-            <button
-              className={styles.sidebarButton}
-              onClick={() => isAvailable && onPlatformSelect(p.name)}
-              disabled={!isAvailable}
-              style={{
-                cursor: isAvailable ? 'pointer' : 'not-allowed',
-                opacity: isAvailable ? 1 : 0.5,
-              }}
-              title={collapsed ? p.name : ''}
-              onKeyDown={(e) => {
-                if (isAvailable && (e.key === 'Enter' || e.key === ' ')) {
-                  onPlatformSelect(p.name);
-                }
-              }}
-            >
+          <div
+            key={p.name}
+            className={`${styles.navItem} ${activePlatform === p.name ? styles.navItemActive : ''} ${!isAvailable ? styles.navItemDisabled : ''}`}
+            role="button"
+            tabIndex={0}
+            onClick={() => isAvailable && onPlatformSelect(p.name)}
+            onKeyDown={(e) => {
+              if (isAvailable && (e.key === 'Enter' || e.key === ' ')) {
+                onPlatformSelect(p.name);
+              }
+            }}
+            style={{
+              cursor: isAvailable ? 'pointer' : 'not-allowed',
+              opacity: isAvailable ? 1 : 0.5,
+              display: 'flex',
+              alignItems: 'center',
+              width: '100%',
+            }}
+          >
+            <span className={styles.sidebarButton} title={collapsed ? p.name : ''}>
               <span className={styles.sidebarIconWrapper} style={{ flexShrink: 0 }}>
                 {p.icon}
               </span>
               <span className={styles.sidebarLabel}>{p.name}</span>
-            </button>
+            </span>
           </div>
         );
       })}

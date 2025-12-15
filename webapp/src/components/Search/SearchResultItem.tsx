@@ -63,7 +63,7 @@ export default function SearchResultItem({ result, onClick, searchQuery }: Searc
         <div className={styles.header}>
           <div className={styles.headerLeft}>
             <span className={styles.sender}>{result.sender_name}</span>
-            <span className={styles.separator}>,</span>
+            <span className={styles.separator}>|</span>
             <span className={styles.threadTitle}>{result.thread_title || 'Unknown Thread'}</span>
           </div>
           <div className={styles.timestamp}>{dateStr}</div>

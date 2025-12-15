@@ -15,8 +15,8 @@ export function getDb(): Database.Database {
   try {
     dbInstance = new Database(dbPath, { readonly: true });
     return dbInstance;
-  } catch (error) {
-    console.error(`Failed to open database at ${dbPath}`, error);
-    throw error;
+  } catch (e) {
+    console.error(`Failed to open database at ${dbPath}`, e);
+    throw e;
   }
 }

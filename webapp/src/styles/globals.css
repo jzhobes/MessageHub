@@ -32,6 +32,7 @@
 }
 
 [data-theme='dark'] {
+  color-scheme: dark;
   /* Dark Theme */
   --bg-sidebar: #101010;
   --bg-sidebar-hover: #1c1c1e;
@@ -78,3 +79,5 @@ body {
 * {
   box-sizing: border-box;
 }
+
+/* Custom Scrollbar Removed: Using native OS scrollbars with color-scheme support */

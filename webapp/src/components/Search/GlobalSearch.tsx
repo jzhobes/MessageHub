@@ -8,15 +8,34 @@ interface GlobalSearchProps {
   isOpen: boolean;
   onClose: () => void;
   onNavigate: (threadId: string, platform: string, messageId: number) => void;
-  activeThreadId?: string;
 }
 
-export default function GlobalSearch({ isOpen, onClose, onNavigate, activeThreadId }: GlobalSearchProps) {
+interface SearchResult {
+  message_id: number;
+  thread_id: string;
+  platform: string;
+  sender_name: string;
+  timestamp: number;
+  snippet: string;
+  thread_title: string;
+}
+
+export default function GlobalSearch({ isOpen, onClose, onNavigate }: GlobalSearchProps) {
+  // State hooks
   const [query, setQuery] = useState('');
-  /* Filters State */
-  const [filterPlatform, setFilterPlatform] = useState<string>('all');
-  const [filterThread, setFilterThread] = useState<string>('all');
+  const [filterPlatform, setFilterPlatform] = useState('all');
+  const [filterThread, setFilterThread] = useState('all');
   const [availableThreads, setAvailableThreads] = useState<Thread[]>([]);
+  const [results, setResults] = useState<SearchResult[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [loading, setLoading] = useState(false); // Initial load
+  const [appending, setAppending] = useState(false); // Load more
+
+  // Ref hooks
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const isOpenRef = useRef<boolean>(isOpen);
 
   // Fetch threads when platform filter changes
   useEffect(() => {
@@ -24,7 +43,6 @@ export default function GlobalSearch({ isOpen, onClose, onNavigate, activeThread
       setAvailableThreads([]);
       return;
     }
-
     let ignore = false;
     const fetchThreads = async () => {
       try {
@@ -45,77 +63,21 @@ export default function GlobalSearch({ isOpen, onClose, onNavigate, activeThread
     };
   }, [filterPlatform]);
 
-  // Reset handler
-  const handleReset = () => {
-    setQuery('');
-    setFilterPlatform('all');
-    setFilterThread('all');
-    setResults([]);
-    setAvailableThreads([]);
-  };
-
-  /* ... existing SearchResult interface ... */
-  interface SearchResult {
-    message_id: number;
-    thread_id: string;
-    platform: string;
-    sender_name: string;
-    timestamp: number;
-    snippet: string;
-    thread_title: string;
-  }
-  const [results, setResults] = useState<SearchResult[]>([]);
-  const [totalCount, setTotalCount] = useState(0);
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
-  const [loading, setLoading] = useState(false); // Initial load
-  const [appending, setAppending] = useState(false); // Load more
-
-  // Ref to track the current abort controller
-  const abortControllerRef = useRef<AbortController | null>(null);
-
-  // Search fetcher
-  const fetchResults = async (pageNum: number, searchQuery: string) => {
-    abortControllerRef.current?.abort();
-    const controller = new AbortController();
-    abortControllerRef.current = controller;
-
-    const params = new URLSearchParams({
-      q: searchQuery,
-      page: pageNum.toString(),
-    });
-
-    if (filterPlatform !== 'all') {
-      params.append('platform', filterPlatform);
-    }
-    if (filterThread !== 'all') {
-      params.append('threadId', filterThread === 'current' && activeThreadId ? activeThreadId : filterThread);
-    }
-
-    try {
-      const res = await fetch(`/api/search?${params}`, { signal: controller.signal });
-      if (!res.ok) throw new Error('Search failed');
-      const json = await res.json();
-      return json as { data: SearchResult[]; total: number };
-    } catch (e: any) {
-      if (e.name === 'AbortError') return null;
-      throw e;
-    }
-  };
-
   // Debounce effect for Query/Filters
   useEffect(() => {
+    if (!isOpenRef.current) {
+      console.log('Search is closed');
+      return;
+    }
     if (!query.trim()) {
       setResults([]);
       setLoading(false);
       return;
     }
-
     const timer = setTimeout(async () => {
       setPage(1);
       setHasMore(true);
       setLoading(true);
-
       try {
         const resp = await fetchResults(1, query);
         if (resp !== null) {
@@ -129,12 +91,55 @@ export default function GlobalSearch({ isOpen, onClose, onNavigate, activeThread
         setLoading(false);
       }
     }, 300);
-
     return () => {
       clearTimeout(timer);
       abortControllerRef.current?.abort();
     };
-  }, [query, filterPlatform, filterThread, activeThreadId]);
+  }, [query, filterPlatform, filterThread]);
+
+  // Sync isOpen prop to ref
+  useEffect(() => {
+    isOpenRef.current = isOpen;
+  }, [isOpen]);
+
+  // Search fetcher
+  const fetchResults = async (pageNum: number, searchQuery: string) => {
+    abortControllerRef.current?.abort();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+    const params = new URLSearchParams({
+      q: searchQuery,
+      page: pageNum.toString(),
+    });
+    if (filterPlatform !== 'all') {
+      params.append('platform', filterPlatform);
+    }
+    if (filterThread !== 'all') {
+      params.append('threadId', filterThread);
+    }
+    try {
+      const res = await fetch(`/api/search?${params}`, { signal: controller.signal });
+      if (!res.ok) {
+        throw new Error('Search failed');
+      }
+      const json = await res.json();
+      return json as { data: SearchResult[]; total: number };
+    } catch (e) {
+      if (e instanceof Error && e.name === 'AbortError') {
+        return null;
+      }
+      throw e;
+    }
+  };
+
+  // Reset handler
+  const handleReset = () => {
+    setQuery('');
+    setFilterPlatform('all');
+    setFilterThread('all');
+    setResults([]);
+    setAvailableThreads([]);
+  };
 
   // Handle Scroll for Pagination
   const handleScroll = async (e: React.UIEvent<HTMLDivElement>) => {
@@ -144,7 +149,6 @@ export default function GlobalSearch({ isOpen, onClose, onNavigate, activeThread
         setAppending(true);
         const nextPage = page + 1;
         setPage(nextPage);
-
         try {
           const resp = await fetchResults(nextPage, query);
           if (resp !== null) {
@@ -193,9 +197,8 @@ export default function GlobalSearch({ isOpen, onClose, onNavigate, activeThread
               <option value="Google Voice">Google Voice</option>
             </select>
 
-            <select className={styles.filterSelect} value={filterThread} onChange={(e) => setFilterThread(e.target.value)} disabled={availableThreads.length === 0 && !activeThreadId}>
+            <select className={styles.filterSelect} value={filterThread} onChange={(e) => setFilterThread(e.target.value)} disabled={availableThreads.length === 0}>
               <option value="all">All Threads</option>
-
               {availableThreads.map((t) => (
                 <option key={t.id} value={t.id}>
                   {t.title.length > 20 ? t.title.substring(0, 20) + '...' : t.title}
@@ -233,8 +236,18 @@ export default function GlobalSearch({ isOpen, onClose, onNavigate, activeThread
                 }}
               />
             ))}
-          {!loading && appending && (
-            <div style={{ padding: '16px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', color: '#888', fontSize: '14px' }}>
+          {loading && appending && (
+            <div
+              style={{
+                padding: '16px',
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                gap: '8px',
+                color: '#888',
+                fontSize: '14px',
+              }}
+            >
               <FaSpinner className={styles.spinner} size={24} />
               <span>Loading more...</span>
             </div>
