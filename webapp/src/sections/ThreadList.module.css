@@ -1,0 +1,105 @@
+.threadList {
+  width: 100%;
+  background-color: var(--bg-thread-list);
+  border-right: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  transition: background-color 0.3s;
+}
+
+.threadScrollContainer {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.threadListHeader {
+  height: 60px;
+  padding: 0 20px;
+  display: flex;
+  align-items: center;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-thread-list);
+  flex-shrink: 0;
+  z-index: 10;
+}
+
+.threadItem {
+  padding: 15px 20px;
+  border-bottom: 1px solid var(--border-color);
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.threadItem:hover {
+  background-color: var(--bg-thread-item-hover);
+}
+
+.threadItemActive {
+  background-color: var(--bg-thread-item-active);
+  border-left: 4px solid var(--border-thread-active);
+}
+
+.threadName {
+  font-weight: 600;
+  color: var(--text-primary);
+  font-size: 1rem;
+  margin-bottom: 4px;
+}
+
+.threadSnippet {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.threadTime {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  float: right;
+}
+
+.loadingContainer {
+  padding: 20px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 10px;
+  color: var(--text-secondary);
+}
+
+.loadingText {
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.noThreads {
+  padding: 20px;
+  color: var(--text-secondary);
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.spinner {
+  animation: spin 1s linear infinite;
+  font-size: 1.2rem;
+  color: #007aff;
+  display: block;
+}

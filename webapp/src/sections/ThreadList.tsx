@@ -1,6 +1,6 @@
 import React from 'react';
 import { FaSpinner } from 'react-icons/fa';
-import styles from '../styles/index.module.css';
+import styles from './ThreadList.module.css';
 import { Thread } from '../types';
 
 interface ThreadListProps {

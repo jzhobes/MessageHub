@@ -11,3 +11,6 @@ preview_cache.json
 
 # database
 data/messagehub.db
+
+# virtual environment
+venv/

@@ -26,8 +26,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       content: string;
     }
 
-    let sql = `
-        SELECT m.*, t.platform, t.title as thread_title
+    let baseSql = `
         FROM messages m
         JOIN threads t ON m.thread_id = t.id
         WHERE m.content LIKE ?
@@ -36,23 +35,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const params: (string | number)[] = [`%${queryStr}%`];
 
     if (platform) {
-      sql += ' AND t.platform = ?';
-      // Map frontend platform name to DB value: lowercase, space to underscore
+      baseSql += ' AND t.platform = ?';
       const pStr = (Array.isArray(platform) ? platform[0] : platform).toLowerCase().replace(' ', '_');
       params.push(pStr);
     }
 
     if (threadId) {
-      sql += ' AND m.thread_id = ?';
+      baseSql += ' AND m.thread_id = ?';
       params.push(Array.isArray(threadId) ? threadId[0] : threadId);
     }
 
-    sql += ' ORDER BY m.timestamp_ms DESC LIMIT ? OFFSET ?';
-    params.push(PAGE_SIZE, offset);
+    // 1. Get Total Count
+    const countSql = `SELECT count(*) as total ${baseSql}`;
+    const countResult = db.prepare(countSql).get(...params) as { total: number };
+    const total = countResult ? countResult.total : 0;
 
-    const rows = db.prepare(sql).all(...params) as SearchRow[];
+    // 2. Get Data
+    const dataSql = `SELECT m.*, t.platform, t.title as thread_title ${baseSql} ORDER BY m.timestamp_ms DESC LIMIT ? OFFSET ?`;
+    const dataRows = db.prepare(dataSql).all(...params, PAGE_SIZE, offset) as SearchRow[];
 
-    const results = rows.map((row) => ({
+    const results = dataRows.map((row) => ({
       message_id: row.id,
       thread_id: row.thread_id,
       thread_title: row.thread_title,
@@ -60,10 +62,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       sender_name: row.sender_name,
       timestamp: row.timestamp_ms,
       content: row.content,
-      snippet: row.content, // Full content as snippet for now
+      snippet: row.content,
     }));
 
-    return res.status(200).json(results);
+    return res.status(200).json({ data: results, total });
   } catch (e) {
     console.error('Error searching:', e);
     return res.status(500).json({ error: 'Failed to search' });

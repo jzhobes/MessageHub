@@ -14,7 +14,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       Facebook: count('facebook'),
       Instagram: count('instagram'),
       'Google Chat': count('google_chat'),
-      'Google Voice': false,
+      'Google Voice': count('google_voice'),
     };
 
     res.status(200).json(status);

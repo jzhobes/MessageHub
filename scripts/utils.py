@@ -1,39 +1,37 @@
 import os
 
 import re
-from datetime import datetime
 from pathlib import Path
+
+# External dependencies (assumes venv is active)
+try:
+    from dateutil import parser
+except ImportError:
+    print("Error: 'python-dateutil' is required. Please install it via 'pip install -r scripts/requirements.txt'")
+    exit(1)
+
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    print("Error: 'python-dotenv' is required. Please install it via 'pip install -r scripts/requirements.txt'")
+    exit(1)
 
 # -----------------------------------------------------------------------------
 # Configuration & Path Resolution
 # -----------------------------------------------------------------------------
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parent
-
-
 ENV_FILE = PROJECT_ROOT / ".env"
+
+# Load environment variables
+if ENV_FILE.exists():
+    load_dotenv(ENV_FILE)
+    print(f"Loaded config from {ENV_FILE}")
 
 
 def get_data_dir():
     """Resolve data directory from root .env or fallback."""
-    data_path = None
-
-    # Try to read .env
-    if os.path.exists(ENV_FILE):
-        try:
-            with open(ENV_FILE, "r") as f:
-                for line in f:
-                    if line.strip().startswith("DATA_PATH="):
-                        val = line.strip().split("=", 1)[1].strip()
-                        # Allow optional quotes
-                        if (val.startswith('"') and val.endswith('"')) or (val.startswith("'") and val.endswith("'")):
-                            val = val[1:-1]
-                        data_path = val
-                        break
-            if data_path:
-                print(f"Loaded config from {ENV_FILE}")
-        except Exception as e:
-            print(f"Warning: Failed to read {ENV_FILE}: {e}")
+    data_path = os.getenv("DATA_PATH")
 
     if data_path:
         from pathlib import PureWindowsPath
@@ -89,33 +87,16 @@ def fix_text(text):
 
 def parse_iso_time(iso_str):
     """
-    Parses Google Chat ISO timestamp to milliseconds.
-    Example: "Monday, May 20, 2013 at 2:11:12 PM UTC"
+    Parses timestamps (Google Chat ISO, Google Voice ISO, etc) to milliseconds using dateutil.
     """
     if not iso_str:
         return 0
 
-    # Try dateutil first if available (robust)
     try:
-        from dateutil import parser
-
+        # dateutil handles "Monday, May 20..." and "2023-01-01T..." automatically
         dt = parser.parse(iso_str)
         return int(dt.timestamp() * 1000)
-    except ImportError:
-        pass
     except Exception:
-        pass
-
-    # Fallback to naive parsing for the specific known format
-    # "Monday, May 20, 2013 at 2:11:12 PM UTC"
-    # Remove " at ", " UTC", " " (narrow nbsp)
-    clean = iso_str.replace(" at ", " ").replace(" UTC", "").replace("\u202f", " ")
-
-    try:
-        # Format: "%A, %B %d, %Y %I:%M:%S %p"
-        dt = datetime.strptime(clean, "%A, %B %d, %Y %I:%M:%S %p")
-        return int(dt.timestamp() * 1000)
-    except ValueError:
         return 0
 
 
@@ -180,3 +161,66 @@ def clean_json_messages(directory, platforms=None):
 
     mb = reclaimed_bytes / (1024 * 1024)
     print(f"Cleanup Complete. Deleted {deleted_count} files ({mb:.2f} MB).")
+
+
+def clean_google_voice_files(data_dir=DATA_DIR):
+    """
+    Deletes processed Google Voice HTML files to save space.
+    Target: Voice/Calls/*.html
+    """
+    voice_root = Path(data_dir) / "Voice"
+    # Also check nested Takeout
+    if not voice_root.exists():
+        sub = Path(data_dir) / "Takeout" / "Voice"
+        if sub.exists():
+            voice_root = sub
+
+    if not voice_root.exists():
+        return
+
+    print("Cleaning up Google Voice HTML files...")
+    deleted_count = 0
+    reclaimed_bytes = 0
+
+    # Folders to clean
+    targets = ["Calls", "Spam", "Trash", "Archive"]
+
+    for t in targets:
+        target_dir = voice_root / t
+        if not target_dir.exists():
+            continue
+
+        for f in target_dir.glob("*.html"):
+            try:
+                size = f.stat().st_size
+                f.unlink()
+                deleted_count += 1
+                reclaimed_bytes += size
+            except Exception as e:
+                print(f"Error deleting {f}: {e}")
+
+    mb = reclaimed_bytes / (1024 * 1024)
+    print(f"Google Voice Cleanup Complete. Deleted {deleted_count} files ({mb:.2f} MB).")
+
+
+def merge_folders(src, dst):
+    """
+    Recursively merges src directory into dst directory.
+    Uses shutil.copytree with dirs_exist_ok=True (Python 3.8+).
+    Deletes src after successful merge.
+    """
+    import shutil
+
+    src = Path(src)
+    dst = Path(dst)
+
+    if not src.exists():
+        return
+
+    print(f"Merging {src.name} into {dst.name}...")
+    try:
+        dst.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(src, dst, dirs_exist_ok=True)
+        shutil.rmtree(src)
+    except Exception as e:
+        print(f"Error merging {src} to {dst}: {e}")

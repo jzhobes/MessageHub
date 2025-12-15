@@ -1,0 +1,76 @@
+.linkPreviewCard {
+  margin: 0;
+  width: 100%;
+  max-width: 300px;
+  border-radius: inherit;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  background-color: var(--bg-card);
+}
+
+.linkPreviewLazy {
+  margin-top: 0;
+  padding: 10px;
+  background-color: var(--bg-card);
+  border-radius: inherit;
+  border: 1px solid var(--border-color);
+  font-size: 0.9rem;
+  max-width: 300px;
+  color: var(--text-primary);
+}
+
+.linkPreviewFallback {
+  margin: 0;
+  width: 100%;
+  max-width: 300px;
+  border-radius: inherit;
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-card);
+  padding: 10px;
+  color: var(--text-primary);
+}
+
+.linkPreviewLink {
+  color: #007aff;
+  text-decoration: none;
+  word-break: break-all;
+  font-size: 0.9rem;
+}
+
+.linkPreviewTitleArea {
+  padding: 10px 12px;
+  background-color: var(--bg-quote);
+}
+
+.linkPreviewTitle {
+  font-weight: 600;
+  font-size: 0.9rem;
+  margin-bottom: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-primary);
+}
+
+.linkPreviewImage {
+  width: 100%;
+  max-height: 300px;
+  object-fit: cover;
+  display: block;
+}
+
+.previewBubbleSent {
+  border-top-left-radius: 18px;
+  border-top-right-radius: 4px;
+  border-bottom-right-radius: 18px;
+  border-bottom-left-radius: 18px;
+}
+
+.previewBubbleReceived {
+  border-top-left-radius: 4px;
+  border-top-right-radius: 18px;
+  border-bottom-right-radius: 18px;
+  border-bottom-left-radius: 18px;
+}

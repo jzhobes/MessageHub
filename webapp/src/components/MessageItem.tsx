@@ -1,6 +1,6 @@
 import React from 'react';
 import { FaQuoteLeft } from 'react-icons/fa';
-import styles from '../styles/index.module.css';
+import styles from './MessageItem.module.css';
 import LinkPreview from './LinkPreview';
 import LazyView from './LazyView';
 import { Message } from '../types';
@@ -72,6 +72,9 @@ export default function MessageItem({
     .filter(Boolean)
     .join(' ');
 
+  // Add a plain class for global targeting by ChatWindow
+  const bubbleClassName = `${bubbleClasses} message-bubble`;
+
   return (
     <div
       style={{
@@ -101,7 +104,7 @@ export default function MessageItem({
 
           {/* Bubble */}
           {(hasTextContent || displayPhotos.length > 0 || (msg.videos && msg.videos.length > 0) || (msg.gifs && msg.gifs.length > 0) || msg.sticker || msg.quoted_message_metadata) && (
-            <div className={bubbleClasses} title={formatTime(msg.timestamp_ms)}>
+            <div className={bubbleClassName} title={formatTime(msg.timestamp_ms)}>
               {msg.quoted_message_metadata && (
                 <div
                   className={styles.quoteContainer}

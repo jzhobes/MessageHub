@@ -1,6 +1,6 @@
 import { FaFacebook, FaInstagram, FaPhone, FaMoon, FaSun } from 'react-icons/fa';
 import { SiGooglechat } from 'react-icons/si';
-import styles from '../styles/index.module.css';
+import styles from './Sidebar.module.css';
 
 interface SidebarProps {
   activePlatform: string;

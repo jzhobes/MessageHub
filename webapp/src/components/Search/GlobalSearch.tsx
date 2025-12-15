@@ -65,12 +65,45 @@ export default function GlobalSearch({ isOpen, onClose, onNavigate, activeThread
     thread_title: string;
   }
   const [results, setResults] = useState<SearchResult[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [totalCount, setTotalCount] = useState(0);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [loading, setLoading] = useState(false); // Initial load
+  const [appending, setAppending] = useState(false); // Load more
 
   // Ref to track the current abort controller
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  // Debounce effect
+  // Search fetcher
+  const fetchResults = async (pageNum: number, searchQuery: string) => {
+    abortControllerRef.current?.abort();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    const params = new URLSearchParams({
+      q: searchQuery,
+      page: pageNum.toString(),
+    });
+
+    if (filterPlatform !== 'all') {
+      params.append('platform', filterPlatform);
+    }
+    if (filterThread !== 'all') {
+      params.append('threadId', filterThread === 'current' && activeThreadId ? activeThreadId : filterThread);
+    }
+
+    try {
+      const res = await fetch(`/api/search?${params}`, { signal: controller.signal });
+      if (!res.ok) throw new Error('Search failed');
+      const json = await res.json();
+      return json as { data: SearchResult[]; total: number };
+    } catch (e: any) {
+      if (e.name === 'AbortError') return null;
+      throw e;
+    }
+  };
+
+  // Debounce effect for Query/Filters
   useEffect(() => {
     if (!query.trim()) {
       setResults([]);
@@ -78,44 +111,22 @@ export default function GlobalSearch({ isOpen, onClose, onNavigate, activeThread
       return;
     }
 
-    setLoading(true);
-
     const timer = setTimeout(async () => {
-      abortControllerRef.current?.abort();
-      const controller = new AbortController();
-      abortControllerRef.current = controller;
+      setPage(1);
+      setHasMore(true);
+      setLoading(true);
 
       try {
-        const params = new URLSearchParams({
-          q: query,
-        });
-
-        // Apply Platform Filter
-        if (filterPlatform !== 'all') {
-          params.append('platform', filterPlatform);
+        const resp = await fetchResults(1, query);
+        if (resp !== null) {
+          setResults(resp.data);
+          setTotalCount(resp.total);
+          setHasMore(resp.data.length < resp.total);
         }
-
-        // Apply Thread Filter
-        if (filterThread !== 'all') {
-          params.append('threadId', filterThread === 'current' && activeThreadId ? activeThreadId : filterThread);
-        }
-
-        const res = await fetch(`/api/search?${params.toString()}`, {
-          signal: controller.signal,
-        });
-
-        if (res.ok) {
-          const data = await res.json();
-          setResults(data);
-        }
-      } catch (e: unknown) {
-        if (e instanceof Error && e.name !== 'AbortError') {
-          console.error(e);
-        }
+      } catch (e) {
+        console.error(e);
       } finally {
-        if (!controller.signal.aborted) {
-          setLoading(false);
-        }
+        setLoading(false);
       }
     }, 300);
 
@@ -124,6 +135,30 @@ export default function GlobalSearch({ isOpen, onClose, onNavigate, activeThread
       abortControllerRef.current?.abort();
     };
   }, [query, filterPlatform, filterThread, activeThreadId]);
+
+  // Handle Scroll for Pagination
+  const handleScroll = async (e: React.UIEvent<HTMLDivElement>) => {
+    const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
+    if (scrollHeight - scrollTop <= clientHeight + 50) {
+      if (!loading && !appending && hasMore) {
+        setAppending(true);
+        const nextPage = page + 1;
+        setPage(nextPage);
+
+        try {
+          const resp = await fetchResults(nextPage, query);
+          if (resp !== null) {
+            setResults((prev) => [...prev, ...resp.data]);
+            setHasMore(results.length + resp.data.length < resp.total);
+          }
+        } catch (e) {
+          console.error(e);
+        } finally {
+          setAppending(false);
+        }
+      }
+    }
+  };
 
   if (!isOpen) {
     return null;
@@ -171,9 +206,14 @@ export default function GlobalSearch({ isOpen, onClose, onNavigate, activeThread
             <button className={styles.resetButton} onClick={handleReset}>
               Reset
             </button>
+            {!loading && query && totalCount > 0 && (
+              <span className={styles.resultsCount}>
+                {totalCount.toLocaleString()} result{totalCount === 1 ? '' : 's'}
+              </span>
+            )}
           </div>
         </div>
-        <div className={styles.resultsList}>
+        <div className={styles.resultsList} onScroll={handleScroll}>
           {loading && (
             <div className={styles.loading}>
               <FaSpinner className={styles.spinner} size={24} />
@@ -184,7 +224,7 @@ export default function GlobalSearch({ isOpen, onClose, onNavigate, activeThread
           {!loading &&
             results.map((r) => (
               <SearchResultItem
-                key={r.message_id}
+                key={`${r.message_id}_${r.thread_id}`}
                 result={r}
                 searchQuery={query}
                 onClick={() => {
@@ -193,6 +233,12 @@ export default function GlobalSearch({ isOpen, onClose, onNavigate, activeThread
                 }}
               />
             ))}
+          {!loading && appending && (
+            <div style={{ padding: '16px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', color: '#888', fontSize: '14px' }}>
+              <FaSpinner className={styles.spinner} size={24} />
+              <span>Loading more...</span>
+            </div>
+          )}
         </div>
       </div>
     </div>

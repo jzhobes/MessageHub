@@ -95,10 +95,25 @@ To enable rich link previews for Instagram links (bypassing login walls):
 
 ### 3. Ingest Data
 
-Move your downloaded `.zip` files into your configured data folder (or the project root). Then run the ingestion script:
+First, set up the Python environment (install dependencies like `beautifulsoup4` and `python-dateutil`):
+
+**Unix (Mac/Linux):**
 
 ```bash
-python3 scripts/ingest.py
+./setup.sh
+```
+
+**Windows:**
+
+```cmd
+setup.bat
+```
+
+Move your downloaded `.zip` files into your configured data folder (default: `data/`). Then run the ingestion script:
+
+```bash
+./venv/bin/python3 scripts/ingest.py
+# On Windows: venv\Scripts\python scripts/ingest.py
 ```
 
 **What this script does:**

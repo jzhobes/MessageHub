@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
 import { FaSearch, FaArrowLeft, FaBars } from 'react-icons/fa';
-import styles from '../styles/index.module.css';
+import styles from '../styles/Layout.module.css';
 import { Message, Thread } from '../types';
 import Sidebar from '../sections/Sidebar';
 import ThreadList from '../sections/ThreadList';
@@ -20,7 +20,7 @@ export default function Home() {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
 
   // Navigation State
-  const [pendingPage, setPendingPage] = useState<number | null>(null);
+
   const [targetMessageId, setTargetMessageId] = useState<string | null>(null);
 
   // Layout State
@@ -133,10 +133,13 @@ export default function Home() {
     }
   }, [isRouterReady, router.query, activePlatform, activeThread, threads]);
 
-  const updateUrl = (platform: string, threadId?: string) => {
+  const updateUrl = (platform: string, threadId?: string, pageNum?: number) => {
     const query: Record<string, string> = { platform };
     if (threadId) {
       query.threadId = threadId;
+    }
+    if (pageNum && pageNum > 1) {
+      query.page = pageNum.toString();
     }
 
     router.push(
@@ -200,9 +203,9 @@ export default function Home() {
     setMessages([]);
     setLoading(true);
     setHasMore(false);
-    setPendingPage(null); // Clear jumping
+    // setPendingPage(null); // Removed
     setTargetMessageId(null);
-    updateUrl(activePlatform, t.id);
+    updateUrl(activePlatform, t.id); // Page undefined -> 1
   };
 
   const handleSearchNavigate = async (threadId: string, platform: string, msgId: number) => {
@@ -211,18 +214,9 @@ export default function Home() {
       if (res.ok) {
         const info = await res.json();
 
-        setPendingPage(info.page);
         setTargetMessageId(msgId.toString());
-
-        if (activePlatform !== info.platform) {
-          updateUrl(info.platform, info.threadId);
-        } else if (activeThread?.id !== info.threadId) {
-          updateUrl(info.platform, info.threadId);
-        } else {
-          setPage(info.page);
-          setMessages([]);
-          loadMessagesManual(info.threadId, info.page);
-        }
+        // Navigate to the thread/page via URL update
+        updateUrl(info.platform, info.threadId, info.page);
       }
     } catch (e) {
       console.error('Jump failed', e);
@@ -235,16 +229,16 @@ export default function Home() {
       return;
     }
 
+    const pageParam = router.query.page;
+    const startPage = pageParam ? parseInt(pageParam as string, 10) : 1;
+    // Ensure internal state matches URL
+    setPage(startPage);
+
     const loadMessages = async (threadId: string, pageNum: number, reset: boolean) => {
       setLoading(true);
 
-      const effectivePage = reset && pendingPage ? pendingPage : pageNum;
-      if (reset && pendingPage) {
-        setPage(effectivePage);
-      }
-
       try {
-        const res = await fetch(`/api/messages?threadId=${encodeURIComponent(threadId)}&page=${effectivePage}&platform=${encodeURIComponent(activePlatform)}`);
+        const res = await fetch(`/api/messages?threadId=${encodeURIComponent(threadId)}&page=${pageNum}&platform=${encodeURIComponent(activePlatform)}`);
         if (res.ok) {
           const data = await res.json();
           const newMsgs = data.messages || [];
@@ -255,10 +249,6 @@ export default function Home() {
             setMessages((prev) => [...prev, ...newMsgs]);
           }
           setHasMore(newMsgs.length > 0);
-
-          if (reset && pendingPage) {
-            setPendingPage(null);
-          }
         } else {
           setHasMore(false);
         }
@@ -269,11 +259,8 @@ export default function Home() {
       }
     };
 
-    const startPage = pendingPage || 1;
-    setMessages([]);
-    setPage(startPage);
     loadMessages(activeThread.id, startPage, true); // Reset
-  }, [activeThread, activePlatform, pendingPage]);
+  }, [activeThread, activePlatform, router.query.page]);
 
   const loadMessagesManual = async (threadId: string, pageNum: number) => {
     setLoading(true);

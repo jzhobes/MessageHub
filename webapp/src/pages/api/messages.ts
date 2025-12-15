@@ -69,7 +69,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   // Identify "Me"
   // TODO: cache this or move to a proper identity service
-  const myNamesSet = new Set<string>();
+  const myNamesSet = new Set<string>(['Me']);
   const dataDir = getDataDir();
 
   // Dynamically find Google Chat user info

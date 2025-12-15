@@ -47,6 +47,13 @@
   gap: 12px;
 }
 
+.resultsCount {
+  margin-left: auto;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
 .searchInputWrapper {
   flex: 1;
   background: var(--input-bg);
@@ -200,6 +207,7 @@
   overflow: hidden;
   display: -webkit-box;
   -webkit-line-clamp: 2;
+  line-clamp: 2;
   -webkit-box-orient: vertical;
 }
 

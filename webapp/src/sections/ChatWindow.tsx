@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { FaSpinner } from 'react-icons/fa';
-import styles from '../styles/index.module.css';
+import styles from './ChatWindow.module.css';
 import MessageItem from '../components/MessageItem';
 import { Message, Thread, QuotedMessageMetadata } from '../types';
 
@@ -41,16 +41,26 @@ export default function ChatWindow({ activeThread, messages, loading, hasMore, p
   // Scroll to target message effect
   useEffect(() => {
     if (targetMessageId && !loading && messages.length > 0) {
-      // Wait for render
-      const timer = setTimeout(() => {
+      let attempts = 0;
+      const tryScroll = () => {
         const el = document.getElementById(`msg-${targetMessageId}`);
         if (el) {
-          el.scrollIntoView({ behavior: 'auto', block: 'center' });
+          console.log(`Scrolling to msg-${targetMessageId}`);
+          el.scrollIntoView({ behavior: 'auto', block: 'center', inline: 'nearest' });
           el.classList.add(styles.highlightFlash);
           setTimeout(() => el.classList.remove(styles.highlightFlash), 1500);
+        } else {
+          attempts++;
+          if (attempts < 10) {
+            setTimeout(tryScroll, 200); // Retry every 200ms up to 2s
+          } else {
+            console.warn(`Could not find element msg-${targetMessageId} after retries`);
+          }
         }
-      }, 500);
-      return () => clearTimeout(timer);
+      };
+
+      // Start checking after a short delay to allow rendering
+      setTimeout(tryScroll, 100);
     }
   }, [targetMessageId, messages, loading]);
 
@@ -149,7 +159,7 @@ export default function ChatWindow({ activeThread, messages, loading, hasMore, p
           });
 
           return (
-            <div id={`msg-${msg.id || msg.timestamp_ms}`} key={i}>
+            <div id={`msg-${msg.id || msg.timestamp_ms}`} key={msg.id || msg.timestamp_ms}>
               <MessageItem
                 msg={msg}
                 isMyMsg={isMyMsg}
