@@ -30,12 +30,8 @@
 
 .messagesContainer {
   flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding: 20px;
-  display: flex;
-  flex-direction: column-reverse;
-  overflow-anchor: none;
+  position: relative;
+  min-height: 0;
 }
 
 .loadMoreContainer {
@@ -82,24 +78,4 @@
   font-size: 1.2rem;
   color: #007aff;
   display: block;
-}
-
-@keyframes pulseHighlight {
-  0% {
-    transform: scale(1);
-    box-shadow: 0 0 0 0 var(--highlight-border);
-  }
-  50% {
-    transform: scale(1.02);
-    box-shadow: 0 0 0 4px rgba(0, 122, 255, 0);
-  }
-  100% {
-    transform: scale(1);
-    box-shadow: 0 0 0 0 rgba(0, 122, 255, 0);
-  }
-}
-
-.highlightFlash :global(.message-bubble) {
-  animation: pulseHighlight 0.75s ease-in-out;
-  animation-delay: 0.3s;
 }

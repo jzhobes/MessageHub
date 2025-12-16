@@ -10,10 +10,9 @@ export default function MessageItem({
   isMyMsg,
   isFirst,
   isLast,
+  isTarget,
   showAvatar,
   showName,
-  isMediaOnly,
-  hasPreview,
   activePlatform,
   showTimestamp,
   timestampStr,
@@ -23,10 +22,9 @@ export default function MessageItem({
   isMyMsg: boolean;
   isFirst: boolean;
   isLast: boolean;
+  isTarget?: boolean;
   showAvatar: boolean;
   showName: boolean;
-  isMediaOnly: boolean;
-  hasPreview: boolean;
   activePlatform: string;
   showTimestamp: boolean;
   timestampStr: string;
@@ -56,6 +54,11 @@ export default function MessageItem({
   const urlRegex = /(https?:\/\/[^\s]+)/;
   const contentLinkMatch = msg.content ? msg.content.match(urlRegex) : null;
   const previewUrl = msg.share?.link || (contentLinkMatch ? contentLinkMatch[0] : null);
+  const hasPreview = !!previewUrl;
+
+  const isImageShare = msg.share && msg.share.link && /\.(gif|jpe?g|png|webp)($|\?)/i.test(msg.share.link);
+  const hasMedia = (msg.photos && msg.photos.length > 0) || (msg.videos && msg.videos.length > 0) || (msg.gifs && msg.gifs.length > 0) || msg.sticker || isImageShare;
+  const isMediaOnly = hasMedia && !msg.content;
 
   // Filter photos if we are showing a link preview (avoids duplicates)
   const displayPhotos = previewUrl && msg.photos ? [] : msg.photos || [];
@@ -73,7 +76,7 @@ export default function MessageItem({
     .join(' ');
 
   // Add a plain class for global targeting by ChatWindow
-  const bubbleClassName = `${bubbleClasses} message-bubble`;
+  const bubbleClassName = `${bubbleClasses} messageBubble`;
 
   return (
     <div
@@ -86,7 +89,7 @@ export default function MessageItem({
       {/* Timestamp */}
       {showTimestamp && <div className={styles.timestampLabel}>{timestampStr}</div>}
 
-      <div className={`${styles.messageRow} ${isMyMsg ? styles.sentRow : styles.receivedRow} ${isLast ? styles.messageRowGroupEnd : ''}`}>
+      <div className={`${styles.messageRow} ${isMyMsg ? styles.sentRow : styles.receivedRow} ${isLast ? styles.messageRowGroupEnd : ''} ${isTarget ? styles.highlightTarget : ''}`}>
         {/* Avatar Area (Left) */}
         {!isMyMsg && (
           <div className={`${styles.avatarArea} ${msg.reactions && msg.reactions.length > 0 ? styles.hasReactionsAvatar : ''}`}>

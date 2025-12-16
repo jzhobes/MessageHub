@@ -41,6 +41,7 @@ export default function Home() {
   const [showSidebar, setShowSidebar] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
   const [theme, setTheme] = useState('light');
+  const [highlightToken, setHighlightToken] = useState(0);
 
   // Availability & Router State
   const [availability, setAvailability] = useState<Record<string, boolean>>({
@@ -68,7 +69,6 @@ export default function Home() {
         query.page = pageNum.toString();
       }
 
-      console.warn('platform', platform);
       router.push(
         {
           pathname: '/',
@@ -87,15 +87,18 @@ export default function Home() {
     localStorage.setItem('theme', next);
   }, [theme]);
 
+  const latestRequestRef = useRef<symbol | null>(null);
+
   // Load Messages Helper
   const loadMessages = useCallback(
-    async (threadId: string, pageNum: number, mode: 'reset' | 'append' | 'prepend') => {
-      if (!activeThread) {
+    async (threadId: string, pageNum: number, mode: 'reset' | 'older' | 'newer') => {
+      if (!activeThread || activeThread.id !== threadId) {
         return;
       }
 
-      // If resetting, use null messages to indicate full reload (spinner)
-      // If appending/prepending, track via loading state to keep current messages visible
+      const requestId = Symbol('loadMessages');
+      latestRequestRef.current = requestId;
+
       if (mode === 'reset') {
         setMessages(null);
       } else {
@@ -104,6 +107,12 @@ export default function Home() {
 
       try {
         const res = await fetch(`/api/messages?threadId=${encodeURIComponent(threadId)}&page=${pageNum}&platform=${encodeURIComponent(activePlatform)}`);
+
+        // Drop responses for superseded requests
+        if (latestRequestRef.current !== requestId) {
+          return;
+        }
+
         if (res.ok) {
           const data = await res.json();
           const newMsgs = data.messages || [];
@@ -112,34 +121,44 @@ export default function Home() {
 
           if (mode === 'reset') {
             setMessages(newMsgs);
-            // Has Newer if we started > 1
             setHasMoreNew(pageNum > 1);
-            // Has Older if we got a full page
             setHasMoreOld(hasData && isFullPage);
-          } else if (mode === 'append') {
+            setPageRange({ min: pageNum, max: pageNum });
+          } else if (mode === 'older') {
             setMessages((prev) => [...(prev || []), ...newMsgs]);
-            // Limit older check by file_count if valid, else heuristic
             if (activeThread.file_count) {
               setHasMoreOld(pageNum < activeThread.file_count);
             } else {
               setHasMoreOld(hasData && isFullPage);
             }
-          } else if (mode === 'prepend') {
+            setPageRange((prev) => ({ ...prev, max: pageNum }));
+          } else if (mode === 'newer') {
             setMessages((prev) => [...newMsgs, ...(prev || [])]);
             setHasMoreNew(pageNum > 1);
+            setPageRange((prev) => ({ ...prev, min: pageNum }));
           }
         } else {
-          if (mode === 'append') {
+          // Handle error state
+          if (mode === 'reset') {
+            setMessages([]); // Clear spinner
+          }
+          if (mode === 'older') {
             setHasMoreOld(false);
           }
-          if (mode === 'prepend') {
+          if (mode === 'newer') {
             setHasMoreNew(false);
           }
         }
       } catch (e) {
         console.error(e);
+        if (mode === 'reset') {
+          setMessages([]);
+        } // Clear spinner on throw
       } finally {
-        setLoading(false);
+        // Only turn off loading if this is still the latest request
+        if (latestRequestRef.current === requestId) {
+          setLoading(false);
+        }
       }
     },
     [activePlatform, activeThread],
@@ -148,9 +167,6 @@ export default function Home() {
   const handlePlatformSelect = useCallback(
     (p: string) => {
       updateUrl(p, undefined);
-      setActivePlatform(p); // Optimistic update
-      setActiveThread(null);
-      setMessages(null);
       if (isMobile) {
         setShowSidebar(false); // Close sidebar on mobile after selection
       }
@@ -182,6 +198,7 @@ export default function Home() {
           const info = await res.json();
 
           setTargetMessageId(msgId.toString());
+          setHighlightToken((t) => t + 1);
           // Map raw platform to display name before updating URL
           const displayPlatform = mapPlatform(info.platform);
           // Navigate to the thread/page via URL update
@@ -204,7 +221,7 @@ export default function Home() {
       return;
     }
     setPageRange((prev) => ({ ...prev, max: next }));
-    loadMessages(activeThread.id, next, 'append');
+    loadMessages(activeThread.id, next, 'older');
   }, [activeThread, pageRange.max, loadMessages]);
 
   const handleLoadNew = useCallback(() => {
@@ -217,7 +234,7 @@ export default function Home() {
       return;
     }
     setPageRange((prev) => ({ ...prev, min: next }));
-    loadMessages(activeThread.id, next, 'prepend');
+    loadMessages(activeThread.id, next, 'newer');
   }, [activeThread, pageRange.min, loadMessages]);
 
   // --- Effects ---
@@ -251,8 +268,6 @@ export default function Home() {
         console.error('Failed to fetch status', err);
       });
   }, []);
-
-  console.warn('activePlatform', activePlatform);
 
   // 3. Responsive Check
   useEffect(() => {
@@ -356,13 +371,18 @@ export default function Home() {
       return;
     }
 
+    const threadIdParam = router.query.threadId as string | undefined;
+    if (threadIdParam && threadIdParam !== activeThread.id) {
+      return;
+    }
+
     const pageParam = router.query.page;
     const startPage = pageParam ? parseInt(pageParam as string, 10) : 1;
 
     console.info(`Initializing at Page ${startPage}`);
     setPageRange({ min: startPage, max: startPage });
     loadMessages(activeThread.id, startPage, 'reset');
-  }, [activeThread, router.query.page, loadMessages]);
+  }, [activeThread, router.query.page, router.query.threadId, loadMessages]);
 
   // 7. Theme Initialization
   useEffect(() => {
@@ -450,10 +470,11 @@ export default function Home() {
                 hasMoreOld={hasMoreOld}
                 hasMoreNew={hasMoreNew}
                 pageRange={pageRange}
-                onLoadOld={handleLoadOld}
-                onLoadNew={handleLoadNew}
+                onStartReached={handleLoadOld}
+                onEndReached={handleLoadNew}
                 activePlatform={activePlatform}
                 targetMessageId={targetMessageId}
+                highlightToken={highlightToken}
                 initializing={!!router.query.threadId && !activeThread}
               />
             </div>

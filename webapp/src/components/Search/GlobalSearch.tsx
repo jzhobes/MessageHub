@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { FaTimes, FaSpinner, FaSearch } from 'react-icons/fa';
+import { Virtuoso } from 'react-virtuoso';
 import styles from './Search.module.css';
 import SearchResultItem from './SearchResultItem';
 import { Thread } from '../../types';
@@ -141,27 +142,39 @@ export default function GlobalSearch({ isOpen, onClose, onNavigate }: GlobalSear
     setAvailableThreads([]);
   };
 
-  // Handle Scroll for Pagination
-  const handleScroll = async (e: React.UIEvent<HTMLDivElement>) => {
-    const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
-    if (scrollHeight - scrollTop <= clientHeight + 50) {
-      if (!loading && !appending && hasMore) {
-        setAppending(true);
-        const nextPage = page + 1;
-        setPage(nextPage);
-        try {
-          const resp = await fetchResults(nextPage, query);
-          if (resp !== null) {
-            setResults((prev) => [...prev, ...resp.data]);
-            setHasMore(results.length + resp.data.length < resp.total);
-          }
-        } catch (e) {
-          console.error(e);
-        } finally {
-          setAppending(false);
-        }
-      }
+  const handleEndReached = useCallback(() => {
+    if (!hasMore || loading || appending) {
+      return;
     }
+
+    setAppending(true);
+    const nextPage = page + 1;
+    setPage(nextPage);
+
+    (async () => {
+      try {
+        const resp = await fetchResults(nextPage, query);
+        if (resp !== null) {
+          setResults((prev) => [...prev, ...resp.data]);
+          setHasMore(results.length + resp.data.length < resp.total);
+        }
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setAppending(false);
+      }
+    })();
+  }, [hasMore, loading, appending, page, query, results.length]); // Dependencies for callback
+
+  const Footer = () => {
+    return appending ? (
+      <div className={styles.footerLoading}>
+        <FaSpinner className={styles.spinner} size={24} />
+        <span>Loading more...</span>
+      </div>
+    ) : (
+      <div style={{ height: 20 }} /> // Spacer
+    );
   };
 
   if (!isOpen) {
@@ -211,46 +224,38 @@ export default function GlobalSearch({ isOpen, onClose, onNavigate }: GlobalSear
             </button>
             {!loading && query && totalCount > 0 && (
               <span className={styles.resultsCount}>
-                {totalCount.toLocaleString()} result{totalCount === 1 ? '' : 's'}
+                {results.length < totalCount ? `${results.length.toLocaleString()} of ${totalCount.toLocaleString()} results` : `${totalCount.toLocaleString()} result${totalCount === 1 ? '' : 's'}`}
               </span>
             )}
           </div>
         </div>
-        <div className={styles.resultsList} onScroll={handleScroll}>
-          {loading && (
+        <div className={styles.resultsList}>
+          {loading && !appending && (
             <div className={styles.loading}>
               <FaSpinner className={styles.spinner} size={24} />
               <span>Searching...</span>
             </div>
           )}
           {!loading && results.length === 0 && query && <div className={styles.empty}>No matches found.</div>}
-          {!loading &&
-            results.map((r) => (
-              <SearchResultItem
-                key={`${r.message_id}_${r.thread_id}`}
-                result={r}
-                searchQuery={query}
-                onClick={() => {
-                  onNavigate(r.thread_id, r.platform, r.message_id);
-                  onClose();
-                }}
-              />
-            ))}
-          {loading && appending && (
-            <div
-              style={{
-                padding: '16px',
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'center',
-                gap: '8px',
-                color: '#888',
-                fontSize: '14px',
-              }}
-            >
-              <FaSpinner className={styles.spinner} size={24} />
-              <span>Loading more...</span>
-            </div>
+          {results.length && (
+            <Virtuoso
+              style={{ height: '100%' }}
+              data={results}
+              endReached={handleEndReached}
+              overscan={200}
+              components={{ Footer }}
+              itemContent={(index, r) => (
+                <SearchResultItem
+                  key={`${r.message_id}_${r.thread_id}`}
+                  result={r}
+                  searchQuery={query}
+                  onClick={() => {
+                    onNavigate(r.thread_id, r.platform, r.message_id);
+                    onClose();
+                  }}
+                />
+              )}
+            />
           )}
         </div>
       </div>

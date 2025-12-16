@@ -1,12 +1,12 @@
 # MessageHub
 
-MessageHub is a unified local viewer for your personal chat archives. It aggregates and displays message history from **Facebook**, **Instagram**, and **Google Chat** exports in a single, modern web interface.
+MessageHub is a unified local viewer for your personal chat archives. It aggregates and displays message history from **Facebook**, **Instagram**, **Google Chat**, and **Google Voice** exports in a single, modern web interface.
 
 ## Features
 
-- **Unified Dashboard:** Toggle seamlessly between Facebook Messenger, Instagram DMs, and Google Chat histories.
+- **Unified Dashboard:** Toggle between Facebook Messenger, Instagram DMs, Google Chat, and Google Voice histories.
+- **Global Search:** Instantly search all archives. Click any result to **jump** to that message in its original context, preserving timeline history.
 - **Rich Media Support:** View photos, videos, and reactions directly in the chat stream.
-- **Instant Search:** Search across all messages and threads using a local SQLite backend.
 - **Automated Ingestion:** A single script handles Zip extraction, data merging, and database population.
 
 ## Project Structure
@@ -17,8 +17,10 @@ MessageHub/
 │   ├── Facebook/
 │   ├── Instagram/
 │   ├── Google Chat/
+│   ├── Google Voice/
 │   └── messagehub.db      # SQLite database containing all message data
 ├── scripts/               # Python processing scripts
+│   ├── parsers/           # Platform-specific parsers
 │   ├── ingest.py          # Main script: Zip extraction + DB Ingestion
 │   └── utils.py           # Shared logic
 ├── webapp/                # Next.js frontend application
@@ -26,7 +28,9 @@ MessageHub/
 │   │   ├── components/    # Reusable UI atoms
 │   │   ├── sections/      # Major page layout blocks
 │   │   ├── pages/         # Next.js pages and API routes
-│   │   └── styles/        # CSS Modules
+│   │   ├── styles/        # CSS Modules
+│   │   ├── utils/         # Helper functions (DB, Dates, etc.)
+│   │   └── types.ts       # Shared TypeScript interfaces
 └── README.md              # This file
 ```
 
@@ -145,6 +149,6 @@ Open [http://localhost:3000](http://localhost:3000) to browse your messages.
 - **Backend:** Next.js API Routes (Node.js) serve data via SQLite queries.
 - **Ingestion:** Python-based pipeline (`ingest.py`) handles:
   - Zip extraction and merging (handling split archives).
-  - Latin-1/UTF-8 mojibake correction.
+  - Data parsing and ingestion into SQLite.
   - Media path resolution.
   - Selective JSON cleanup.
