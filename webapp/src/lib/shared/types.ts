@@ -3,7 +3,7 @@ export interface Thread {
   title: string;
   timestamp: number;
   snippet?: string;
-  file_count?: number; // pagination helper
+  pageCount?: number; // pagination helper
   platform?: string;
   is_group?: number;
   // Dataset Studio Metadata
@@ -11,6 +11,7 @@ export interface Thread {
   participationRatio?: number;
   myAvgMessageLength?: number;
   myMessageCount?: number;
+  messageCount?: number;
   platform_source?: string;
 }
 

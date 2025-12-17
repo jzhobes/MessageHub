@@ -10,15 +10,19 @@ interface ThreadPreviewModalProps {
   threadId: string | null;
   threadTitle?: string;
   platform?: string;
+  messageCount?: number;
 }
 
-export default function ThreadPreviewModal({ isOpen, onClose, threadId, threadTitle, platform }: ThreadPreviewModalProps) {
+export default function ThreadPreviewModal({ isOpen, onClose, threadId, threadTitle, platform, messageCount }: ThreadPreviewModalProps) {
   // State matching Home page usage of ChatWindow
   const [messages, setMessages] = useState<Message[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [pageRange, setPageRange] = useState({ min: 1, max: 1 });
+  const [visiblePage, setVisiblePage] = useState(1);
   const [hasMoreOld, setHasMoreOld] = useState(false);
   const [hasMoreNew, setHasMoreNew] = useState(false);
+
+  const totalPages = messageCount ? Math.ceil(messageCount / 100) : 1;
 
   // Mock activeThread object for ChatWindow props
   const activeThread: Thread | null = threadId
@@ -26,7 +30,7 @@ export default function ThreadPreviewModal({ isOpen, onClose, threadId, threadTi
         id: threadId,
         title: threadTitle || 'Thread Preview',
         platform: platform || 'generic',
-        file_count: 1000, // unlimited scrolling for preview
+        pageCount: totalPages, // Use calculated pages for progress
         timestamp: Date.now(),
         // Add other required fields with dummy values
         download_path: '',
@@ -132,6 +136,7 @@ export default function ThreadPreviewModal({ isOpen, onClose, threadId, threadTi
   // Initialize on open
   useEffect(() => {
     if (isOpen && threadId) {
+      setVisiblePage(1);
       loadMessages(threadId, 1, 'reset');
     } else {
       setMessages(null);
@@ -167,7 +172,12 @@ export default function ThreadPreviewModal({ isOpen, onClose, threadId, threadTi
         <div className={styles.header}>
           <div className={styles.titleGroup}>
             <div className={styles.title}>{threadTitle || 'Thread Preview'}</div>
-            {platform && <div className={styles.subtitle}>{platform}</div>}
+            <div className={styles.subtitle}>
+              {platform && <span>{platform} </span>}
+              <span style={{ opacity: 0.7 }}>
+                • Page {visiblePage?.toLocaleString()} of {totalPages.toLocaleString()}
+              </span>
+            </div>
           </div>
           <button className={styles.closeButton} onClick={onClose} aria-label="Close Preview">
             <FaTimes />
@@ -176,6 +186,7 @@ export default function ThreadPreviewModal({ isOpen, onClose, threadId, threadTi
 
         <div className={styles.messageList}>
           <ChatWindow
+            hideHeader
             activeThread={activeThread}
             messages={messages}
             loading={loading}
@@ -188,6 +199,7 @@ export default function ThreadPreviewModal({ isOpen, onClose, threadId, threadTi
             targetMessageId={null}
             highlightToken={0}
             initializing={loading && messages === null}
+            onPageChange={setVisiblePage}
           />
         </div>
       </div>

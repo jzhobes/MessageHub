@@ -4,12 +4,14 @@ import Link from 'next/link';
 import { FaArrowLeft, FaRobot } from 'react-icons/fa';
 import { FiMoon, FiSun } from 'react-icons/fi';
 
+import Checkbox from '@/components/Checkbox';
+import TextareaAuto from '@/components/TextareaAuto';
+import ThreadPreviewModal from '@/components/ThreadPreviewModal';
 import { useForm } from '@/hooks/useForm';
 import { useTheme } from '@/hooks/useTheme';
 import { Thread } from '@/lib/shared/types';
 import { StudioControls } from '@/sections/StudioControls';
 import { StudioThreadList } from '@/sections/StudioThreadList';
-import ThreadPreviewModal from '@/components/ThreadPreviewModal';
 
 import layoutStyles from '@/styles/Layout.module.css';
 import styles from '@/styles/Studio.module.css';
@@ -25,14 +27,28 @@ const initialState = {
   redactPII: true,
 };
 
+const PERSONA_TEMPLATES = [
+  { label: 'Work', text: 'Professional, Concise' },
+  { label: 'Social', text: 'Casual, Friendly, Lowercase' },
+  { label: 'Witty', text: 'Sarcastic, Witty, Short' },
+];
+
+const INSTRUCTION_TEMPLATES = [
+  { label: 'Strict', text: 'Answer directly and concisely. No filler.' },
+  { label: 'Casual', text: 'Use lowercase, minimal punctuation, and casual slang.' },
+  { label: 'Roleplay', text: 'You are a helpful assistant. Keep answers professional but friendly.' },
+];
+
 export default function Studio() {
-  // State
+  // ... existing code ...
+
   const [threads, setThreads] = useState<Thread[]>([]);
   const [selectedIds, setSelectedIds] = useState(new Set<string>());
   const [loading, setLoading] = useState(true);
   // Multi-select filter state (empty set = 'All')
   const [filterPlatforms, setFilterPlatforms] = useState(new Set<string>());
   const [generating, setGenerating] = useState(false);
+  const [progress, setProgress] = useState({ current: 0, total: 0 });
   // Preview Modal
   const [previewThread, setPreviewThread] = useState<Thread | null>(null);
 
@@ -86,6 +102,7 @@ export default function Studio() {
       return;
     }
     setGenerating(true);
+    setProgress({ current: 0, total: 0 });
 
     try {
       const names = config.identityNames
@@ -93,6 +110,7 @@ export default function Studio() {
         .map((s) => s.trim())
         .filter(Boolean);
 
+      // 1. Create Job
       const res = await fetch('/api/generate-dataset', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -112,29 +130,55 @@ export default function Studio() {
       if (!res.ok) {
         const err = await res.json();
         alert('Error: ' + err.error);
+        setGenerating(false);
         return;
       }
 
-      // Trigger Download
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'virtual_me_dataset.zip';
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
+      const { jobId } = await res.json();
+
+      // 2. Poll Status
+      const poll = setInterval(async () => {
+        try {
+          const statusRes = await fetch(`/api/job-status?id=${jobId}`);
+          if (!statusRes.ok) {
+            return;
+          } // Keep trying
+
+          const job = await statusRes.json();
+
+          setProgress({ current: job.progress || 0, total: job.total || 0 });
+
+          if (job.status === 'completed') {
+            clearInterval(poll);
+            setGenerating(false);
+
+            // Trigger Download
+            const downloadUrl = `/api/generate-dataset?jobId=${jobId}`;
+            const a = document.createElement('a');
+            a.href = downloadUrl;
+            a.download = 'virtual_me_dataset.zip';
+            document.body.appendChild(a);
+            a.click(); // Browser handles download
+            document.body.removeChild(a);
+          } else if (job.status === 'failed') {
+            clearInterval(poll);
+            setGenerating(false);
+            alert('Generation failed: ' + (job.error || 'Unknown error'));
+          }
+        } catch (e) {
+          console.error('Polling error', e);
+        }
+      }, 1000);
     } catch (e) {
       console.error(e);
-      alert('Generation failed');
-    } finally {
+      alert('Generation failed to start');
       setGenerating(false);
     }
   };
 
   // Rough Token Estimation
   const selectedThreads = threads.filter((t) => selectedIds.has(t.id));
-  const totalFilesEstimated = selectedThreads.reduce((acc, t) => acc + (t.file_count || 1), 0);
+  const totalFilesEstimated = selectedThreads.reduce((acc, t) => acc + (t.pageCount || 1), 0);
   const estimatedTokens = totalFilesEstimated * 100 * 50; // Very rough
   const maxTokens = 2000000;
   const fillPercent = Math.min((estimatedTokens / maxTokens) * 100, 100);
@@ -233,88 +277,106 @@ export default function Studio() {
                     <h3 className={styles.sectionTitle}>Identity Configuration</h3>
                     <div className={styles.inputGroup}>
                       <label className={styles.label}>Your Names (Active Speaker)</label>
-                      <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: 4 }}>We scan for these names to identify &quot;You&quot; in the chat. Separated by commas.</p>
+                      <p className={styles.helperText}>We scan for these names to identify &quot;You&quot; in the chat. Separated by commas.</p>
                       <input type="text" className={styles.input} value={config.identityNames} onChange={(e) => setField('identityNames', e.target.value)} />
                     </div>
 
-                    <div className={styles.inputGroup} style={{ marginTop: 12 }}>
+                    <div className={`${styles.inputGroup} ${styles.inputGroupItem}`}>
                       <label className={styles.label}>Persona Tag (Optional)</label>
-                      <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: 4 }}>
-                        Example: &quot;Professional, Tech&quot;, &quot;Casual, Sarcastic&quot;. Multiple tags supported (comma separated).
-                      </p>
+                      <p className={styles.helperText}>Example: &quot;Professional, Tech&quot;, &quot;Casual, Sarcastic&quot;. Multiple tags supported (comma separated).</p>
                       <input type="text" className={styles.input} placeholder="e.g. Casual, Friendly" value={config.personaTag} onChange={(e) => setField('personaTag', e.target.value)} />
+                      <div className={styles.templateContainer}>
+                        <span className={styles.templateLabel}>Templates:</span>
+                        {PERSONA_TEMPLATES.map((t) => (
+                          <div
+                            key={t.label}
+                            className={styles.templateChip}
+                            onClick={() => {
+                              const current = config.personaTag.trim();
+                              const newText = current ? `${current}, ${t.text}` : t.text;
+                              setField('personaTag', newText);
+                            }}
+                          >
+                            + {t.label}
+                          </div>
+                        ))}
+                      </div>
                     </div>
 
-                    <div className={styles.inputGroup} style={{ marginTop: 12 }}>
+                    <div className={`${styles.inputGroup} ${styles.inputGroupItem}`}>
                       <label className={styles.label}>Custom System Instructions (Optional)</label>
-                      <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: 4 }}>Appended to the System Prompt. e.g. &quot;Do not use emojis.&quot;</p>
-                      <textarea
-                        className={styles.input}
-                        style={{ height: 60, fontFamily: 'inherit', resize: 'none' }}
+                      <p className={styles.helperText}>Appended to the System Prompt. e.g. &quot;Do not use emojis.&quot;</p>
+                      <TextareaAuto
                         placeholder="Additional instructions..."
                         value={config.customInstructions}
                         onChange={(e) => setField('customInstructions', e.target.value)}
+                        minRows={3}
+                        maxRows={8}
                       />
+                      <div className={styles.templateContainer}>
+                        <span className={styles.templateLabel}>Templates:</span>
+                        {INSTRUCTION_TEMPLATES.map((t) => (
+                          <div
+                            key={t.label}
+                            className={styles.templateChip}
+                            onClick={() => {
+                              const current = config.customInstructions.trim();
+                              const newText = current ? `${current}\n${t.text}` : t.text;
+                              setField('customInstructions', newText);
+                            }}
+                          >
+                            + {t.label}
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </div>
 
                   <div className={styles.section}>
                     <h3 className={styles.sectionTitle}>Content Strategy</h3>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                      <input type="checkbox" id="chkGroup" style={{ width: 18, height: 18 }} checked={config.includeGroupNames} onChange={(e) => setField('includeGroupNames', e.target.checked)} />
-                      <label htmlFor="chkGroup" className={styles.label} style={{ cursor: 'pointer' }}>
-                        Include Speaker Names (Group Chats)
-                      </label>
-                    </div>
-                    <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: 8, marginBottom: 4, lineHeight: 1.4 }}>
-                      Required for the model to understand group dynamics. Example: <em>&quot;[Alice]: How are you?&quot;</em> instead of just <em>&quot;How are you?&quot;</em>.
-                    </p>
+                    <Checkbox
+                      id="chkGroup"
+                      label="Include Speaker Names (Group Chats)"
+                      checked={config.includeGroupNames}
+                      onChange={(c) => setField('includeGroupNames', c)}
+                      description='Required for the model to understand group dynamics. Example: "[Alice]: How are you?" instead of just "How are you?".'
+                    />
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 12 }}>
-                      <input type="checkbox" id="chkMerge" style={{ width: 18, height: 18 }} checked={config.mergeSequential} onChange={(e) => setField('mergeSequential', e.target.checked)} />
-                      <label htmlFor="chkMerge" className={styles.label} style={{ cursor: 'pointer' }}>
-                        Merge Sequential Messages (Recommended)
-                      </label>
-                    </div>
-                    <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: 8, marginBottom: 4, lineHeight: 1.4 }}>
-                      Combines rapid-fire messages into a single turn to ensure cleaner <em>User &rarr; Assistant</em> patterns.
-                    </p>
+                    <Checkbox
+                      id="chkMerge"
+                      label="Merge Sequential Messages (Recommended)"
+                      checked={config.mergeSequential}
+                      onChange={(c) => setField('mergeSequential', c)}
+                      description="Combines rapid-fire messages into a single turn to ensure cleaner User → Assistant patterns."
+                      style={{ marginTop: 12 }}
+                    />
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 12 }}>
-                      <input type="checkbox" id="chkReactions" style={{ width: 18, height: 18 }} checked={config.imputeReactions} onChange={(e) => setField('imputeReactions', e.target.checked)} />
-                      <label htmlFor="chkReactions" className={styles.label} style={{ cursor: 'pointer' }}>
-                        Convert Reactions to Text (Highly Recommended)
-                      </label>
-                    </div>
-                    <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: 8, marginBottom: 4, lineHeight: 1.4 }}>
-                      Treats your reactions (👍, ❤️) as replies. Saves thousands of sessions where you acknowledged but didn&apos;t type.
-                    </p>
+                    <Checkbox
+                      id="chkReactions"
+                      label="Convert Reactions to Text (Highly Recommended)"
+                      checked={config.imputeReactions}
+                      onChange={(c) => setField('imputeReactions', c)}
+                      description="Treats your reactions (👍, ❤️) as replies. Saves thousands of sessions where you acknowledged but didn't type."
+                      style={{ marginTop: 12 }}
+                    />
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 12 }}>
-                      <input type="checkbox" id="chkPII" style={{ width: 18, height: 18 }} checked={config.redactPII} onChange={(e) => setField('redactPII', e.target.checked)} />
-                      <label htmlFor="chkPII" className={styles.label} style={{ cursor: 'pointer' }}>
-                        Redact PII (Emails & Phone #s)
-                      </label>
-                    </div>
-                    <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: 8, lineHeight: 1.4 }}>
-                      Scrubs personally identifiable information by replacing detected emails and phone numbers with <code>[REDACTED_EMAIL]</code> and <code>[REDACTED_PHONE]</code> placeholders.
-                    </p>
+                    <Checkbox
+                      id="chkPII"
+                      label="Redact PII (Emails & Phone #s)"
+                      checked={config.redactPII}
+                      onChange={(c) => setField('redactPII', c)}
+                      description="Scrubs personally identifiable information by replacing detected emails and phone numbers with [REDACTED_EMAIL] and [REDACTED_PHONE] placeholders."
+                      style={{ marginTop: 12 }}
+                    />
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 12 }}>
-                      <input
-                        type="checkbox"
-                        id="chkSystem"
-                        style={{ width: 18, height: 18 }}
-                        checked={config.removeSystemMessages}
-                        onChange={(e) => setField('removeSystemMessages', e.target.checked)}
-                      />
-                      <label htmlFor="chkSystem" className={styles.label} style={{ cursor: 'pointer' }}>
-                        Remove System/Admin Messages
-                      </label>
-                    </div>
-                    <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: 8, lineHeight: 1.4 }}>
-                      Filters out platform noise like &quot;You missed a call&quot;, &quot;Alice named the group&quot;, etc.
-                    </p>
+                    <Checkbox
+                      id="chkSystem"
+                      label="Remove System/Admin Messages"
+                      checked={config.removeSystemMessages}
+                      onChange={(c) => setField('removeSystemMessages', c)}
+                      description='Filters out platform noise like "You missed a call", "Alice named the group", etc.'
+                      style={{ marginTop: 12 }}
+                    />
                   </div>
                 </div>
               </div>
@@ -327,18 +389,20 @@ export default function Studio() {
 
                   <div style={{ marginBottom: 16 }}>
                     <span className={styles.label}>Selected Statistics:</span>
-                    <div style={{ display: 'flex', gap: 20, marginTop: 8 }}>
+                    <div className={styles.statsGroup}>
                       <div>
-                        <div style={{ fontSize: '24px', fontWeight: 'bold' }}>{selectedIds.size}</div>
-                        <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Threads</div>
+                        <div className={styles.statValue}>{selectedIds.size}</div>
+                        <div className={styles.statLabel}>Threads</div>
                       </div>
                       <div>
-                        <div style={{ fontSize: '24px', fontWeight: 'bold' }}>~{estimatedTokens.toLocaleString()}</div>
-                        <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Est. Tokens</div>
+                        <div className={styles.statValue}>~{estimatedTokens.toLocaleString()}</div>
+                        <div className={styles.statLabel}>Est. Tokens</div>
                       </div>
                       <div>
-                        <div style={{ fontSize: '24px', fontWeight: 'bold', color: validity.color }}>{avgSelectedScore}</div>
-                        <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Avg Quality ({validity.label})</div>
+                        <div className={styles.statValue} style={{ color: validity.color }}>
+                          {avgSelectedScore}
+                        </div>
+                        <div className={styles.statLabel}>Avg Quality ({validity.label})</div>
                       </div>
                     </div>
                   </div>
@@ -355,7 +419,7 @@ export default function Studio() {
                   </div>
 
                   <button className={styles.generateBtn} onClick={handleGenerate} disabled={generating || selectedIds.size === 0}>
-                    {generating ? 'Processing...' : `Generate Dataset (${selectedIds.size})`}
+                    {generating ? `Processing... ${progress.total > 0 ? Math.round((progress.current / progress.total) * 100) + '%' : ''}` : `Generate Dataset (${selectedIds.size})`}
                   </button>
                   {generating && <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: 8 }}>This may take a minute...</p>}
                 </div>
@@ -364,7 +428,14 @@ export default function Studio() {
           </div>
         </div>
       </div>
-      <ThreadPreviewModal isOpen={!!previewThread} onClose={() => setPreviewThread(null)} threadId={previewThread?.id || null} threadTitle={previewThread?.title} platform={previewThread?.platform} />
+      <ThreadPreviewModal
+        isOpen={!!previewThread}
+        onClose={() => setPreviewThread(null)}
+        threadId={previewThread?.id || null}
+        threadTitle={previewThread?.title}
+        platform={previewThread?.platform}
+        messageCount={previewThread?.messageCount}
+      />
     </div>
   );
 }

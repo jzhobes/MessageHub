@@ -18,6 +18,8 @@ interface ChatWindowProps {
   targetMessageId: string | null;
   highlightToken: number;
   initializing?: boolean;
+  hideHeader?: boolean;
+  onPageChange?: (page: number) => void;
 }
 
 const START_INDEX = 10000;
@@ -35,6 +37,8 @@ export default function ChatWindow({
   targetMessageId,
   highlightToken,
   initializing,
+  hideHeader,
+  onPageChange,
 }: ChatWindowProps) {
   // Refs
   const virtuosoRef = useRef<VirtuosoHandle>(null);
@@ -202,6 +206,7 @@ export default function ChatWindow({
     const calculatedPage = pageRange.min + Math.floor(originalIndex / 100);
 
     setCurrentTopPage(calculatedPage);
+    onPageChange?.(calculatedPage);
   };
 
   // Components
@@ -243,7 +248,7 @@ export default function ChatWindow({
   if (initializing || messages === null) {
     return (
       <div className={styles.chatArea}>
-        <div className={styles.chatHeader} />
+        {!hideHeader && <div className={styles.chatHeader} />}
         <div className={styles.messagesContainer}>
           <div className={styles.emptyState}>
             <FaSpinner className="spinner" size={24} />
@@ -256,12 +261,14 @@ export default function ChatWindow({
 
   return (
     <div className={styles.chatArea}>
-      <div className={styles.chatHeader}>
-        <div className={styles.headerTitle}>{activeThread?.title}</div>
-        <div className={styles.pageIndicator}>
-          (Page {currentTopPage?.toLocaleString()} of {(activeThread?.file_count || 1).toLocaleString()})
+      {!hideHeader && (
+        <div className={styles.chatHeader}>
+          <div className={styles.headerTitle}>{activeThread?.title}</div>
+          <div className={styles.pageIndicator}>
+            (Page {currentTopPage?.toLocaleString()} of {(activeThread?.pageCount || 1).toLocaleString()})
+          </div>
         </div>
-      </div>
+      )}
 
       <div className={styles.messagesContainer}>
         <Virtuoso

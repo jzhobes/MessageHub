@@ -141,8 +141,8 @@ export default function Home() {
             setPageRange({ min: pageNum, max: pageNum });
           } else if (mode === 'older') {
             setMessages((prev) => [...(prev || []), ...newMsgs]);
-            if (activeThread.file_count) {
-              setHasMoreOld(pageNum < activeThread.file_count);
+            if (activeThread.pageCount) {
+              setHasMoreOld(pageNum < activeThread.pageCount);
             } else {
               setHasMoreOld(hasData && isFullPage);
             }
@@ -232,7 +232,7 @@ export default function Home() {
       return;
     }
     const next = pageRange.max + 1;
-    if (activeThread.file_count && next > activeThread.file_count) {
+    if (activeThread.pageCount && next > activeThread.pageCount) {
       setHasMoreOld(false);
       return;
     }

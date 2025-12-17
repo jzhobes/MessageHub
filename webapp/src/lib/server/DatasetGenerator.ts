@@ -49,7 +49,12 @@ export class DatasetGenerator {
     this.maxTokensPerFile = options.maxTokensPerFile || 1900000; // Safety buffer below 2M
   }
 
-  public *generateStream(threadIds: string[], identityNames: string[], dateRange?: { start: number; end: number }): Generator<{ fileName: string; content: string; tokenCount: number }> {
+  public async *generateStream(
+    threadIds: string[],
+    identityNames: string[],
+    dateRange?: { start: number; end: number },
+    onProgress?: (current: number, total: number) => void,
+  ): AsyncGenerator<{ fileName: string; content: string; tokenCount: number }> {
     let batchedSessions: DatasetEntry[] = [];
     let batchedTokens = 0;
     let fileIndex = 1;
@@ -62,7 +67,17 @@ export class DatasetGenerator {
     const imputeReactions = this.imputeReactions;
     const redactPII = this.redactPII;
 
+    let processedCount = 0;
+
     for (const threadId of threadIds) {
+      processedCount++;
+      if (onProgress) {
+        onProgress(processedCount, threadIds.length);
+      }
+
+      // Yield to event loop AFTER EVERY THREAD to keep server responsive
+      await new Promise((resolve) => setImmediate(resolve));
+
       const thread = this.db.prepare('SELECT is_group, platform, title FROM threads WHERE id = ?').get(threadId) as { is_group: number; platform: string; title: string } | undefined;
 
       if (!thread) {
@@ -155,6 +170,11 @@ export class DatasetGenerator {
       }.bind(this); // Bind this for encoder access
 
       for (let i = 0; i < messages.length; i++) {
+        // Yield inside massive threads (every 500 msgs)
+        if (i > 0 && i % 500 === 0) {
+          await new Promise((resolve) => setImmediate(resolve));
+        }
+
         const msg = messages[i];
         const prevMsg = i > 0 ? messages[i - 1] : null;
 

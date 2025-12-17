@@ -77,11 +77,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         participants,
         timestamp: row.last_activity_ms || 0,
         snippet: row.snippet || '',
-        is_group: !!row.is_group,
-        // platform: row.platform // Optional, frontend might use it
-        folder_path: '', // deprecated
-        // Map msg_count to page count (legacy prop name file_count used by frontend)
-        file_count: Math.ceil((row.msg_count || 0) / PAGE_SIZE),
+        pageCount: Math.ceil((row.msg_count || 0) / PAGE_SIZE),
       };
     });
 

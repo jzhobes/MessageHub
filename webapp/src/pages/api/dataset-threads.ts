@@ -123,7 +123,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         platform: getPlatformLabel(row.platform),
         timestamp: row.timestamp,
         is_group: !!row.is_group,
-        file_count: 1, // Legacy prop
+        pageCount: 1, // Legacy prop renamed to pageCount
 
         // Stats
         messageCount: total,

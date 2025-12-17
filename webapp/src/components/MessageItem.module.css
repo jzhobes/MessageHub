@@ -165,19 +165,6 @@
   line-height: 1.3;
 }
 
-.previewContainer {
-  margin-top: 4px;
-  max-width: 300px;
-  overflow: hidden;
-}
-
-.previewImage {
-  max-width: 100%;
-  border-radius: 12px;
-  max-height: 300px;
-  display: block;
-}
-
 .reactionContainer {
   display: flex;
   position: absolute;
