@@ -2,10 +2,13 @@
 
 MessageHub is a unified local viewer for your personal chat archives. It aggregates and displays message history from **Facebook**, **Instagram**, **Google Chat**, and **Google Voice** exports in a single, modern web interface.
 
+It also features **DataForge AI**, a built-in studio for curating high-quality datasets to fine-tune Large Language Models (LLMs) on your authentic voice.
+
 ## Features
 
 - **Unified Dashboard:** Toggle between Facebook Messenger, Instagram DMs, Google Chat, and Google Voice histories.
-- **Global Search:** Instantly search all archives. Click any result to **jump** to that message in its original context, preserving timeline history.
+- **DataForge AI Studio:** Select specific threads, filter system noise, and generate formatted JSONL datasets for OpenAI fine-tuning.
+- **Global Search:** Instantly search all archives. Click any result to **jump** to that message in its original context.
 - **Rich Media Support:** View photos, videos, and reactions directly in the chat stream.
 - **Automated Ingestion:** A single script handles Zip extraction, data merging, and database population.
 
@@ -142,11 +145,25 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000) to browse your messages.
 
+### 5. DataForge AI (Fine-Tuning Studio)
+
+MessageHub includes a tool to create **"Virtual You"** datasets for training AI models.
+
+1.  Click the **Robot Icon (🤖)** in the top header.
+2.  **Filter & Select**: Choose threads that represent your best writing (high quality, recent).
+3.  **Configure**:
+    - **Identity**: Enter your name(s) so the AI knows who "Assistant" is.
+    - **Cleanup**: Auto-remove system messages ("You missed a call") and PII (emails/phones).
+    - **Reactions**: Convert reactions (👍) into text replies (`[Reacted "👍"]`) for better context.
+4.  **Generate**: The server will process thousands of messages in the background and produce a `.zip` containing optimized `.jsonl` files ready for upload to OpenAI.
+
 ## Technical Details
 
 - **Frontend:** [Next.js](https://nextjs.org/) (React) with a modular component architecture.
-- **Database:** SQLite (`messagehub.db`) used for high-performance querying and searching of messages + metadata.
-- **Backend:** Next.js API Routes (Node.js) serve data via SQLite queries.
+- **Database:** SQLite (`messagehub.db`) accessed via `better-sqlite3` for high-performance querying.
+- **Dataset Engine:**
+  - **Async Processing:** Non-blocking job queue for generating large datasets without freezing the UI.
+  - **Tokenization:** Uses `tiktoken` to strictly adhere to LLM context limits (2M tokens/file).
 - **Ingestion:** Python-based pipeline (`ingest.py`) handles:
   - Zip extraction and merging (handling split archives).
   - Data parsing and ingestion into SQLite.
