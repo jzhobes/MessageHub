@@ -1,7 +1,12 @@
+.container {
+  margin-top: 4px;
+  max-width: 300px;
+  overflow: hidden;
+}
+
 .linkPreviewCard {
   margin: 0;
   width: 100%;
-  max-width: 300px;
   border-radius: inherit;
   overflow: hidden;
   border: 1px solid var(--border-color);
@@ -17,7 +22,7 @@
   border-radius: inherit;
   border: 1px solid var(--border-color);
   font-size: 0.9rem;
-  max-width: 300px;
+  max-width: 100%;
   color: var(--text-primary);
 }
 

@@ -46,6 +46,8 @@ export default function ChatWindow({
   const [currentTopPage, setCurrentTopPage] = useState(pageRange.min);
   const [firstItemIndex, setFirstItemIndex] = useState(START_INDEX);
   const [isReady, setIsReady] = useState(false);
+  const [localTargetId, setLocalTargetId] = useState<string | null>(null);
+  const [localHighlightToken, setLocalHighlightToken] = useState(0);
 
   // Memos (data)
   const virtuosoData = useMemo(() => {
@@ -107,6 +109,7 @@ export default function ChatWindow({
     setFirstItemIndex(START_INDEX);
     previousMessagesLength.current = 0;
     newestMessageIdRef.current = null;
+    setLocalTargetId(null);
   }, [activeThread?.id]);
 
   // Reset atBottom state prevents stale true causing runaway on navigation
@@ -169,6 +172,10 @@ export default function ChatWindow({
           align: 'center',
           behavior: 'auto',
         });
+        const matchMsg = virtuosoData[matchIndex];
+        const matchId = matchMsg.id || matchMsg.timestamp_ms.toString();
+        setLocalTargetId(matchId);
+        setLocalHighlightToken((prev) => prev + 1);
       } else {
         console.error('Message not found in loaded history');
       }
@@ -335,7 +342,11 @@ export default function ChatWindow({
             const showAvatar = !isMyMsg && isBottom;
             const showName = !isMyMsg && isTop;
 
-            const isTarget = (msg.id || msg.timestamp_ms.toString()) === targetMessageId;
+            const msgId = msg.id || msg.timestamp_ms.toString();
+            const isGlobalTarget = msgId === targetMessageId;
+            const isLocalTarget = msgId === localTargetId;
+            const isTarget = isGlobalTarget || isLocalTarget;
+            const highlightKey = isGlobalTarget ? highlightToken : isLocalTarget ? localHighlightToken : 0;
 
             const timestampStr = new Date(msg.timestamp_ms).toLocaleString('en-US', {
               weekday: 'short',
@@ -355,10 +366,11 @@ export default function ChatWindow({
               <div className={classNames.join(' ')} style={{ paddingBottom: isBottom ? 16 : 4, paddingLeft: 20, paddingRight: 20 }}>
                 {showTimestamp && <div className={styles.timestampLabel}>{timestampStr}</div>}
                 <MessageItem
-                  key={msg.id + (isTarget ? `-highlight-${highlightToken}` : '')}
+                  key={msgId}
                   msg={msg}
                   isMyMsg={isMyMsg}
                   isTarget={isTarget}
+                  highlightToken={highlightKey}
                   showAvatar={showAvatar}
                   showName={showName}
                   activePlatform={activePlatform}

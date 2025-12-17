@@ -26,7 +26,7 @@ export interface QuotedMessageMetadata {
   text?: string;
 }
 
-interface MediaItem {
+export interface MediaItem {
   uri: string;
 }
 
@@ -39,6 +39,7 @@ export interface Message {
   photos?: MediaItem[];
   videos?: MediaItem[];
   gifs?: MediaItem[];
+  attachments?: MediaItem[];
   sticker?: {
     uri: string;
   };

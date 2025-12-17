@@ -4,29 +4,7 @@ import path from 'path';
 import { getDataDir } from '@/lib/shared/config';
 import { getDb } from '@/lib/server/db';
 
-/** Unified media item for internal use */
-interface MediaItem {
-  uri: string;
-}
-
-/** Unified Message structure used by the frontend */
-interface Message {
-  id?: string;
-  is_sender?: boolean;
-  sender_name: string;
-  timestamp_ms: number;
-  content?: string;
-  photos?: MediaItem[];
-  videos?: MediaItem[];
-  gifs?: MediaItem[];
-  sticker?: { uri: string };
-  share?: { link?: string; share_text?: string };
-  reactions?: { reaction: string; actor: string }[];
-  quoted_message_metadata?: {
-    creator?: { name: string };
-    text?: string;
-  };
-}
+import { MediaItem, Message } from '@/lib/shared/types';
 
 /** Facebook Profile Information structure */
 interface FacebookProfile {
@@ -171,6 +149,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const gifs: MediaItem[] = media.filter((m) => m.type === 'gif');
       const stickers: MediaItem[] = media.filter((m) => m.type === 'sticker');
       const files: MediaItem[] = media.filter((m) => m.type === 'file');
+      const otherFiles: MediaItem[] = [];
 
       // Post-process 'files' (e.g. from Google Chat) to see if they are actually photos/videos
       files.forEach((f) => {
@@ -179,17 +158,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           photos.push(f);
         } else if (['.mp4', '.mov', '.webm', '.mkv', '.avi'].includes(ext)) {
           videos.push(f);
+        } else {
+          otherFiles.push(f);
         }
       });
 
       // Handle Annotations (Google Chat Images)
       if (row.annotations_json) {
-        interface AnnotationItem {
+        const annotations: {
           url_metadata?: {
             image_url?: string;
           };
-        }
-        const annotations: AnnotationItem[] = JSON.parse(row.annotations_json);
+        }[] = JSON.parse(row.annotations_json);
         annotations.forEach((a) => {
           if (a.url_metadata?.image_url) {
             photos.push({ uri: a.url_metadata.image_url });
@@ -254,6 +234,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           content: row.content ?? undefined,
           quoted_message_metadata,
           share: shareObj,
+          attachments: otherFiles.length ? otherFiles : undefined,
           reactions: undefined, // Reactions attached to media
         });
       } else {
@@ -269,6 +250,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           photos: photos.length ? photos : undefined,
           videos: videos.length ? videos : undefined,
           gifs: gifs.length ? gifs : undefined,
+          attachments: otherFiles.length ? otherFiles : undefined,
           sticker: stickers.length > 0 ? stickers[0] : undefined,
           reactions: reactions,
         });
@@ -287,18 +269,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       return result;
     });
-
-    // Reverse messages? No, usually API returns Newest First (DESC), UI might reverse it or use as is.
-    // The previous implementation read split files which were already DESC/ASC?
-    // "create_fb_index": messages in JSON are usually DESC (Newest top).
-    // Let's assume frontend expects DESC order.
-    // Wait, typical chat UI expects [Old -> New] if rendering top-down, or [New -> Old] if column-reverse.
-    // Google Chat split script said: "Create message_1.json with reversed messages".
-    // Let's stick to DESC (Newest First) and let UI handle it. This is standard for pagination.
-
-    // Return format: { messages: [...] } or just [...] ?
-    // Previous Google handler: res.status(200).json({ messages });
-    // Previous FB handler: res.status(200).json(fixedData); which has { messages: ... }
 
     return res.status(200).json({ messages });
   } catch (e) {

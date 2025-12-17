@@ -17,7 +17,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).send('Missing path or platform');
   }
 
-  const pathStr = Array.isArray(pathParam) ? pathParam[0] : pathParam;
+  const pathStr = decodeURIComponent(Array.isArray(pathParam) ? pathParam[0] : pathParam);
 
   // SECURITY: Prevent path traversal
   // This is critical since this API reads arbitrary files from disk
@@ -71,6 +71,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const ext = path.extname(absolutePath).toLowerCase();
     let contentType = 'application/octet-stream';
+    let disposition = 'inline';
+
     if (ext === '.jpg' || ext === '.jpeg') {
       contentType = 'image/jpeg';
     } else if (ext === '.png') {
@@ -81,13 +83,37 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       contentType = 'video/mp4';
     } else if (ext === '.mov') {
       contentType = 'video/quicktime';
+    } else if (ext === '.pdf') {
+      contentType = 'application/pdf';
+      disposition = 'inline';
+    } else if (ext === '.csv') {
+      contentType = 'text/plain';
+      disposition = 'inline';
+    } else if (ext === '.txt') {
+      contentType = 'text/plain';
+      disposition = 'inline';
+    } else if (ext === '.xlsx') {
+      contentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      disposition = 'attachment';
+    } else if (ext === '.docx') {
+      contentType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      disposition = 'attachment';
+    } else if (ext === '.zip') {
+      contentType = 'application/zip';
+      disposition = 'attachment';
+    } else {
+      // Fallback for other binary files
+      disposition = 'attachment';
     }
 
     res.setHeader('Content-Type', contentType);
+    const fileName = path.basename(pathStr).replace(/^File-/, '');
+    res.setHeader('Content-Disposition', `${disposition}; filename="${fileName}"`);
     res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
     res.send(fileBuffer);
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code === 'ENOENT') {
+      console.error('File not found:', absolutePath);
       return res.status(404).send('File not found');
     }
     console.error('Error serving media:', e);

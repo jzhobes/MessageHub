@@ -4,13 +4,13 @@ import styles from './LinkPreview.module.css';
 
 interface LinkPreviewProps {
   url: string;
-  isMyMsg: boolean; // required to determine radius class
-  suppressImage?: boolean;
 }
 
-export default function LinkPreview({ url, isMyMsg, suppressImage }: LinkPreviewProps) {
+export default function LinkPreview({ url }: LinkPreviewProps) {
+  const isDirectImage = /\.(gif|jpe?g|png|webp)($|\?)/i.test(url);
+
   const [data, setData] = useState<{ image?: string; title?: string; description?: string } | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!isDirectImage);
   const isMounted = useRef(true);
 
   useEffect(() => {
@@ -37,46 +37,62 @@ export default function LinkPreview({ url, isMyMsg, suppressImage }: LinkPreview
     }
   }, [url]);
 
+  if (isDirectImage) {
+    return (
+      <div className={`${styles.container} previewContainer`}>
+        <img src={url} alt="Shared Image" className={styles.linkPreviewImage} loading="lazy" />
+      </div>
+    );
+  }
+
   if (loading) {
     return (
-      <LazyView onEnter={fetchPreview} rootMargin="50px" className={`linkPreview ${styles.linkPreviewLazy}`}>
-        <a href={url} target="_blank" rel="noopener noreferrer" className={styles.linkPreviewLink}>
-          {url}
-        </a>
-        <div style={{ fontSize: '0.8rem', color: '#999', marginTop: '4px' }}>Loading preview...</div>
-      </LazyView>
+      <div className={`${styles.container} previewContainer`}>
+        <LazyView onEnter={fetchPreview} rootMargin="50px" className={`linkPreview ${styles.linkPreviewLazy}`}>
+          <a href={url} target="_blank" rel="noopener noreferrer" className={styles.linkPreviewLink}>
+            {url}
+          </a>
+          <div style={{ fontSize: '0.8rem', color: '#999', marginTop: '4px' }}>Loading preview...</div>
+        </LazyView>
+      </div>
     );
   }
 
   // Render logic
-  const hasImage = data && data.image && !suppressImage;
-  const hasTitle = data && (data.title || data.description);
+  const hasImage = data?.image;
+  const textContent = data?.title || data?.description;
 
-  if (!loading && !hasImage && !hasTitle) {
+  if (!loading && !hasImage && !textContent) {
     // Fallback - don't show separate bubble, just let the text link stand alone
     return null;
   }
 
   // If we have data
-  if (hasImage || hasTitle) {
+  if (hasImage || textContent) {
     return (
-      <div className={`linkPreview ${styles.linkPreviewCard}`}>
-        {/* Preview Image */}
-        {hasImage && data?.image && (
-          <a href={url} target="_blank" rel="noopener noreferrer" style={{ display: 'block', width: '100%' }}>
-            <img
-              src={data.image}
-              alt="Preview"
-              className={styles.linkPreviewImage}
-              style={{
-                borderBottom: hasTitle ? '1px solid #eee' : 'none',
-              }}
-            />
-          </a>
-        )}
+      <div className={`${styles.container} previewContainer`}>
+        <div className={`linkPreview ${styles.linkPreviewCard}`}>
+          {/* Preview Image */}
+          {hasImage && data?.image && (
+            <a href={url} target="_blank" rel="noopener noreferrer" style={{ display: 'block', width: '100%' }}>
+              <img
+                src={data.image}
+                alt="Preview"
+                className={styles.linkPreviewImage}
+                style={{
+                  borderBottom: textContent ? '1px solid #eee' : 'none',
+                }}
+              />
+            </a>
+          )}
 
-        {/* Text Content */}
-        {hasTitle && <div className={styles.linkPreviewTitleArea}>{data?.title && <div className={styles.linkPreviewTitle}>{data.title}</div>}</div>}
+          {/* Text Content */}
+          {textContent && (
+            <div className={styles.linkPreviewTitleArea}>
+              <div className={styles.linkPreviewTitle}>{textContent}</div>
+            </div>
+          )}
+        </div>
       </div>
     );
   }

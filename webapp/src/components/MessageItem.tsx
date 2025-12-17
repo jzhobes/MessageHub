@@ -1,14 +1,29 @@
 import React from 'react';
-import { FaQuoteLeft } from 'react-icons/fa';
+import { FaQuoteLeft, FaFileDownload, FaFilePdf, FaFileWord, FaFileExcel, FaFileCsv, FaFileArchive } from 'react-icons/fa';
 import styles from './MessageItem.module.css';
 import LinkPreview from './LinkPreview';
 import LazyView from './LazyView';
 import { Message } from '@/lib/shared/types';
 
+const FILE_ICON_MAP: Record<string, React.ElementType> = {
+  pdf: FaFilePdf,
+  doc: FaFileWord,
+  docx: FaFileWord,
+  xls: FaFileExcel,
+  xlsx: FaFileExcel,
+  csv: FaFileCsv,
+  zip: FaFileArchive,
+  rar: FaFileArchive,
+  '7z': FaFileArchive,
+  tar: FaFileArchive,
+  gz: FaFileArchive,
+};
+
 export default function MessageItem({
   msg,
   isMyMsg,
   isTarget,
+  highlightToken,
   showAvatar,
   showName,
   activePlatform,
@@ -17,12 +32,28 @@ export default function MessageItem({
   msg: Message;
   isMyMsg: boolean;
   isTarget?: boolean;
+  highlightToken?: number;
   showAvatar: boolean;
   showName: boolean;
   activePlatform: string;
   onQuoteClick?: () => void;
 }) {
   const hasTextContent = !!msg.content;
+  const bubbleRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    if (isTarget && bubbleRef.current && highlightToken) {
+      const animation = bubbleRef.current.animate(
+        [
+          { transform: 'scale(1)', boxShadow: '0 0 0 0 var(--highlight-border)' },
+          { transform: 'scale(1.02)', boxShadow: '0 0 0 4px rgba(0, 122, 255, 0)' },
+          { transform: 'scale(1)', boxShadow: '0 0 0 0 rgba(0, 122, 255, 0)' },
+        ],
+        { duration: 750, easing: 'ease-in-out' },
+      );
+      return () => animation.cancel();
+    }
+  }, [isTarget, highlightToken]);
 
   const formatMessageContent = (text: string) => {
     const urlRegex = /(https?:\/\/[^\s]+)/g;
@@ -30,7 +61,7 @@ export default function MessageItem({
     return parts.map((part, index) => {
       if (part.match(urlRegex)) {
         return (
-          <a key={index} href={part} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'underline' }} onClick={(e) => e.stopPropagation()}>
+          <a key={index} href={part} target="_blank" rel="noopener noreferrer" className={styles.messageLink} onClick={(e) => e.stopPropagation()}>
             {part}
           </a>
         );
@@ -46,7 +77,6 @@ export default function MessageItem({
   const urlRegex = /(https?:\/\/[^\s]+)/;
   const contentLinkMatch = msg.content ? msg.content.match(urlRegex) : null;
   const previewUrl = msg.share?.link || (contentLinkMatch ? contentLinkMatch[0] : null);
-  const hasPreview = !!previewUrl;
 
   const isImageShare = msg.share && msg.share.link && /\.(gif|jpe?g|png|webp)($|\?)/i.test(msg.share.link);
   const hasMedia = (msg.photos && msg.photos.length > 0) || (msg.videos && msg.videos.length > 0) || (msg.gifs && msg.gifs.length > 0) || msg.sticker || isImageShare;
@@ -56,9 +86,7 @@ export default function MessageItem({
   const displayPhotos = previewUrl && msg.photos ? [] : msg.photos || [];
 
   // Construct Class Names for Bubble
-  const bubbleClasses = [styles.messageBubble, isMyMsg ? styles.sentBubble : styles.receivedBubble, hasPreview ? styles.hasPreview : '', isMediaOnly ? styles.mediaBubble : '']
-    .filter(Boolean)
-    .join(' ');
+  const bubbleClasses = [styles.messageBubble, isMyMsg ? styles.sentBubble : styles.receivedBubble, isMediaOnly ? styles.mediaBubble : ''].filter(Boolean).join(' ');
 
   // Add a plain class for global targeting by ChatWindow
   const bubbleClassName = `${bubbleClasses} messageBubble`;
@@ -71,8 +99,8 @@ export default function MessageItem({
         flexDirection: 'column',
       }}
     >
-      <div className={`${styles.messageRow} ${isMyMsg ? styles.justifyRight : styles.justifyLeft} ${isTarget ? styles.highlightTarget : ''}`}>
-        {/* Avatar Area (Left) */}
+      <div className={`${styles.messageRow} ${isMyMsg ? styles.justifyRight : styles.justifyLeft}`}>
+        {/* Avatar (left) */}
         {!isMyMsg && (
           <div className={`${styles.avatarArea} ${msg.reactions && msg.reactions.length > 0 ? styles.hasReactionsAvatar : ''}`}>
             {showAvatar && (
@@ -84,12 +112,12 @@ export default function MessageItem({
         )}
 
         <div className={`${styles.messageContentStack} ${isMyMsg ? styles.alignRight : styles.alignLeft} ${msg.reactions && msg.reactions.length > 0 ? styles.hasReactions : ''}`}>
-          {/* Name (Outside, Above) */}
+          {/* Name (outside, above) */}
           {showName && <div className={`${styles.senderNameOutside} showName`}>{msg.sender_name}</div>}
 
           {/* Bubble */}
-          {(hasTextContent || displayPhotos.length > 0 || (msg.videos && msg.videos.length > 0) || (msg.gifs && msg.gifs.length > 0) || msg.sticker || msg.quoted_message_metadata) && (
-            <div className={bubbleClassName} title={formatTime(msg.timestamp_ms)}>
+          {(hasTextContent || displayPhotos?.length || msg.videos?.length || msg.gifs?.length || msg.attachments?.length || msg.sticker || msg.quoted_message_metadata) && (
+            <div ref={bubbleRef} className={bubbleClassName} title={formatTime(msg.timestamp_ms)}>
               {msg.quoted_message_metadata && (
                 <div
                   className={styles.quoteContainer}
@@ -107,34 +135,44 @@ export default function MessageItem({
                 </div>
               )}
               {hasTextContent && msg.content && <div>{formatMessageContent(msg.content)}</div>}
-
-              {/* Photos */}
+              {/* photos */}
               {displayPhotos.length > 0 &&
-                displayPhotos.map((p, idx) => (
+                displayPhotos.map(({ uri }, idx) => (
                   <div key={`p-${idx}`} className={hasTextContent ? styles.mediaMargin : ''}>
-                    <img src={p.uri.startsWith('http') ? p.uri : `/api/media?path=${encodeURIComponent(p.uri)}&platform=${activePlatform}`} alt="Photo" className={styles.msgImage} loading="lazy" />
+                    <img src={uri.startsWith('http') ? uri : `/api/media?path=${encodeURIComponent(uri)}&platform=${activePlatform}`} alt="Photo" className={styles.msgImage} loading="lazy" />
                   </div>
                 ))}
-              {/* Videos */}
-              {msg.videos &&
-                msg.videos.map((v, idx) => (
-                  <div key={`v-${idx}`} className={hasTextContent ? styles.mediaMargin : ''}>
-                    <LazyView rootMargin="200px">
-                      {(inView) => (
-                        <video controls preload={inView ? 'metadata' : 'none'} src={`/api/media?path=${encodeURIComponent(v.uri)}&platform=${activePlatform}`} className={styles.msgVideo} />
-                      )}
-                    </LazyView>
-                  </div>
-                ))}
-              {/* GIFs */}
-              {msg.gifs &&
-                msg.gifs.map((g, idx) => (
-                  <div key={`g-${idx}`} className={hasTextContent ? styles.mediaMargin : ''}>
-                    <img src={`/api/media?path=${encodeURIComponent(g.uri)}&platform=${activePlatform}`} alt="GIF" className={styles.msgGif} loading="lazy" />
-                  </div>
-                ))}
+              {/* videos */}
+              {msg.videos?.map(({ uri }, idx) => (
+                <div key={`v-${idx}`} className={hasTextContent ? styles.mediaMargin : ''}>
+                  <LazyView rootMargin="200px">
+                    {(inView) => <video controls preload={inView ? 'metadata' : 'none'} src={`/api/media?path=${encodeURIComponent(uri)}&platform=${activePlatform}`} className={styles.msgVideo} />}
+                  </LazyView>
+                </div>
+              ))}
+              {/* gifs */}
+              {msg.gifs?.map(({ uri }, idx) => (
+                <div key={`g-${idx}`} className={hasTextContent ? styles.mediaMargin : ''}>
+                  <img src={`/api/media?path=${encodeURIComponent(uri)}&platform=${activePlatform}`} alt="GIF" className={styles.msgGif} loading="lazy" />
+                </div>
+              ))}
+              {/* attachments */}
+              {msg.attachments?.map(({ uri }, idx) => {
+                const fileName = (uri.split('/').pop() || 'File').replace(/^File-/, '');
+                const fileUrl = `/api/media?path=${encodeURIComponent(uri)}&platform=${activePlatform}`;
+                const ext = fileName.split('.').pop()?.toLowerCase();
+                const Icon = (ext && FILE_ICON_MAP[ext]) || FaFileDownload;
 
-              {/* Stickers */}
+                return (
+                  <div key={`a-${idx}`} className={hasTextContent ? styles.mediaMargin : ''}>
+                    <a href={fileUrl} target="_blank" rel="noopener noreferrer" className={styles.attachmentCard} title="Download File">
+                      <Icon size={20} />
+                      <span style={{ fontSize: '0.9em', wordBreak: 'break-all' }}>{fileName}</span>
+                    </a>
+                  </div>
+                );
+              })}
+              {/* stickers */}
               {msg.sticker && (
                 <div className={hasTextContent ? styles.mediaMargin : ''}>
                   <img src={`/api/media?path=${encodeURIComponent(msg.sticker.uri)}&platform=${activePlatform}`} alt="Sticker" className={styles.msgSticker} loading="lazy" />
@@ -142,20 +180,9 @@ export default function MessageItem({
               )}
             </div>
           )}
-
-          {/* Shared Content / Link Preview Bubble */}
-          {previewUrl && (
-            <div className={styles.previewContainer}>
-              {/\.(gif|jpe?g|png|webp)($|\?)/i.test(previewUrl) ? (
-                // Only show standalone image preview IF no photo attachments exist
-                !msg.photos?.length && <img src={previewUrl} alt="Shared Image" className={`previewImage ${styles.previewImage}`} loading="lazy" />
-              ) : (
-                <LinkPreview url={previewUrl} isMyMsg={isMyMsg} />
-              )}
-            </div>
-          )}
-
-          {/* Reactions */}
+          {/* shared content / link preview bubble */}
+          {previewUrl && <LinkPreview url={previewUrl} />}
+          {/* reactions */}
           {msg.reactions && msg.reactions.length > 0 && (
             <div className={styles.reactionContainer}>
               {msg.reactions.map((r, idx) => (
