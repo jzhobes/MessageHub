@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { getDb } from '../../utils/db';
+import { getDb } from '@/lib/server/db';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { messageId } = req.query;

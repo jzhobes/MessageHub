@@ -1,6 +1,6 @@
 import { promises as fs } from 'fs';
 import path from 'path';
-import { getDataDir } from './config';
+import { getDataDir } from '@/lib/shared/config';
 
 interface FacebookProfile {
   profile_v2?: {
@@ -31,7 +31,7 @@ interface GoogleChatUserInfo {
  * by scanning profile JSON files in the data directory.
  */
 export async function getMyNames(): Promise<string[]> {
-  const myNamesSet = new Set<string>();
+  const myNamesSet = new Set<string>(['Me']);
   const dataDir = getDataDir();
 
   // Dynamically find Google Chat user info

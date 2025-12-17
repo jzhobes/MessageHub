@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { promises as fs } from 'fs';
 import path from 'path';
-import { getDataDir } from '../../utils/config';
+import { getDataDir } from '@/lib/shared/config';
 
 /**
  * API Handler to serve media files (images, videos) from the local data directory.

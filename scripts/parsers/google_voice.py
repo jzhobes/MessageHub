@@ -19,14 +19,6 @@ def ingest_google_voice_thread(cursor, thread_data):
     parts = ["Me", thread_id]
     parts_json = json.dumps(parts)
 
-    cursor.execute(
-        """
-        INSERT OR IGNORE INTO threads (id, platform, title, participants_json, last_activity_ms, snippet)
-        VALUES (?, 'google_voice', ?, ?, 0, '')
-        """,
-        (thread_id, thread_id, parts_json),
-    )
-
     msg_count = 0
     skipped_count = 0
 
@@ -54,20 +46,28 @@ def ingest_google_voice_thread(cursor, thread_data):
                     messages = [soup]
 
             for index, msg_el in enumerate(messages):
+                # Skip non-text call logs (e.g., Received/Placed/Missed) to exclude phone call events
+                fname = fpath.name
+                if " - " in fname:
+                    parts = fname.split(" - ")
+                    if len(parts) >= 3:
+                        category = parts[1].strip().lower()
+                        if category in {"received", "placed", "missed", "voicemail", "recorded"}:
+                            continue
+
                 # 1. Timestamp
                 # <abbr class="dt" title="..."> OR <abbr class="published" title="...">
                 ts_el = msg_el.find("abbr", class_=["dt", "published"])
                 ts = 0
                 if ts_el and ts_el.get("title"):
                     ts = parse_iso_time(ts_el["title"])
-                else:
-                    # Fallback to filename timestamp if first message?
-                    if index == 0:
-                        fname_ts = re.search(r"(\d{4}-\d{2}-\d{2}T\d{2}_\d{2}_\d{2}Z)", fpath.name)
-                        if fname_ts:
-                            # 2023-02-04T19_10_59Z -> dateutil can likely handle or we quick-fix
-                            iso_like = fname_ts.group(1).replace("_", ":")
-                            ts = parse_iso_time(iso_like)
+
+                # Fallback to filename timestamp for any message with missing/invalid timestamp
+                if ts == 0:
+                    fname_ts = re.search(r"(\d{4}-\d{2}-\d{2}T\d{2}_\d{2}_\d{2}Z)", fpath.name)
+                    if fname_ts:
+                        iso_like = fname_ts.group(1).replace("_", ":")
+                        ts = parse_iso_time(iso_like)
 
                 # 2. Sender
                 # <cite class="sender vcard"><a class="tel"><abbr class="fn">Me</abbr></a></cite>
@@ -199,15 +199,14 @@ def ingest_google_voice_thread(cursor, thread_data):
             print(f"Error processing GV file {fpath}: {e}")
 
     # Update Thread Metadata
-    if last_activity_ms > 0:
+    if msg_count > 0:
+        # Insert thread only if we actually ingested messages to avoid empty stubs
         cursor.execute(
             """
-            UPDATE threads 
-            SET last_activity_ms = ?, 
-                snippet = ?
-            WHERE id = ?
+            INSERT OR REPLACE INTO threads (id, platform, title, participants_json, last_activity_ms, snippet)
+            VALUES (?, 'google_voice', ?, ?, ?, ?)
             """,
-            (last_activity_ms, latest_snippet, thread_id),
+            (thread_id, thread_id, parts_json, last_activity_ms, latest_snippet),
         )
 
     return msg_count, skipped_count
@@ -246,7 +245,11 @@ def scan_google_voice(cursor, voice_root):
             if match_anon:
                 thread_id = "Unknown"
             else:
-                continue
+                # Fallback: use prefix before first separator (e.g., "Group Conversation - 2025-...")
+                if " - " in name:
+                    thread_id = name.split(" - ", 1)[0].strip()
+                else:
+                    continue
 
         if thread_id not in file_groups:
             file_groups[thread_id] = []

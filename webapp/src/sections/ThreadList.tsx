@@ -1,7 +1,7 @@
 import React from 'react';
 import { FaSpinner } from 'react-icons/fa';
 import styles from './ThreadList.module.css';
-import { Thread } from '../types';
+import { Thread } from '@/lib/shared/types';
 
 interface ThreadListProps {
   activePlatform: string;
@@ -36,7 +36,7 @@ export default function ThreadList({ activePlatform, threads, activeThread, load
         ))}
         {loading ? (
           <div className={styles.loadingContainer}>
-            <FaSpinner className={styles.spinner} size={24} />
+            <FaSpinner className="spinner" size={24} />
             <span className={styles.loadingText}>Loading threads...</span>
           </div>
         ) : (

@@ -4,6 +4,14 @@ export interface Thread {
   timestamp: number;
   snippet?: string;
   file_count?: number; // pagination helper
+  platform?: string;
+  is_group?: number;
+  // Dataset Studio Metadata
+  qualityScore?: number;
+  participationRatio?: number;
+  myAvgMessageLength?: number;
+  myMessageCount?: number;
+  platform_source?: string;
 }
 
 export interface Reaction {
@@ -40,4 +48,7 @@ export interface Message {
   };
   reactions?: Reaction[];
   quoted_message_metadata?: QuotedMessageMetadata;
+  // Raw DB columns for internal processing
+  media_json?: string;
+  reactions_json?: string;
 }

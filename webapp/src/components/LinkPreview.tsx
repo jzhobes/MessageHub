@@ -13,9 +13,6 @@ export default function LinkPreview({ url, isMyMsg, suppressImage }: LinkPreview
   const [loading, setLoading] = useState(true);
   const isMounted = useRef(true);
 
-  // Determine radius class based on sender
-  const radiusClass = isMyMsg ? styles.previewBubbleSent : styles.previewBubbleReceived;
-
   useEffect(() => {
     return () => {
       isMounted.current = false;
@@ -42,7 +39,7 @@ export default function LinkPreview({ url, isMyMsg, suppressImage }: LinkPreview
 
   if (loading) {
     return (
-      <LazyView onEnter={fetchPreview} rootMargin="50px" className={`${styles.linkPreviewLazy} ${radiusClass}`}>
+      <LazyView onEnter={fetchPreview} rootMargin="50px" className={`linkPreview ${styles.linkPreviewLazy}`}>
         <a href={url} target="_blank" rel="noopener noreferrer" className={styles.linkPreviewLink}>
           {url}
         </a>
@@ -63,7 +60,7 @@ export default function LinkPreview({ url, isMyMsg, suppressImage }: LinkPreview
   // If we have data
   if (hasImage || hasTitle) {
     return (
-      <div className={`${styles.linkPreviewCard} ${radiusClass}`}>
+      <div className={`linkPreview ${styles.linkPreviewCard}`}>
         {/* Preview Image */}
         {hasImage && data?.image && (
           <a href={url} target="_blank" rel="noopener noreferrer" style={{ display: 'block', width: '100%' }}>

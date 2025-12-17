@@ -3,31 +3,23 @@ import { FaQuoteLeft } from 'react-icons/fa';
 import styles from './MessageItem.module.css';
 import LinkPreview from './LinkPreview';
 import LazyView from './LazyView';
-import { Message } from '../types';
+import { Message } from '@/lib/shared/types';
 
 export default function MessageItem({
   msg,
   isMyMsg,
-  isFirst,
-  isLast,
   isTarget,
   showAvatar,
   showName,
   activePlatform,
-  showTimestamp,
-  timestampStr,
   onQuoteClick,
 }: {
   msg: Message;
   isMyMsg: boolean;
-  isFirst: boolean;
-  isLast: boolean;
   isTarget?: boolean;
   showAvatar: boolean;
   showName: boolean;
   activePlatform: string;
-  showTimestamp: boolean;
-  timestampStr: string;
   onQuoteClick?: () => void;
 }) {
   const hasTextContent = !!msg.content;
@@ -64,14 +56,7 @@ export default function MessageItem({
   const displayPhotos = previewUrl && msg.photos ? [] : msg.photos || [];
 
   // Construct Class Names for Bubble
-  const bubbleClasses = [
-    styles.messageBubble,
-    isMyMsg ? styles.sentBubble : styles.receivedBubble,
-    isFirst ? styles.first : '',
-    isLast ? styles.last : '',
-    hasPreview ? styles.hasPreview : '',
-    isMediaOnly ? styles.mediaBubble : '',
-  ]
+  const bubbleClasses = [styles.messageBubble, isMyMsg ? styles.sentBubble : styles.receivedBubble, hasPreview ? styles.hasPreview : '', isMediaOnly ? styles.mediaBubble : '']
     .filter(Boolean)
     .join(' ');
 
@@ -86,10 +71,7 @@ export default function MessageItem({
         flexDirection: 'column',
       }}
     >
-      {/* Timestamp */}
-      {showTimestamp && <div className={styles.timestampLabel}>{timestampStr}</div>}
-
-      <div className={`${styles.messageRow} ${isMyMsg ? styles.sentRow : styles.receivedRow} ${isLast ? styles.messageRowGroupEnd : ''} ${isTarget ? styles.highlightTarget : ''}`}>
+      <div className={`${styles.messageRow} ${isMyMsg ? styles.justifyRight : styles.justifyLeft} ${isTarget ? styles.highlightTarget : ''}`}>
         {/* Avatar Area (Left) */}
         {!isMyMsg && (
           <div className={`${styles.avatarArea} ${msg.reactions && msg.reactions.length > 0 ? styles.hasReactionsAvatar : ''}`}>
@@ -103,7 +85,7 @@ export default function MessageItem({
 
         <div className={`${styles.messageContentStack} ${isMyMsg ? styles.alignRight : styles.alignLeft} ${msg.reactions && msg.reactions.length > 0 ? styles.hasReactions : ''}`}>
           {/* Name (Outside, Above) */}
-          {showName && <div className={styles.senderNameOutside}>{msg.sender_name}</div>}
+          {showName && <div className={`${styles.senderNameOutside} showName`}>{msg.sender_name}</div>}
 
           {/* Bubble */}
           {(hasTextContent || displayPhotos.length > 0 || (msg.videos && msg.videos.length > 0) || (msg.gifs && msg.gifs.length > 0) || msg.sticker || msg.quoted_message_metadata) && (
@@ -166,9 +148,7 @@ export default function MessageItem({
             <div className={styles.previewContainer}>
               {/\.(gif|jpe?g|png|webp)($|\?)/i.test(previewUrl) ? (
                 // Only show standalone image preview IF no photo attachments exist
-                !msg.photos?.length && (
-                  <img src={previewUrl} alt="Shared Image" className={`${styles.previewImage} ${isMyMsg ? styles.previewBubbleSent : styles.previewBubbleReceived}`} loading="lazy" />
-                )
+                !msg.photos?.length && <img src={previewUrl} alt="Shared Image" className={`previewImage ${styles.previewImage}`} loading="lazy" />
               ) : (
                 <LinkPreview url={previewUrl} isMyMsg={isMyMsg} />
               )}

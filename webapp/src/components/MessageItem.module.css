@@ -5,15 +5,11 @@
   width: 100%;
 }
 
-.messageRowGroupEnd {
-  padding-bottom: 12px;
-}
-
-.sentRow {
+.justifyRight {
   justify-content: flex-end;
 }
 
-.receivedRow {
+.justifyLeft {
   justify-content: flex-start;
 }
 
@@ -74,7 +70,6 @@
 
 .messageBubble {
   padding: 10px 16px;
-  border-radius: 18px;
   line-height: 1.4;
   position: relative;
   font-size: 0.95rem;
@@ -88,15 +83,6 @@
 .sentBubble {
   background-color: var(--bubble-sent-bg);
   color: var(--bubble-sent-text);
-  border-radius: 18px 4px 4px 18px;
-}
-
-.sentBubble.first {
-  border-top-right-radius: 18px;
-}
-
-.sentBubble.last {
-  border-bottom-right-radius: 18px;
 }
 
 .sentBubble.hasPreview {
@@ -106,15 +92,6 @@
 .receivedBubble {
   background-color: var(--bubble-received-bg);
   color: var(--bubble-received-text);
-  border-radius: 4px 18px 18px 4px;
-}
-
-.receivedBubble.first {
-  border-top-left-radius: 18px;
-}
-
-.receivedBubble.last {
-  border-bottom-left-radius: 18px;
 }
 
 .receivedBubble.hasPreview {
@@ -209,24 +186,6 @@
   display: block;
 }
 
-.previewBubble {
-  border-radius: 12px;
-}
-
-.previewBubbleSent {
-  border-top-left-radius: 18px;
-  border-top-right-radius: 4px;
-  border-bottom-right-radius: 18px;
-  border-bottom-left-radius: 18px;
-}
-
-.previewBubbleReceived {
-  border-top-left-radius: 4px;
-  border-top-right-radius: 18px;
-  border-bottom-right-radius: 18px;
-  border-bottom-left-radius: 18px;
-}
-
 .reactionContainer {
   display: flex;
   position: absolute;
@@ -249,15 +208,6 @@
   align-items: center;
   cursor: help;
   color: var(--text-primary);
-}
-
-.timestampLabel {
-  width: 100%;
-  text-align: center;
-  font-size: 0.75rem;
-  color: #8e8e93;
-  padding: 16px 0 8px 0;
-  font-weight: 500;
 }
 
 @keyframes pulseHighlight {

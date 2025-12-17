@@ -1,0 +1,321 @@
+.container {
+  transition:
+    background-color 0.3s ease,
+    border-color 0.3s ease,
+    color 0.3s ease;
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  overflow: hidden;
+}
+
+.leftPane {
+  transition:
+    background-color 0.3s ease,
+    border-color 0.3s ease;
+  width: 400px;
+  border-right: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+}
+
+/* Legacy leftHeader replaced by paneControl + paneHeader */
+.leftHeader {
+  display: none; /* Just in case */
+}
+
+.paneHeader {
+  composes: header from './ThreadListCommon.module.css';
+}
+
+.paneControls {
+  padding: 20px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  transition:
+    background-color 0.3s ease,
+    border-color 0.3s ease;
+}
+
+.threadList {
+  composes: list from './ThreadListCommon.module.css';
+  flex: 1;
+  overflow-y: auto;
+}
+
+.threadItem {
+  composes: item from './ThreadListCommon.module.css';
+  display: flex;
+  align-items: center;
+  user-select: none;
+}
+
+/* Map the 'selected' class directly to the common itemSelected style */
+.selected {
+  composes: itemSelected from './ThreadListCommon.module.css';
+}
+
+.checkbox {
+  margin-right: 12px;
+  width: 18px;
+  height: 18px;
+}
+
+.threadInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+.threadTitle {
+  /* Button Reset */
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  appearance: none; /* specific for buttons */
+
+  /* Text Styles */
+  max-width: 200px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.threadTitle:hover {
+  text-decoration: underline;
+}
+
+.threadMeta {
+  font-size: 12px;
+  color: var(--text-secondary);
+  display: flex;
+  justify-content: space-between;
+}
+
+.mainPane {
+  flex: 1;
+  overflow-y: auto; /* Scroller flush right */
+  background: var(--bg-primary);
+}
+
+.contentWrapper {
+  display: flex;
+  flex-direction: row;
+  min-height: 100%;
+}
+
+.configPane {
+  flex: 1;
+  padding: 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+}
+
+.outputPane {
+  width: 400px;
+  padding: 40px 40px 40px 0; /* No left padding initially */
+  flex-shrink: 0;
+}
+
+.outputBubble {
+  background: var(--bg-secondary);
+  padding: 24px;
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  position: sticky;
+  top: 40px;
+  transition:
+    background-color 0.3s ease,
+    border-color 0.3s ease;
+}
+
+@media (max-width: 1200px) {
+  .contentWrapper {
+    flex-direction: column;
+  }
+  .outputPane {
+    width: 100%;
+    padding: 0 40px 40px 40px;
+  }
+  .outputBubble {
+    position: static;
+  }
+}
+
+.headerTagline {
+  font-size: 13px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-top: 2px;
+  cursor: default;
+  user-select: none;
+}
+
+.section {
+  transition:
+    background-color 0.3s ease,
+    border-color 0.3s ease,
+    color 0.3s ease;
+  background: var(--bg-secondary);
+  padding: 24px;
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+}
+
+.sectionTitle {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  color: var(--text-primary);
+}
+
+.inputGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.input {
+  padding: 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  width: 100%;
+}
+
+.tokenBarContainer {
+  height: 8px;
+  background: var(--border-color);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-top: 8px;
+}
+
+.tokenBarFill {
+  height: 100%;
+  background: #10b981;
+  transition: width 0.3s ease;
+}
+
+.generateBtn {
+  padding: 16px 32px;
+  background: #2563eb;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    transform 0.1s,
+    background 0.2s;
+  align-self: flex-start;
+}
+
+.generateBtn:hover {
+  background: #1d4ed8;
+}
+
+.generateBtn:disabled {
+  background: #6b7280;
+  cursor: not-allowed;
+}
+
+.generateBtn:active {
+  transform: scale(0.98);
+}
+
+.backLink {
+  margin-bottom: 20px;
+  display: inline-block;
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.backLink:hover {
+  text-decoration: underline;
+}
+.filterBtn {
+  padding: 4px 10px;
+  border-radius: 16px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 12px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.filterBtn:hover {
+  background: var(--bg-sidebar-hover);
+}
+
+.filterBtnActive {
+  background: #2563eb;
+  color: #fff;
+  border-color: #2563eb;
+}
+
+.filterBtnActive:hover {
+  background: #1d4ed8;
+}
+
+@media (max-width: 768px) {
+  .mobileHidden {
+    display: none !important;
+  }
+}
+
+.dropdownMenu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  width: 160px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 50;
+  padding: 4px 0;
+  color: var(--text-primary);
+}
+
+.dropdownItem {
+  padding: 8px 16px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.dropdownItem:hover {
+  background: var(--bg-sidebar-hover);
+}
+
+.loadingContainer {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}

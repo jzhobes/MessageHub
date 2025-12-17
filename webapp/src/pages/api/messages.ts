@@ -1,8 +1,8 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { promises as fs } from 'fs';
 import path from 'path';
-import { getDataDir } from '../../utils/config';
-import { getDb } from '../../utils/db';
+import { getDataDir } from '@/lib/shared/config';
+import { getDb } from '@/lib/server/db';
 
 /** Unified media item for internal use */
 interface MediaItem {

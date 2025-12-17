@@ -1,4 +1,7 @@
 .container {
+  transition:
+    background-color 0.3s ease,
+    color 0.3s ease;
   display: flex;
   flex-direction: column;
   height: 100vh;
@@ -8,10 +11,13 @@
 }
 
 .topBar {
+  transition:
+    background-color 0.3s ease,
+    border-color 0.3s ease,
+    color 0.3s ease;
   height: 56px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
   border-bottom: 1px solid var(--border-color);
   background-color: var(--bg-chat-header);
   flex-shrink: 0;
@@ -40,12 +46,22 @@
   font-size: 1.3rem;
   font-weight: 500;
   color: var(--text-sidebar);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 6px 10px;
+  border-radius: 8px;
+  text-decoration: none;
+}
+
+.appTitle:hover {
+  background: var(--surface-hover);
 }
 
 .searchSection {
   flex: 1;
   max-width: 720px;
-  margin: 0 20px;
+  margin: 0 auto;
 }
 
 .sidebarWrapper {
@@ -147,4 +163,65 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+@media (max-width: 768px) {
+  .searchTrigger span {
+    display: none;
+  }
+
+  .searchTrigger {
+    background: transparent;
+    padding: 0;
+    cursor: pointer;
+  }
+
+  .searchTrigger:hover {
+    background-color: var(--bg-sidebar-hover);
+  }
+
+  .searchTriggerIcon {
+    margin-right: 0;
+    font-size: 1.2rem;
+  }
+
+  .searchSection {
+    margin-left: auto;
+    margin-right: 0;
+    flex: 0 0 auto; /* Don't expand */
+  }
+}
+
+.headerIconBtn {
+  border: 1px solid var(--border-color);
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: all 0.2s;
+}
+
+.container[data-theme='light'] .headerIconBtn {
+  border-color: rgba(0, 0, 0, 0.1);
+  color: #4b5563;
+}
+
+.container[data-theme='dark'] .headerIconBtn {
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #e5e7eb;
+}
+
+.headerIconBtn:hover {
+  background-color: var(--bg-sidebar-hover);
+}
+
+.container[data-theme='dark'] .headerIconBtn:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.themeToggleWrapper {
+  margin-left: 16px;
+  display: flex;
+  align-items: center;
 }

@@ -17,6 +17,7 @@
   --text-primary: #000000;
   --text-secondary: #8e8e93;
   --border-color: #e5e5ea;
+  --border-subtle: rgba(0, 0, 0, 0.15);
 
   --bubble-sent-bg: #007aff;
   --bubble-sent-text: #ffffff;
@@ -29,6 +30,8 @@
   --bg-quote: rgba(0, 0, 0, 0.05);
   --bg-card: #ffffff;
   --highlight-border: #000;
+  --bg-primary: #ffffff;
+  --bg-secondary: #f2f2f7;
 }
 
 [data-theme='dark'] {
@@ -52,6 +55,7 @@
   --text-primary: #ffffff;
   --text-secondary: #8e8e93;
   --border-color: #38383a;
+  --border-subtle: rgba(255, 255, 255, 0.2);
 
   --bubble-sent-bg: #0a84ff;
   --bubble-sent-text: #ffffff;
@@ -64,6 +68,8 @@
   --bg-quote: rgba(255, 255, 255, 0.1);
   --bg-card: #2c2c2e;
   --highlight-border: #ffffff;
+  --bg-primary: #000000;
+  --bg-secondary: #1c1c1e;
 }
 
 body {
@@ -81,3 +87,15 @@ body {
 }
 
 /* Custom Scrollbar Removed: Using native OS scrollbars with color-scheme support */
+
+.spinner {
+  animation: spin 1s linear infinite;
+  color: #2563eb;
+  margin: 0 8px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

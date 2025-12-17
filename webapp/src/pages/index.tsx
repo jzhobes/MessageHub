@@ -1,12 +1,17 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { FaSearch, FaArrowLeft, FaBars } from 'react-icons/fa';
-import styles from '../styles/Layout.module.css';
-import { Message, Thread } from '../types';
-import Sidebar from '../sections/Sidebar';
-import ThreadList from '../sections/ThreadList';
-import ChatWindow from '../sections/ChatWindow';
-import GlobalSearch from '../components/Search/GlobalSearch';
+import { FaArrowLeft, FaBars, FaSearch } from 'react-icons/fa';
+import { FiMoon, FiSun } from 'react-icons/fi';
+
+import GlobalSearch from '@/components/Search/GlobalSearch';
+import { useTheme } from '@/hooks/useTheme';
+import ChatWindow from '@/sections/ChatWindow';
+import Sidebar from '@/sections/Sidebar';
+import ThreadList from '@/sections/ThreadList';
+import { Message, Thread } from '@/lib/shared/types';
+
+import styles from '@/styles/Layout.module.css';
 
 // Convert raw DB platform identifiers to UI display names
 function mapPlatform(raw: string): string {
@@ -24,6 +29,8 @@ function mapPlatform(raw: string): string {
   }
 }
 
+const platformPreference = ['Facebook', 'Instagram', 'Google Chat', 'Google Voice'];
+
 export default function Home() {
   const router = useRouter();
   const prevWidthRef = useRef(0);
@@ -40,9 +47,7 @@ export default function Home() {
   // Layout State
   const [showSidebar, setShowSidebar] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
-  const [theme, setTheme] = useState('light');
   const [highlightToken, setHighlightToken] = useState(0);
-
   // Availability & Router State
   const [availability, setAvailability] = useState<Record<string, boolean>>({
     Facebook: true,
@@ -56,6 +61,22 @@ export default function Home() {
   const [pageRange, setPageRange] = useState({ min: 1, max: 1 });
   const [hasMoreOld, setHasMoreOld] = useState(false);
   const [hasMoreNew, setHasMoreNew] = useState(false);
+
+  const { theme, toggleTheme, mounted } = useTheme();
+
+  const resolvePlatform = useCallback((candidate: string | undefined, availableMap: Record<string, boolean>) => {
+    if (candidate && availableMap[candidate]) {
+      return candidate;
+    }
+
+    for (const p of platformPreference) {
+      if (availableMap[p]) {
+        return p;
+      }
+    }
+    // Fallback to candidate or default if nothing is available
+    return candidate || platformPreference[0];
+  }, []);
 
   // --- Callbacks & Helpers ---
 
@@ -80,12 +101,6 @@ export default function Home() {
     },
     [router],
   );
-
-  const toggleTheme = useCallback(() => {
-    const next = theme === 'light' ? 'dark' : 'light';
-    setTheme(next);
-    localStorage.setItem('theme', next);
-  }, [theme]);
 
   const latestRequestRef = useRef<symbol | null>(null);
 
@@ -166,12 +181,13 @@ export default function Home() {
 
   const handlePlatformSelect = useCallback(
     (p: string) => {
-      updateUrl(p, undefined);
+      const safePlatform = resolvePlatform(p, availability);
+      updateUrl(safePlatform, undefined);
       if (isMobile) {
         setShowSidebar(false); // Close sidebar on mobile after selection
       }
     },
-    [updateUrl, isMobile],
+    [availability, resolvePlatform, updateUrl, isMobile],
   );
 
   const handleThreadSelect = useCallback(
@@ -191,7 +207,7 @@ export default function Home() {
   );
 
   const handleSearchNavigate = useCallback(
-    async (threadId: string, platform: string, msgId: number) => {
+    async (msgId: number) => {
       try {
         const res = await fetch(`/api/jump?messageId=${msgId}`);
         if (res.ok) {
@@ -252,22 +268,15 @@ export default function Home() {
       .then((res) => res.json())
       .then((data) => {
         setAvailability(data);
-        if (!data[activePlatform]) {
-          if (data['Facebook']) {
-            setActivePlatform('Facebook');
-          } else if (data['Instagram']) {
-            setActivePlatform('Instagram');
-          } else if (data['Google Chat']) {
-            setActivePlatform('Google Chat');
-          } else if (data['Google Voice']) {
-            setActivePlatform('Google Voice');
-          }
+        const safePlatform = resolvePlatform(activePlatform, data);
+        if (safePlatform !== activePlatform) {
+          setActivePlatform(safePlatform);
         }
       })
       .catch((err) => {
         console.error('Failed to fetch status', err);
       });
-  }, []);
+  }, [activePlatform, resolvePlatform]);
 
   // 3. Responsive Check
   useEffect(() => {
@@ -344,8 +353,16 @@ export default function Home() {
     const platformParam = router.query.platform as string;
     const threadIdParam = router.query.threadId as string;
 
-    if (platformParam && platformParam !== activePlatform) {
-      setActivePlatform(platformParam);
+    const safePlatform = resolvePlatform(platformParam || activePlatform, availability);
+
+    // If URL contains an invalid/unavailable platform, rewrite it to the first valid one
+    if (platformParam && platformParam !== safePlatform) {
+      updateUrl(safePlatform);
+      return;
+    }
+
+    if (safePlatform !== activePlatform) {
+      setActivePlatform(safePlatform);
       setActiveThread(null);
       setMessages(null);
       return;
@@ -363,7 +380,7 @@ export default function Home() {
         setActiveThread(null);
       }
     }
-  }, [isRouterReady, router.query, activePlatform, activeThread, threads]);
+  }, [isRouterReady, router.query, activePlatform, activeThread, threads, resolvePlatform, availability, updateUrl]);
 
   // 6. Initial Load / Reset Messages when Active Thread changes
   useEffect(() => {
@@ -383,16 +400,6 @@ export default function Home() {
     setPageRange({ min: startPage, max: startPage });
     loadMessages(activeThread.id, startPage, 'reset');
   }, [activeThread, router.query.page, router.query.threadId, loadMessages]);
-
-  // 7. Theme Initialization
-  useEffect(() => {
-    const saved = localStorage.getItem('theme');
-    if (saved) {
-      setTheme(saved);
-    } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-      setTheme('dark');
-    }
-  }, []);
 
   if (!isRouterReady) {
     return <div>Loading...</div>;
@@ -427,20 +434,34 @@ export default function Home() {
             </button>
           )}
 
-          <div className={styles.appTitle}>
+          <Link
+            aria-label="Back to home"
+            className={styles.appTitle}
+            href="/"
+            prefetch={false}
+            onClick={(e) => {
+              // Force full reload to guarantee clean state
+              e.preventDefault();
+              window.location.href = '/';
+            }}
+          >
             <span>💬</span>
             <span>MessageHub</span>
-          </div>
+          </Link>
         </div>
 
         <div className={styles.searchSection}>
-          <div className={styles.searchTrigger} onClick={() => setIsSearchOpen(true)}>
-            <FaSearch className={styles.searchTriggerIcon} />
+          <div className={`${styles.searchTrigger} ${isMobile ? styles.headerIconBtn : ''}`} onClick={() => setIsSearchOpen(true)}>
+            <FaSearch className={styles.searchTriggerIcon} size={20} />
             <span>Search messages...</span>
           </div>
         </div>
 
-        <div style={{ width: 40 }} />
+        <div className={styles.themeToggleWrapper}>
+          <button className={`${styles.iconButton} ${styles.headerIconBtn}`} onClick={toggleTheme} title={theme === 'light' ? 'Switch to Dark Mode' : 'Switch to Light Mode'}>
+            {!mounted || theme === 'light' ? <FiMoon size={20} /> : <FiSun size={20} />}
+          </button>
+        </div>
       </div>
 
       {/* Main Body */}
@@ -451,7 +472,7 @@ export default function Home() {
             display: isSidebarVisible ? 'block' : 'none',
           }}
         >
-          <Sidebar activePlatform={activePlatform} onPlatformSelect={handlePlatformSelect} availability={availability} theme={theme} onToggleTheme={toggleTheme} collapsed={collapsed} />
+          <Sidebar activePlatform={activePlatform} onPlatformSelect={handlePlatformSelect} availability={availability} collapsed={collapsed} />
         </div>
 
         <div className={styles.workspace}>

@@ -44,16 +44,61 @@ export default function SearchResultItem({ result, onClick, searchQuery }: Searc
     if (!query.trim()) {
       return text;
     }
-    const parts = text.split(new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'));
-    return parts.map((part, i) =>
-      part.toLowerCase() === query.toLowerCase() ? (
+
+    // Tokenize query: split by spaces but respect quotes
+    const tokens: string[] = [];
+    const quoteRegex = /"([^"]+)"|(\S+)/g;
+    let match;
+    while ((match = quoteRegex.exec(query)) !== null) {
+      if (match[1]) {
+        tokens.push(match[1]);
+      } else {
+        tokens.push(match[2]);
+      }
+    }
+
+    if (tokens.length === 0) {
+      return text;
+    }
+
+    // Build regex pattern for all tokens
+    const patterns = tokens.map((t) => {
+      let pattern = t;
+      let isStart = false;
+      if (pattern.startsWith('^')) {
+        isStart = true;
+        pattern = pattern.slice(1);
+      }
+
+      // Escape regex special characters, but preserve * and ?
+      const escaped = pattern
+        .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+        .replace(/\*/g, '.*?')
+        .replace(/\?/g, '.');
+
+      if (isStart) {
+        // Match start of string or word boundary
+        return `(?:^|\\b)${escaped}`;
+      }
+      return escaped;
+    });
+
+    const combinedPattern = `(${patterns.join('|')})`;
+    const parts = text.split(new RegExp(combinedPattern, 'gi'));
+
+    return parts.map((part, i) => {
+      // Check if this part matches one of our tokens (case-insensitive)
+      // Since split includes the separator, we just check if it matches the regex
+      // But verify it's not empty string or irrelevant
+      const isMatch = new RegExp(`^${combinedPattern}$`, 'i').test(part);
+      return isMatch ? (
         <span key={i} className={styles.highlight}>
           {part}
         </span>
       ) : (
         part
-      ),
-    );
+      );
+    });
   };
 
   return (

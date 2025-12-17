@@ -1,9 +1,9 @@
-import React, { useEffect, useRef, useState, useMemo, useCallback, useLayoutEffect } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { FaSpinner } from 'react-icons/fa';
-import { Virtuoso, VirtuosoHandle, IndexLocationWithAlign } from 'react-virtuoso';
+import { IndexLocationWithAlign, Virtuoso, VirtuosoHandle } from 'react-virtuoso';
+import MessageItem from '@/components/MessageItem';
+import { Message, QuotedMessageMetadata, Thread } from '@/lib/shared/types';
 import styles from './ChatWindow.module.css';
-import MessageItem from '../components/MessageItem';
-import { Message, Thread, QuotedMessageMetadata } from '../types';
 
 interface ChatWindowProps {
   activeThread: Thread | null;
@@ -125,6 +125,14 @@ export default function ChatWindow({
 
   // Manual trigger for onEndReached once ready
   useEffect(() => {
+    /*
+     * We only want to run this check ONCE when the component becomes "ready" (initial load done).
+     * Accessing refs (atBottomRef) is safe as they are always fresh.
+     * Accessing state (hasMoreNew, loading) is safe because they are captured from the render
+     * where isReady became true.
+     * We strictly exclude 'loading'/'hasMoreNew' from deps to prevent re-running this
+     * logic when those values change during normal operation (avoiding loops).
+     */
     if (isReady && atBottomRef.current && hasMoreNew && !loading) {
       console.log('Manual trigger of onEndReached after ready state');
       onEndReached();
@@ -195,7 +203,7 @@ export default function ChatWindow({
       <div className={styles.loadMoreContainer} style={{ padding: 20 }}>
         {loading && hasMoreOld && (
           <>
-            <FaSpinner className={styles.spinner} size={24} />
+            <FaSpinner className="spinner" size={24} />
             <span className={styles.loadingText}>Loading older...</span>
           </>
         )}
@@ -208,7 +216,7 @@ export default function ChatWindow({
       <div className={styles.loadMoreContainer} style={{ padding: 20 }}>
         {loading && hasMoreNew && (
           <>
-            <FaSpinner className={styles.spinner} size={24} />
+            <FaSpinner className="spinner" size={24} />
             <span className={styles.loadingText}>Loading newer...</span>
           </>
         )}
@@ -231,7 +239,7 @@ export default function ChatWindow({
         <div className={styles.chatHeader} />
         <div className={styles.messagesContainer}>
           <div className={styles.emptyState}>
-            <FaSpinner className={`spin ${styles.spinner}`} size={24} />
+            <FaSpinner className="spinner" size={24} />
             <div className={styles.loadingText}>Loading messages...</div>
           </div>
         </div>
@@ -285,20 +293,8 @@ export default function ChatWindow({
             const prevMsg = virtuosoData[dataIndex - 1]; // Above
             const nextMsg = virtuosoData[dataIndex + 1]; // Below
 
-            // isTop: First in a block of same sender (Visually Top)
-            const isTop = !prevMsg || prevMsg.sender_name !== msg.sender_name;
-            // isBottom: Last in a block of same sender (Visually Bottom)
-            const isBottom = !nextMsg || nextMsg.sender_name !== msg.sender_name;
-
-            // Pass flags to MessageItem instead of style objects
-            const showAvatar = !isMyMsg && isBottom;
-            const showName = !isMyMsg && isTop;
-
-            const isTarget = (msg.id || msg.timestamp_ms.toString()) === targetMessageId;
-
+            // Timestamp Logic: Show if day changed or > 1 hour gap
             let showTimestamp = false;
-
-            // Timestamp Logic: Show if day changed or > 1 hour gap from previous message
             if (prevMsg) {
               const currentDate = new Date(msg.timestamp_ms);
               const prevDate = new Date(prevMsg.timestamp_ms);
@@ -311,9 +307,35 @@ export default function ChatWindow({
                 showTimestamp = true;
               }
             } else {
-              // First message of the entire loaded history (top)
               showTimestamp = true;
             }
+
+            // isTop: First in a block (Different sender OR Timestamp break)
+            const isTop = !prevMsg || prevMsg.sender_name !== msg.sender_name || showTimestamp;
+
+            // isBottom: Last in a block (Different sender OR Next is timestamp break)
+            // We need to peek ahead to see if next msg generates a timestamp
+            let nextShowsTimestamp = false;
+            if (nextMsg) {
+              const currentDate = new Date(msg.timestamp_ms);
+              const nextDate = new Date(nextMsg.timestamp_ms);
+              if (
+                currentDate.getDate() !== nextDate.getDate() ||
+                currentDate.getMonth() !== nextDate.getMonth() ||
+                currentDate.getFullYear() !== nextDate.getFullYear() ||
+                currentDate.getHours() !== nextDate.getHours()
+              ) {
+                nextShowsTimestamp = true;
+              }
+            }
+
+            const isBottom = !nextMsg || nextMsg.sender_name !== msg.sender_name || nextShowsTimestamp;
+
+            // Pass flags to MessageItem instead of style objects
+            const showAvatar = !isMyMsg && isBottom;
+            const showName = !isMyMsg && isTop;
+
+            const isTarget = (msg.id || msg.timestamp_ms.toString()) === targetMessageId;
 
             const timestampStr = new Date(msg.timestamp_ms).toLocaleString('en-US', {
               weekday: 'short',
@@ -324,20 +346,22 @@ export default function ChatWindow({
               minute: '2-digit',
             });
 
+            const messageAlignStyle = msg?.is_sender ? styles.messageAlignRight : styles.messageAlignLeft;
+            const classNames = [messageAlignStyle, isTop || !!prevMsg?.reactions?.length ? styles.firstMessage : null, isBottom || !!msg?.reactions?.length ? styles.lastMessage : null].filter(
+              Boolean,
+            );
+
             return (
-              <div style={{ paddingBottom: 4, paddingLeft: 20, paddingRight: 20 }}>
+              <div className={classNames.join(' ')} style={{ paddingBottom: isBottom ? 16 : 4, paddingLeft: 20, paddingRight: 20 }}>
+                {showTimestamp && <div className={styles.timestampLabel}>{timestampStr}</div>}
                 <MessageItem
                   key={msg.id + (isTarget ? `-highlight-${highlightToken}` : '')}
                   msg={msg}
                   isMyMsg={isMyMsg}
-                  isFirst={isTop}
-                  isLast={isBottom}
                   isTarget={isTarget}
                   showAvatar={showAvatar}
                   showName={showName}
                   activePlatform={activePlatform}
-                  showTimestamp={showTimestamp}
-                  timestampStr={timestampStr}
                   onQuoteClick={() => handleQuoteClick(msg.quoted_message_metadata)}
                 />
               </div>

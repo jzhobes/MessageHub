@@ -21,17 +21,6 @@
   color: var(--text-primary);
 }
 
-.linkPreviewFallback {
-  margin: 0;
-  width: 100%;
-  max-width: 300px;
-  border-radius: inherit;
-  border: 1px solid var(--border-color);
-  background-color: var(--bg-card);
-  padding: 10px;
-  color: var(--text-primary);
-}
-
 .linkPreviewLink {
   color: #007aff;
   text-decoration: none;
@@ -59,18 +48,4 @@
   max-height: 300px;
   object-fit: cover;
   display: block;
-}
-
-.previewBubbleSent {
-  border-top-left-radius: 18px;
-  border-top-right-radius: 4px;
-  border-bottom-right-radius: 18px;
-  border-bottom-left-radius: 18px;
-}
-
-.previewBubbleReceived {
-  border-top-left-radius: 4px;
-  border-top-right-radius: 18px;
-  border-bottom-right-radius: 18px;
-  border-bottom-left-radius: 18px;
 }

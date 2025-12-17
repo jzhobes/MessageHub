@@ -1,7 +1,7 @@
 import fs from 'fs';
 import { execSync } from 'child_process';
 import { getInstagramHeaders } from './instagram';
-import { getDataDir } from './config';
+import { getDataDir } from '@/lib/shared/config';
 
 export async function runStartupChecks() {
   console.log('🔍 [Instrumentation] Running Startup Checks...');

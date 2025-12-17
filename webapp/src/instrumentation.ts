@@ -6,7 +6,7 @@ export async function register() {
     // The Edge Runtime does not support Node.js APIs like 'fs' or 'child_process'.
     // If we import statically, the Edge compiler sees 'fs' and fails the build.
     // See docs: https://nextjs.org/docs/app/building-your-application/optimizing/instrumentation
-    const { runStartupChecks } = await import('./utils/startup');
+    const { runStartupChecks } = await import('./lib/server/startup');
     await runStartupChecks();
   }
 }

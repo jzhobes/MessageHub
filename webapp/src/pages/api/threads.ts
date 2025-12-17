@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { getDb } from '../../utils/db';
+import { getDb } from '@/lib/server/db';
 
 /**
  * API Handler to list message threads for a specific platform.
@@ -8,7 +8,7 @@ import { getDb } from '../../utils/db';
  * @param req - Next.js API request containing 'platform' query parameter.
  * @param res - Next.js API response
  */
-import { getMyNames } from '../../utils/identity';
+import { getMyNames } from '@/lib/server/identity';
 
 /**
  * API Handler to list message threads for a specific platform.

@@ -10,12 +10,15 @@
     "format": "prettier --write ."
   },
   "dependencies": {
+    "@types/jszip": "^3.4.0",
     "better-sqlite3": "^12.5.0",
+    "jszip": "^3.10.1",
     "next": "16.0.10",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-icons": "^5.5.0",
-    "react-virtuoso": "^4.17.0"
+    "react-virtuoso": "^4.17.0",
+    "tiktoken": "^1.0.22"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",

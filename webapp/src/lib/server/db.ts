@@ -1,6 +1,6 @@
 import Database from 'better-sqlite3';
 import path from 'path';
-import { getDataDir } from './config';
+import { getDataDir } from '@/lib/shared/config';
 
 let dbInstance: Database.Database | null = null;
 

@@ -164,7 +164,7 @@ def scan_directory(scan_path, db_path, platform_filter="all"):
     print(f"Skipped {total_skipped} duplicate messages.")
 
 
-def extract_zips_found(search_dirs, target_root):
+def extract_zips_found(search_dirs, target_root, platform_filter="all"):
     """
     Scans specified directories for .zip files and extracts them
     into a subdirectory of target_root named after the zip file.
@@ -202,6 +202,18 @@ def extract_zips_found(search_dirs, target_root):
                     has_chat = any(f.startswith("Takeout/Google Chat/") for f in file_list)
 
                     if has_voice or has_chat:
+                        # Respect platform filter: if user wants only google_voice, allow zips that include Voice;
+                        # if only google_chat, allow those with Chat; if all, take both.
+                        if platform_filter != "all":
+                            allowed = False
+                            if platform_filter == "google_voice" and has_voice:
+                                allowed = True
+                            if platform_filter == "google_chat" and has_chat:
+                                allowed = True
+                            if not allowed:
+                                print(f"  Skipping {zip_path.name}: does not match platform filter ({platform_filter}).")
+                                continue
+
                         dest_dir = target_root
                         if has_voice:
                             detected_platforms.add("google_voice")
@@ -233,6 +245,9 @@ def extract_zips_found(search_dirs, target_root):
 
                     # 2. Instagram signature: your_instagram_activity
                     elif any(f.startswith("your_instagram_activity") for f in file_list):
+                        if platform_filter not in ("all", "instagram"):
+                            print(f"  Skipping {zip_path.name}: does not match platform filter ({platform_filter}).")
+                            continue
                         dest_dir = target_root / "Instagram"
                         detected_platforms.add("instagram")
                         print(f"  Identified as Instagram Export. Extracting to {dest_dir} ...")
@@ -241,6 +256,9 @@ def extract_zips_found(search_dirs, target_root):
 
                     # 3. Facebook signature: your_activity_across_facebook
                     elif any(f.startswith("your_facebook_activity") for f in file_list):
+                        if platform_filter not in ("all", "facebook"):
+                            print(f"  Skipping {zip_path.name}: does not match platform filter ({platform_filter}).")
+                            continue
                         dest_dir = target_root / "Facebook"
                         detected_platforms.add("facebook")
                         print(f"  Identified as Facebook Export. Extracting to {dest_dir} ...")
@@ -300,7 +318,7 @@ def start_ingestion():
         if source_path.is_dir() and source_path not in scan_locations:
             scan_locations.append(source_path)
 
-        _, detected_platforms = extract_zips_found(scan_locations, DATA_DIR)
+        _, detected_platforms = extract_zips_found(scan_locations, DATA_DIR, platform_filter=args.platform)
     else:
         print("Skipping zip extraction.")
 

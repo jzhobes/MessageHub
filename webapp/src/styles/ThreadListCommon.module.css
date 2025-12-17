@@ -1,0 +1,48 @@
+.list {
+  background-color: var(--bg-thread-list);
+  overflow-y: auto;
+}
+
+.item {
+  padding: 15px 20px;
+  border-bottom: 1px solid var(--border-color);
+  cursor: pointer;
+  transition: background-color 0.2s;
+  color: var(--text-primary);
+}
+
+/* Dataset style: selected (background only), hover overrides it */
+.itemSelected {
+  background-color: var(--bg-thread-item-active);
+}
+
+.itemSelected:has(+ .itemSelected) {
+  border-bottom-color: var(--text-secondary);
+}
+
+.item:hover {
+  background-color: var(--bg-thread-item-hover);
+}
+
+/* MessageHub style: active (background + border), overrides hover */
+.itemActive {
+  background-color: var(--bg-thread-item-active);
+  border-left: 4px solid var(--border-thread-active);
+}
+
+.header {
+  height: 60px;
+  padding: 0 20px;
+  display: flex;
+  align-items: center;
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-thread-list);
+  flex-shrink: 0;
+  transition:
+    background-color 0.3s ease,
+    border-color 0.3s ease,
+    color 0.3s ease;
+}

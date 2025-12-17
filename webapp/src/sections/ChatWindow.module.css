@@ -22,6 +22,17 @@
   background-color: var(--bg-chat-header);
 }
 
+.headerTitle {
+  font-weight: 600;
+  font-size: 1.1rem;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+
 .pageIndicator {
   font-size: 0.8rem;
   color: var(--text-secondary);
@@ -39,7 +50,6 @@
   justify-content: center;
   padding: 10px;
   align-items: center;
-  gap: 8px;
   color: #6b7280;
 }
 
@@ -48,34 +58,49 @@
   font-weight: 500;
 }
 
+.timestampLabel {
+  width: 100%;
+  text-align: center;
+  font-size: 0.75rem;
+  color: #8e8e93;
+  padding: 16px 0 8px 0;
+  font-weight: 500;
+  user-select: none;
+}
+
 .emptyState {
   display: flex;
   align-items: center;
   justify-content: center;
   height: 100%;
-  gap: 8px;
   color: var(--text-secondary);
   font-size: 1.2rem;
 }
 
-.flexCenter {
-  display: flex !important;
-  justify-content: center;
-  align-items: center;
+.messageAlignLeft :global(.messageBubble),
+.messageAlignLeft :global(.linkPreview) {
+  border-radius: 4px 18px 18px 4px;
 }
 
-@keyframes spin {
-  0% {
-    transform: rotate(0deg);
-  }
-  100% {
-    transform: rotate(360deg);
-  }
+.messageAlignLeft.firstMessage :global(.messageBubble) {
+  border-top-left-radius: 18px;
 }
 
-.spinner {
-  animation: spin 1s linear infinite;
-  font-size: 1.2rem;
-  color: #007aff;
-  display: block;
+.messageAlignLeft.lastMessage :global(.messageBubble),
+.messageAlignLeft.lastMessage :global(.linkPreview) {
+  border-bottom-left-radius: 18px;
+}
+
+.messageAlignRight :global(.messageBubble),
+.messageAlignRight :global(.linkPreview) {
+  border-radius: 18px 4px 4px 18px;
+}
+
+.messageAlignRight.firstMessage :global(.messageBubble) {
+  border-top-right-radius: 18px;
+}
+
+.messageAlignRight.lastMessage :global(.messageBubble),
+.messageAlignRight.lastMessage :global(.linkPreview) {
+  border-bottom-right-radius: 18px;
 }

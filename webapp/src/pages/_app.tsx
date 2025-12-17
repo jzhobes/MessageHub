@@ -2,6 +2,7 @@ import '@/styles/globals.css';
 import type { AppProps } from 'next/app';
 import Head from 'next/head';
 import { Geist, Geist_Mono } from 'next/font/google';
+import { ThemeProvider } from '@/hooks/useTheme';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -15,7 +16,7 @@ const geistMono = Geist_Mono({
 
 export default function App({ Component, pageProps }: AppProps) {
   return (
-    <>
+    <ThemeProvider>
       <Head>
         <title>MessageHub</title>
         <meta name="description" content="Personal message archive viewer for Facebook, Instagram, Google Chat, and Google Voice" />
@@ -24,6 +25,6 @@ export default function App({ Component, pageProps }: AppProps) {
       <div className={`${geistSans.variable} ${geistMono.variable}`}>
         <Component {...pageProps} />
       </div>
-    </>
+    </ThemeProvider>
   );
 }

@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { promises as fs } from 'fs';
 import path from 'path';
-import { getInstagramHeaders } from '../../utils/instagram';
+import { getInstagramHeaders } from '@/lib/server/instagram';
 
 /**
  * Metadata extracted from a URL's OpenGraph tags.
