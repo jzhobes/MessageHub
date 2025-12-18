@@ -1,7 +1,7 @@
-import type { NextApiRequest, NextApiResponse } from 'next';
 import fs from 'fs';
 import path from 'path';
-import { setRuntimeDataPath } from '@/lib/shared/config';
+import type { NextApiRequest, NextApiResponse } from 'next';
+import appConfig from '@/lib/shared/appConfig';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   // Determine Project Root (parent of webapp if running inside webapp)
@@ -11,7 +11,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (req.method === 'GET') {
     // 1204: Just use what's currently configured in process.env or fallback
     // We assume setRuntimeDataPath updates process.env.DATA_PATH
-    const currentPath = process.env.DATA_PATH || 'data';
+    const currentPath = process.env.DATA_PATH ?? 'data';
 
     // Now resolve it to check existence
     const resolved = path.isAbsolute(currentPath) ? currentPath : path.resolve(projectRoot, currentPath);
@@ -47,7 +47,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         if (files.filter((f) => f !== '.DS_Store' && f !== 'thumbs.db').length > 0) {
           isEmpty = false;
         }
-      } catch (e) {
+      } catch {
         // If we can't read it (permission?), treat as not empty or error?
         // simple fallback
       }
@@ -59,14 +59,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         await fs.promises.mkdir(resolved, { recursive: true });
         exists = true;
         isEmpty = true;
-      } catch (e: any) {
-        return res.status(500).json({ error: `Failed to create folder: ${e.message}. Check permissions.` });
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        return res.status(500).json({ error: `Failed to create folder: ${message}. Check permissions.` });
       }
     }
 
     // Update runtime config only if valid (exists)
     if (exists) {
-      setRuntimeDataPath(dataPath);
+      appConfig.DATA_PATH = dataPath;
     }
 
     return res.status(200).json({ dataPath, exists, resolved, isEmpty });

@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { getDb } from '@/lib/server/db';
+import db from '@/lib/server/db';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { messageId } = req.query;
@@ -8,7 +8,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ error: 'Missing messageId' });
   }
 
-  const db = getDb();
+  const dbInstance = db.get();
 
   try {
     // 1. Get the target message details
@@ -17,7 +17,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       thread_id: string;
       timestamp_ms: number;
     }
-    const msg = db.prepare('SELECT id, thread_id, timestamp_ms FROM messages WHERE id = ?').get(messageId) as MsgRow | undefined;
+    const msg = dbInstance.prepare('SELECT id, thread_id, timestamp_ms FROM messages WHERE id = ?').get(messageId) as MsgRow | undefined;
 
     if (!msg) {
       return res.status(404).json({ error: 'Message not found' });
@@ -28,7 +28,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     interface CountRow {
       count: number;
     }
-    const row = db
+    const row = dbInstance
       .prepare(
         `
         SELECT COUNT(*) as count 
@@ -48,7 +48,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     interface ThreadRow {
       platform: string;
     }
-    const thread = db.prepare('SELECT platform FROM threads WHERE id = ?').get(msg.thread_id) as ThreadRow;
+    const thread = dbInstance.prepare('SELECT platform FROM threads WHERE id = ?').get(msg.thread_id) as ThreadRow;
 
     return res.status(200).json({
       threadId: msg.thread_id,

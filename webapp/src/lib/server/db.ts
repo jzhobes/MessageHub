@@ -1,40 +1,56 @@
-import Database from 'better-sqlite3';
-import path from 'path';
 import fs from 'fs';
-import { getDataDir } from '@/lib/shared/config';
+import path from 'path';
+import Database from 'better-sqlite3';
 
-let dbInstance: Database.Database | null = null;
+import appConfig from '@/lib/shared/appConfig';
 
-export function dbExists(): boolean {
-  if (dbInstance) {
-    return true;
+/**
+ * DatabaseService manages the connection to the SQLite database.
+ * It ensures a single instance (singleton) is used throughout the application.
+ */
+class DatabaseService {
+  private _instance: Database.Database | null = null;
+
+  /**
+   * Checks if the database file exists in the current data directory.
+   */
+  public exists(): boolean {
+    if (this._instance) {
+      return true;
+    }
+    try {
+      const dbPath = path.join(appConfig.DATA_PATH, 'messagehub.db');
+      return fs.existsSync(dbPath);
+    } catch {
+      return false;
+    }
   }
-  try {
-    const dataDir = getDataDir();
-    const dbPath = path.join(dataDir, 'messagehub.db');
-    return fs.existsSync(dbPath);
-  } catch (e) {
-    return false;
+
+  /**
+   * Retrieves the active database connection.
+   * Opens a new connection if none exists.
+   */
+  public get(): Database.Database {
+    if (this._instance) {
+      return this._instance;
+    }
+
+    const dbPath = path.join(appConfig.DATA_PATH, 'messagehub.db');
+
+    if (!fs.existsSync(dbPath)) {
+      throw new Error(`Database file not found at ${dbPath}. Please run setup.`);
+    }
+
+    try {
+      this._instance = new Database(dbPath, { readonly: true });
+      return this._instance;
+    } catch (e) {
+      console.error(`Failed to open database at ${dbPath}`, e);
+      throw e;
+    }
   }
 }
 
-export function getDb(): Database.Database {
-  if (dbInstance) {
-    return dbInstance;
-  }
-
-  const dataDir = getDataDir();
-  const dbPath = path.join(dataDir, 'messagehub.db');
-
-  if (!fs.existsSync(dbPath)) {
-    throw new Error(`Database file not found at ${dbPath}. Please run setup.`);
-  }
-
-  try {
-    dbInstance = new Database(dbPath, { readonly: true });
-    return dbInstance;
-  } catch (e) {
-    console.error(`Failed to open database at ${dbPath}`, e);
-    throw e;
-  }
-}
+// Export a single instance of the database service as default
+const db = new DatabaseService();
+export default db;

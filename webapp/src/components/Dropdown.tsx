@@ -10,7 +10,7 @@ interface DropdownProps {
   align?: 'left' | 'right';
 }
 
-export const Dropdown: React.FC<DropdownProps> = ({ trigger, children, width, open, onOpenChange, align = 'left' }) => {
+export function Dropdown({ trigger, children, width, open, onOpenChange, align = 'left' }: DropdownProps) {
   const [internalOpen, setInternalOpen] = useState(false);
   const isControlled = open !== undefined;
   const isOpen = isControlled ? open : internalOpen;
@@ -70,13 +70,15 @@ export const Dropdown: React.FC<DropdownProps> = ({ trigger, children, width, op
       )}
     </div>
   );
-};
+}
 
-export const DropdownItem: React.FC<{
+interface DropdownItemProps {
   children: React.ReactNode;
   onClick?: () => void;
   className?: string;
-}> = ({ children, onClick, className }) => {
+}
+
+export function DropdownItem({ children, onClick, className }: DropdownItemProps) {
   return (
     <div
       className={className || styles.dropdownItem}
@@ -90,6 +92,6 @@ export const DropdownItem: React.FC<{
       {children}
     </div>
   );
-};
+}
 
 export const DropdownDivider = () => <div style={{ height: 1, background: 'var(--border-color)', margin: '4px 0' }} />;

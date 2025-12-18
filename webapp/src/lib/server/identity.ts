@@ -1,6 +1,6 @@
 import { promises as fs } from 'fs';
 import path from 'path';
-import { getDataDir } from '@/lib/shared/config';
+import appConfig from '@/lib/shared/appConfig';
 
 interface FacebookProfile {
   profile_v2?: {
@@ -32,34 +32,28 @@ interface GoogleChatUserInfo {
  */
 export async function getMyNames(): Promise<string[]> {
   const myNamesSet = new Set<string>(['Me']);
-  const dataDir = getDataDir();
+  const dataDir = appConfig.DATA_PATH;
 
   // Dynamically find Google Chat user info
   let googleChatUserPath = '';
   const gcUsersDir = path.join(dataDir, 'Google Chat/Users');
   try {
-    if (
-      await fs
-        .stat(gcUsersDir)
-        .then(() => true)
-        .catch(() => false)
-    ) {
-      const folders = await fs.readdir(gcUsersDir);
-      for (const folder of folders) {
-        if (folder.startsWith('User ')) {
-          const candidate = path.join(gcUsersDir, folder, 'user_info.json');
-          try {
-            await fs.access(candidate);
-            googleChatUserPath = candidate;
-            break;
-          } catch {
-            // No-op
-          }
+    await fs.access(gcUsersDir);
+    const folders = await fs.readdir(gcUsersDir);
+    for (const folder of folders) {
+      if (folder.startsWith('User ')) {
+        const candidate = path.join(gcUsersDir, folder, 'user_info.json');
+        try {
+          await fs.access(candidate);
+          googleChatUserPath = candidate;
+          break;
+        } catch {
+          // File missing in this specific user folder, continue search
         }
       }
     }
   } catch {
-    // No-op
+    // Directory missing or inaccessible, skip Google Chat discovery
   }
 
   const profileSources = [

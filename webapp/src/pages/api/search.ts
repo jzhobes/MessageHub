@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { getDb } from '@/lib/server/db';
+import db from '@/lib/server/db';
 import { PlatformMap, ReversePlatformMap } from '@/lib/shared/platforms';
 import { getMyNames } from '@/lib/server/identity';
 
@@ -14,8 +14,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const pageNum = parseInt(Array.isArray(page) ? page[0] : page, 10) || 1;
   const PAGE_SIZE = 100;
   const offset = (pageNum - 1) * PAGE_SIZE;
-
-  const db = getDb();
 
   try {
     interface SearchRow {
@@ -99,14 +97,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       params.push(Array.isArray(threadId) ? threadId[0] : threadId);
     }
 
+    const dbInstance = db.get();
+
     // Get total count
     const countSql = `SELECT count(*) as total ${baseSql}`;
-    const countResult = db.prepare(countSql).get(...params) as { total: number };
+    const countResult = dbInstance.prepare(countSql).get(...params) as { total: number };
     const total = countResult ? countResult.total : 0;
 
     // Facets - platform breakdown
     const platformSql = `SELECT t.platform, count(*) as count ${baseSql} GROUP BY t.platform`;
-    const platformRows = db.prepare(platformSql).all(...params) as { platform: string; count: number }[];
+    const platformRows = dbInstance.prepare(platformSql).all(...params) as { platform: string; count: number }[];
     const platforms: Record<string, number> = {};
     platformRows.forEach((r) => {
       platforms[r.platform] = r.count;
@@ -114,7 +114,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Facets - sender breakdown (top 20)
     const senderSql = `SELECT m.sender_name, count(*) as count ${baseSql} GROUP BY m.sender_name ORDER BY count DESC LIMIT 20`;
-    const senderRows = db.prepare(senderSql).all(...params) as { sender_name: string; count: number }[];
+    const senderRows = dbInstance.prepare(senderSql).all(...params) as { sender_name: string; count: number }[];
 
     // Normalize personal names
     const myNames = await getMyNames();
@@ -145,7 +145,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Get data
     const dataSql = `SELECT m.*, t.platform, t.title as thread_title ${baseSql} ORDER BY m.timestamp_ms DESC LIMIT ? OFFSET ?`;
-    const dataRows = db.prepare(dataSql).all(...params, PAGE_SIZE, offset) as SearchRow[];
+    const dataRows = dbInstance.prepare(dataSql).all(...params, PAGE_SIZE, offset) as SearchRow[];
 
     const results = dataRows.map((row) => ({
       message_id: row.id,

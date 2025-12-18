@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { promises as fs } from 'fs';
 import path from 'path';
-import { getDataDir } from '@/lib/shared/config';
+import appConfig from '@/lib/shared/appConfig';
 
 /**
  * API Handler to serve media files (images, videos) from the local data directory.
@@ -32,7 +32,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).send('Missing path');
   }
 
-  const baseDir = getDataDir();
+  const baseDir = appConfig.DATA_PATH;
   let relativePath = pathStr;
 
   // Platform-specific path adjustments

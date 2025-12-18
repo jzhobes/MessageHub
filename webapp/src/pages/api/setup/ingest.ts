@@ -2,7 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { spawn } from 'child_process';
 import path from 'path';
 import fs from 'fs';
-import { getDataDir } from '@/lib/shared/config';
+import appConfig from '@/lib/shared/appConfig';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -10,7 +10,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).end(`Method ${req.method} Not Allowed`);
   }
 
-  const dataDir = getDataDir();
+  const dataDir = appConfig.DATA_PATH;
   const rootDir = path.resolve(process.cwd(), '../'); // Assuming webapp is subfolder of project
   const scriptPath = path.join(rootDir, 'scripts', 'ingest.py');
 
@@ -33,7 +33,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Fallback to system python
     pythonPath = 'python3';
     // On windows 'python' usually.
-    if (isWin) pythonPath = 'python';
+    if (isWin) {
+      pythonPath = 'python';
+    }
   }
 
   console.log(`Starting ingestion with ${pythonPath} on ${scriptPath} data=${dataDir}`);
@@ -47,7 +49,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const child = spawn(pythonPath, [scriptPath], { env });
 
-  const sendEvent = (type: string, payload: any) => {
+  const sendEvent = (type: string, payload: unknown) => {
     res.write(`data: ${JSON.stringify({ type, payload })}\n\n`);
   };
 

@@ -1,8 +1,8 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { promises as fs } from 'fs';
 import path from 'path';
-import { getDataDir } from '@/lib/shared/config';
-import { getDb } from '@/lib/server/db';
+import appConfig from '@/lib/shared/appConfig';
+import db from '@/lib/server/db';
 
 import { MediaItem, Message } from '@/lib/shared/types';
 
@@ -48,7 +48,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   // Identify "Me"
   // TODO: cache this or move to a proper identity service
   const myNamesSet = new Set<string>(['Me']);
-  const dataDir = getDataDir();
+  const dataDir = appConfig.DATA_PATH;
 
   // Dynamically find Google Chat user info
   let googleChatUserPath = '';
@@ -108,9 +108,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
   const myNames = Array.from(myNamesSet);
 
-  // Query DB
-  const db = getDb();
-
   try {
     interface MessageRow {
       id: number;
@@ -125,6 +122,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const rows = db
+      .get()
       .prepare(
         `
         SELECT * FROM messages 

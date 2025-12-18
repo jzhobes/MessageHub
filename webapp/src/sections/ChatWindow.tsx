@@ -365,12 +365,17 @@ export default function ChatWindow({
             });
 
             const messageAlignStyle = msg?.is_sender ? styles.messageAlignRight : styles.messageAlignLeft;
-            const classNames = [messageAlignStyle, isTop || !!prevMsg?.reactions?.length ? styles.firstMessage : null, isBottom || !!msg?.reactions?.length ? styles.lastMessage : null].filter(
-              Boolean,
-            );
+            const classNames = [
+              messageAlignStyle,
+              isTop || !!prevMsg?.reactions?.length ? styles.firstMessage : null,
+              isBottom || !!msg?.reactions?.length ? styles.lastMessage : null,
+            ].filter(Boolean);
 
             return (
-              <div className={classNames.join(' ')} style={{ paddingBottom: isBottom ? 16 : 4, paddingLeft: 20, paddingRight: 20 }}>
+              <div
+                className={classNames.join(' ')}
+                style={{ paddingBottom: isBottom ? 16 : 4, paddingLeft: 20, paddingRight: 20 }}
+              >
                 {showTimestamp && <div className={styles.timestampLabel}>{timestampStr}</div>}
                 <MessageItem
                   key={msgId}

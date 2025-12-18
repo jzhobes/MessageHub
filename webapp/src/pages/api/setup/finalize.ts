@@ -33,14 +33,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       newContent = newContent.replace(/^DATA_PATH=.*$/m, `DATA_PATH=${currentPath}`);
     } else {
       // Add newline if needed
-      if (newContent && !newContent.endsWith('\n')) newContent += '\n';
+      if (newContent && !newContent.endsWith('\n')) {
+        newContent += '\n';
+      }
       newContent += `DATA_PATH=${currentPath}\n`;
     }
 
     await fs.promises.writeFile(envPath, newContent);
     return res.status(200).json({ success: true, message: 'Configuration saved to .env' });
-  } catch (e: any) {
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
     console.error('Failed to write .env', e);
-    return res.status(500).json({ error: `Failed to save configuration: ${e.message}` });
+    return res.status(500).json({ error: `Failed to save configuration: ${message}` });
   }
 }

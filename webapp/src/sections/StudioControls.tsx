@@ -3,15 +3,6 @@ import { FaCaretDown } from 'react-icons/fa';
 import { Thread } from '@/lib/shared/types';
 import { PlatformMap } from '@/lib/shared/platforms';
 import styles from '@/pages/studio.module.css';
-
-interface StudioControlsProps {
-  visibleThreads: Thread[];
-  selectedIds: Set<string>;
-  onChange: (ids: Set<string>) => void;
-  filterPlatforms: Set<string>;
-  onFilterChange: (filters: Set<string>) => void;
-}
-
 import { Dropdown, DropdownItem, DropdownDivider } from '@/components/Dropdown';
 
 interface StudioControlsProps {
@@ -22,7 +13,13 @@ interface StudioControlsProps {
   onFilterChange: (filters: Set<string>) => void;
 }
 
-export const StudioControls: React.FC<StudioControlsProps> = ({ visibleThreads, selectedIds, onChange, filterPlatforms, onFilterChange }) => {
+export function StudioControls({
+  visibleThreads,
+  selectedIds,
+  onChange,
+  filterPlatforms,
+  onFilterChange,
+}: StudioControlsProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
 
@@ -90,12 +87,20 @@ export const StudioControls: React.FC<StudioControlsProps> = ({ visibleThreads, 
                     el.indeterminate = count > 0 && count < visibleThreads.length;
                   }
                 }}
-                onChange={(e) => {
-                  e.stopPropagation(); // Don't toggle dropdown when clicking checkbox directly
+                onChange={() => {
                   handleMasterToggle();
                 }}
+                onClick={(e) => e.stopPropagation()}
               />
-              <div style={{ display: 'flex', paddingLeft: 4, borderLeft: '1px solid var(--border-color)', height: 14, alignItems: 'center' }}>
+              <div
+                style={{
+                  display: 'flex',
+                  paddingLeft: 4,
+                  borderLeft: '1px solid var(--border-color)',
+                  height: 14,
+                  alignItems: 'center',
+                }}
+              >
                 <FaCaretDown size={12} color="var(--text-secondary)" />
               </div>
             </div>
@@ -107,7 +112,9 @@ export const StudioControls: React.FC<StudioControlsProps> = ({ visibleThreads, 
               setMenuOpen(false);
             }}
           >
-            {visibleThreads.length > 0 && visibleThreads.every((t) => selectedIds.has(t.id)) ? 'Select None' : 'Select All'}
+            {visibleThreads.length > 0 && visibleThreads.every((t) => selectedIds.has(t.id))
+              ? 'Select None'
+              : 'Select All'}
           </DropdownItem>
           <DropdownDivider />
           {[50, 25, 10].map((n) => (
@@ -143,21 +150,33 @@ export const StudioControls: React.FC<StudioControlsProps> = ({ visibleThreads, 
             }
           >
             <DropdownItem onClick={() => onFilterChange(new Set())}>
-              <input type="checkbox" checked={filterPlatforms.size === 0} readOnly style={{ marginRight: 8, pointerEvents: 'none' }} />
+              <input
+                type="checkbox"
+                checked={filterPlatforms.size === 0}
+                readOnly
+                style={{ marginRight: 8, pointerEvents: 'none' }}
+              />
               All
             </DropdownItem>
             <DropdownDivider />
             {Object.values(PlatformMap).map((label) => (
               <DropdownItem key={label} onClick={() => toggleFilter(label)}>
-                <input type="checkbox" checked={filterPlatforms.has(label)} readOnly style={{ marginRight: 8, pointerEvents: 'none' }} />
+                <input
+                  type="checkbox"
+                  checked={filterPlatforms.has(label)}
+                  readOnly
+                  style={{ marginRight: 8, pointerEvents: 'none' }}
+                />
                 {label}
               </DropdownItem>
             ))}
           </Dropdown>
         </div>
 
-        <span style={{ fontSize: '13px', color: 'var(--text-secondary)', marginLeft: 'auto' }}>{selectedIds.size} selected</span>
+        <span style={{ fontSize: '13px', color: 'var(--text-secondary)', marginLeft: 'auto' }}>
+          {selectedIds.size} selected
+        </span>
       </div>
     </div>
   );
-};
+}

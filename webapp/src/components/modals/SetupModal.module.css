@@ -10,6 +10,16 @@
   align-items: center;
   z-index: 1000;
   backdrop-filter: blur(4px);
+  animation: fadeIn 0.3s ease-out;
+}
+
+.overlayClosing {
+  animation: fadeOut 0.3s ease-in forwards;
+}
+
+.modalClosing {
+  transform: translateY(10px);
+  opacity: 0;
 }
 
 .modal {
@@ -17,19 +27,19 @@
   border: 1px solid var(--border-color);
   border-radius: 12px;
   width: 90%;
-  max-width: 600px;
-  max-height: 90vh;
+  max-width: 900px; /* Increased from 600px */
+  height: 80vh; /* Fixed height for consistent UI */
+  max-height: 95vh;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
   overflow: hidden;
   color: var(--text-primary);
-  transition: all 0.3s ease-in-out;
-  min-height: 400px; /* Prevent layout jumping */
+  min-height: 500px; /* Increased min-height */
 }
 
 .header {
-  padding: 20px;
+  padding: 12px 20px; /* Reduced padding */
   border-bottom: 1px solid var(--border-color);
   display: flex;
   /* justify-content: space-between; */
@@ -57,11 +67,13 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background 0.2s, color 0.2s;
+  transition:
+    background 0.2s,
+    color 0.2s;
 }
 
 .closeButton:hover {
-  background: rgba(0,0,0,0.05);
+  background: rgba(0, 0, 0, 0.05);
   color: var(--text-primary);
 }
 
@@ -69,6 +81,8 @@
   padding: 24px;
   overflow-y: auto;
   flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 
 .footer {
@@ -88,11 +102,11 @@
 }
 
 .stepTitle {
-    font-weight: 600;
-    margin-bottom: 8px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .step {
@@ -154,7 +168,7 @@
   flex: 1;
   padding: 10px 12px;
   border: none;
-  border-radius: 0; 
+  border-radius: 0;
   background: transparent;
   color: var(--text-primary);
   font-family: inherit;
@@ -233,33 +247,53 @@
 }
 
 .fileList {
-    font-size: 0.9em;
-    color: var(--text-secondary);
-    margin-top: 5px;
+  font-size: 0.9em;
+  color: var(--text-secondary);
+  margin-top: 5px;
 }
 
 .progressBar {
-    height: 6px;
-    background: #333;
-    border-radius: 3px;
-    margin-top: 10px;
-    overflow: hidden;
+  height: 6px;
+  background: #333;
+  border-radius: 3px;
+  margin-top: 10px;
+  overflow: hidden;
 }
 
 .progressFill {
-    height: 100%;
-    background: var(--bubble-sent-bg);
-    transition: width 0.3s ease;
+  height: 100%;
+  background: var(--bubble-sent-bg);
+  transition: width 0.3s ease;
 }
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(10px);
+  }
 }
 
 /* ... existing ... */
 
 .stepContent {
   animation: fadeIn 0.3s ease-out;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .welcomeContainer {
@@ -295,8 +329,13 @@
 }
 
 @keyframes bannerFade {
-  0%, 100% { opacity: 0; }
-  50% { opacity: 1; }
+  0%,
+  100% {
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
 }
 
 .welcomeContent {
@@ -310,10 +349,10 @@
 }
 
 .welcomeTitle {
-    margin-bottom: 20px;
+  margin-bottom: 20px;
 }
 
 .welcomeText {
-    color: var(--text-secondary);
-    line-height: 1.6;
+  color: var(--text-secondary);
+  line-height: 1.6;
 }

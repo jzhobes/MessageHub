@@ -3,18 +3,16 @@ import Head from 'next/head';
 import Link from 'next/link';
 import { FaArrowLeft, FaCog, FaRobot } from 'react-icons/fa';
 import { FiMoon, FiSun } from 'react-icons/fi';
-
 import Checkbox from '@/components/Checkbox';
 import TextareaAuto from '@/components/TextareaAuto';
 import TextInput from '@/components/TextInput';
 import ThreadPreviewModal from '@/components/modals/ThreadPreviewModal';
+import SetupModal from '@/components/modals/SetupModal';
 import { useForm } from '@/hooks/useForm';
 import { useTheme } from '@/hooks/useTheme';
 import { Thread } from '@/lib/shared/types';
 import { StudioControls } from '@/sections/StudioControls';
 import { StudioThreadList } from '@/sections/StudioThreadList';
-import SetupModal from '@/components/modals/SetupModal';
-
 import layoutStyles from '@/components/Layout.module.css';
 import styles from './studio.module.css';
 
@@ -149,7 +147,7 @@ export default function Studio() {
 
           const job = await statusRes.json();
 
-          setProgress({ current: job.progress || 0, total: job.total || 0 });
+          setProgress({ current: job.progress ?? 0, total: job.total ?? 0 });
 
           if (job.status === 'completed') {
             clearInterval(poll);
@@ -181,7 +179,7 @@ export default function Studio() {
 
   // Rough Token Estimation
   const selectedThreads = threads.filter((t) => selectedIds.has(t.id));
-  const totalFilesEstimated = selectedThreads.reduce((acc, t) => acc + (t.pageCount || 1), 0);
+  const totalFilesEstimated = selectedThreads.reduce((acc, t) => acc + (t.pageCount ?? 1), 0);
   const estimatedTokens = totalFilesEstimated * 100 * 50; // Very rough
   const maxTokens = 2000000;
   const fillPercent = Math.min((estimatedTokens / maxTokens) * 100, 100);
@@ -192,7 +190,7 @@ export default function Studio() {
       return 0;
     }
     const selected = threads.filter((t) => selectedIds.has(t.id));
-    const totalScore = selected.reduce((acc, t) => acc + (t.qualityScore || 0), 0);
+    const totalScore = selected.reduce((acc, t) => acc + (t.qualityScore ?? 0), 0);
     return Math.round(totalScore / selected.length);
   }, [selectedIds, threads]);
 
@@ -217,7 +215,12 @@ export default function Studio() {
         <title>DataForge AI - MessageHub</title>
       </Head>
 
-      <SetupModal isOpen={showSetup} onClose={() => setShowSetup(false)} onCompleted={() => window.location.reload()} initialStep={2} />
+      <SetupModal
+        isOpen={showSetup}
+        onClose={() => setShowSetup(false)}
+        onCompleted={() => window.location.reload()}
+        initialStep={2}
+      />
       <div className={layoutStyles.topBar}>
         <div className={layoutStyles.leftSection}>
           <Link href="/" className={layoutStyles.iconButton} title="Back to MessageHub">
@@ -244,10 +247,19 @@ export default function Studio() {
         <div className={layoutStyles.searchSection} />
 
         <div className={layoutStyles.themeToggleWrapper}>
-          <button className={`${layoutStyles.iconButton} ${layoutStyles.headerIconBtn}`} onClick={() => setShowSetup(true)} title="Setup" style={{ marginRight: 8 }}>
+          <button
+            className={`${layoutStyles.iconButton} ${layoutStyles.headerIconBtn}`}
+            onClick={() => setShowSetup(true)}
+            title="Setup"
+            style={{ marginRight: 8 }}
+          >
             <FaCog size={20} />
           </button>
-          <button className={`${layoutStyles.iconButton} ${layoutStyles.headerIconBtn}`} onClick={toggleTheme} title={theme === 'light' ? 'Switch to Dark Mode' : 'Switch to Light Mode'}>
+          <button
+            className={`${layoutStyles.iconButton} ${layoutStyles.headerIconBtn}`}
+            onClick={toggleTheme}
+            title={theme === 'light' ? 'Switch to Dark Mode' : 'Switch to Light Mode'}
+          >
             {!mounted || theme === 'light' ? <FiMoon size={20} /> : <FiSun size={20} />}
           </button>
         </div>
@@ -259,7 +271,13 @@ export default function Studio() {
           <div className={styles.leftPane}>
             <div className={styles.paneHeader}>Select Threads</div>
 
-            <StudioControls visibleThreads={visibleThreads} selectedIds={selectedIds} onChange={setSelectedIds} filterPlatforms={filterPlatforms} onFilterChange={setFilterPlatforms} />
+            <StudioControls
+              visibleThreads={visibleThreads}
+              selectedIds={selectedIds}
+              onChange={setSelectedIds}
+              filterPlatforms={filterPlatforms}
+              onFilterChange={setFilterPlatforms}
+            />
 
             <StudioThreadList
               loading={loading}
@@ -284,14 +302,26 @@ export default function Studio() {
                     <h3 className={styles.sectionTitle}>Identity Configuration</h3>
                     <div className={styles.inputGroup}>
                       <label className={styles.label}>Your Names (Active Speaker)</label>
-                      <p className={styles.helperText}>We scan for these names to identify &quot;You&quot; in the chat. Separated by commas.</p>
-                      <TextInput value={config.identityNames} onChange={(e) => setField('identityNames', e.target.value)} />
+                      <p className={styles.helperText}>
+                        We scan for these names to identify &quot;You&quot; in the chat. Separated by commas.
+                      </p>
+                      <TextInput
+                        value={config.identityNames}
+                        onChange={(e) => setField('identityNames', e.target.value)}
+                      />
                     </div>
 
                     <div className={`${styles.inputGroup} ${styles.inputGroupItem}`}>
                       <label className={styles.label}>Persona Tag (Optional)</label>
-                      <p className={styles.helperText}>Example: &quot;Professional, Tech&quot;, &quot;Casual, Sarcastic&quot;. Multiple tags supported (comma separated).</p>
-                      <TextInput placeholder="e.g. Casual, Friendly" value={config.personaTag} onChange={(e) => setField('personaTag', e.target.value)} />
+                      <p className={styles.helperText}>
+                        Example: &quot;Professional, Tech&quot;, &quot;Casual, Sarcastic&quot;. Multiple tags supported
+                        (comma separated).
+                      </p>
+                      <TextInput
+                        placeholder="e.g. Casual, Friendly"
+                        value={config.personaTag}
+                        onChange={(e) => setField('personaTag', e.target.value)}
+                      />
                       <div className={styles.templateContainer}>
                         <span className={styles.templateLabel}>Templates:</span>
                         {PERSONA_TEMPLATES.map((t) => (
@@ -312,7 +342,9 @@ export default function Studio() {
 
                     <div className={`${styles.inputGroup} ${styles.inputGroupItem}`}>
                       <label className={styles.label}>Custom System Instructions (Optional)</label>
-                      <p className={styles.helperText}>Appended to the System Prompt. e.g. &quot;Do not use emojis.&quot;</p>
+                      <p className={styles.helperText}>
+                        Appended to the System Prompt. e.g. &quot;Do not use emojis.&quot;
+                      </p>
                       <TextareaAuto
                         placeholder="Additional instructions..."
                         value={config.customInstructions}
@@ -420,29 +452,37 @@ export default function Studio() {
                       <span className={styles.label}>{Math.round(fillPercent)}% Full</span>
                     </div>
                     <div className={styles.tokenBarContainer}>
-                      <div className={styles.tokenBarFill} style={{ width: `${fillPercent}%`, background: fillPercent > 90 ? '#ef4444' : '#10b981' }} />
+                      <div
+                        className={styles.tokenBarFill}
+                        style={{ width: `${fillPercent}%`, background: fillPercent > 90 ? '#ef4444' : '#10b981' }}
+                      />
                     </div>
-                    <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: 4 }}>Max 2M tokens recommended for initial fine-tuning jobs.</p>
+                    <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: 4 }}>
+                      Max 2M tokens recommended for initial fine-tuning jobs.
+                    </p>
                   </div>
 
-                  <button className={styles.generateBtn} onClick={handleGenerate} disabled={generating || selectedIds.size === 0}>
-                    {generating ? `Processing... ${progress.total > 0 ? Math.round((progress.current / progress.total) * 100) + '%' : ''}` : `Generate Dataset (${selectedIds.size})`}
+                  <button
+                    className={styles.generateBtn}
+                    onClick={handleGenerate}
+                    disabled={generating || selectedIds.size === 0}
+                  >
+                    {generating
+                      ? `Processing... ${progress.total > 0 ? Math.round((progress.current / progress.total) * 100) + '%' : ''}`
+                      : `Generate Dataset (${selectedIds.size})`}
                   </button>
-                  {generating && <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: 8 }}>This may take a minute...</p>}
+                  {generating && (
+                    <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: 8 }}>
+                      This may take a minute...
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
           </div>
         </div>
       </div>
-      <ThreadPreviewModal
-        isOpen={!!previewThread}
-        onClose={() => setPreviewThread(null)}
-        threadId={previewThread?.id || null}
-        threadTitle={previewThread?.title}
-        platform={previewThread?.platform}
-        messageCount={previewThread?.messageCount}
-      />
+      <ThreadPreviewModal isOpen={!!previewThread} onClose={() => setPreviewThread(null)} thread={previewThread} />
     </div>
   );
 }

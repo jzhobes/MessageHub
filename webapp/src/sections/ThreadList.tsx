@@ -1,7 +1,7 @@
 import React from 'react';
 import { FaSpinner } from 'react-icons/fa';
-import styles from './ThreadList.module.css';
 import { Thread } from '@/lib/shared/types';
+import styles from './ThreadList.module.css';
 
 interface ThreadListProps {
   activePlatform: string;
@@ -11,7 +11,13 @@ interface ThreadListProps {
   onThreadSelect: (thread: Thread) => void;
 }
 
-export default function ThreadList({ activePlatform, threads, activeThread, loading, onThreadSelect }: ThreadListProps) {
+export default function ThreadList({
+  activePlatform,
+  threads,
+  activeThread,
+  loading,
+  onThreadSelect,
+}: ThreadListProps) {
   return (
     <div className={styles.threadList}>
       <div className={styles.threadListHeader}>{activePlatform} Messages</div>

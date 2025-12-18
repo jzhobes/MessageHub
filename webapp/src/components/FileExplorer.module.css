@@ -1,0 +1,130 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  /* height set via prop */
+  background: var(--bg-primary);
+  overflow: hidden;
+  height: 100%; /* Default to filling parent if no prop */
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  gap: 10px;
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  font-size: 0.9em;
+}
+
+.addressBar {
+  flex: 1;
+}
+
+
+
+.navButton {
+  background: none;
+  border: none;
+  border-radius: 0;
+  cursor: pointer;
+  padding: 0 12px;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  height: 100%;
+}
+
+.navButton:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.08);
+  color: var(--text-primary);
+}
+
+.navButton + .navButton {
+  border-left: 1px solid var(--border-color);
+}
+
+.navButton:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  padding: 6px 12px;
+  cursor: pointer;
+  gap: 10px;
+  font-size: 1em;
+  color: var(--text-primary);
+  user-select: none;
+}
+
+.item:hover {
+  background: var(--bg-thread-item-hover, rgba(0, 0, 0, 0.03));
+}
+
+.itemSelected {
+  background: rgba(37, 99, 235, 0.1);
+}
+
+.icon {
+  color: #fbbf24;
+  font-size: 1.2em;
+  display: flex;
+  align-items: center;
+}
+
+.fileIcon {
+  color: #9ca3af;
+  font-size: 1.1em;
+  display: flex;
+  align-items: center;
+}
+
+.name {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.checkbox {
+  cursor: pointer;
+}
+
+.empty {
+  padding: 20px;
+  text-align: center;
+  color: var(--text-secondary);
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}
+
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--text-secondary);
+}

@@ -7,6 +7,12 @@ import crypto from 'crypto';
 import { DatasetGenerator } from '@/lib/server/DatasetGenerator';
 import { jobStore } from '@/lib/jobStore';
 
+/**
+ * Next.js API Configuration
+ * - bodyParser: Increased limit to handle large thread selection payloads.
+ * - externalResolver: Enabled to support manual response streaming via archiver.
+ * - runtime: Forced nodejs to allow usage of native fs and archiver modules.
+ */
 export const config = {
   api: {
     bodyParser: {
@@ -148,7 +154,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             await fs.promises.access(job.resultPath);
             await fs.promises.unlink(job.resultPath);
             console.log(`Cleaned up artifact for job ${job.id}`);
-          } catch (e) {
+          } catch {
             // access failed (file not there) or unlink failed
             // Ignore "not found" errors during cleanup
           }

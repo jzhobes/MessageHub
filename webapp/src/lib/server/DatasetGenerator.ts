@@ -1,6 +1,6 @@
 import { get_encoding } from 'tiktoken';
 import { Message } from '@/lib/shared/types';
-import { getDb } from './db';
+import db from './db';
 
 export interface DatasetEntry {
   messages: {
@@ -26,27 +26,33 @@ export interface DatasetCheckResult {
   totalSessions: number;
 }
 
+interface BatchState {
+  sessions: DatasetEntry[];
+  tokens: number;
+  fileIndex: number;
+}
+
 export class DatasetGenerator {
-  private db = getDb();
-  private maxTokensPerFile: number;
-  private includeGroupSpeakerNames: boolean;
-  private mergeSequential: boolean;
-  private removeSystemMessages: boolean;
-  private imputeReactions: boolean;
-  private redactPII: boolean;
-  private personaTag?: string;
-  private customInstructions?: string;
-  private encoder = get_encoding('cl100k_base'); // GPT-4/3.5 standard
+  private _dbInstance = db.get();
+  private _maxTokensPerFile: number;
+  private _includeGroupSpeakerNames: boolean;
+  private _mergeSequential: boolean;
+  private _removeSystemMessages: boolean;
+  private _imputeReactions: boolean;
+  private _redactPII: boolean;
+  private _personaTag?: string;
+  private _customInstructions?: string;
+  private _encoder = get_encoding('cl100k_base'); // GPT-4/3.5 standard
 
   constructor(options: DatasetOptions) {
-    this.includeGroupSpeakerNames = options.includeGroupSpeakerNames;
-    this.mergeSequential = options.mergeSequential || false;
-    this.removeSystemMessages = options.removeSystemMessages || false;
-    this.imputeReactions = options.imputeReactions || false;
-    this.redactPII = options.redactPII || false;
-    this.personaTag = options.personaTag;
-    this.customInstructions = options.customInstructions;
-    this.maxTokensPerFile = options.maxTokensPerFile || 1900000; // Safety buffer below 2M
+    this._includeGroupSpeakerNames = options.includeGroupSpeakerNames;
+    this._mergeSequential = options.mergeSequential ?? false;
+    this._removeSystemMessages = options.removeSystemMessages ?? false;
+    this._imputeReactions = options.imputeReactions ?? false;
+    this._redactPII = options.redactPII ?? false;
+    this._personaTag = options.personaTag;
+    this._customInstructions = options.customInstructions;
+    this._maxTokensPerFile = options.maxTokensPerFile ?? 1900000; // Safety buffer below 2M
   }
 
   public async *generateStream(
@@ -55,18 +61,13 @@ export class DatasetGenerator {
     dateRange?: { start: number; end: number },
     onProgress?: (current: number, total: number) => void,
   ): AsyncGenerator<{ fileName: string; content: string; tokenCount: number }> {
-    let batchedSessions: DatasetEntry[] = [];
-    let batchedTokens = 0;
-    let fileIndex = 1;
+    const batchState: BatchState = {
+      sessions: [],
+      tokens: 0,
+      fileIndex: 1,
+    };
 
     const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
-    const maxTokensPerFile = this.maxTokensPerFile;
-    const includeGroupSpeakerNames = this.includeGroupSpeakerNames;
-    const mergeSequential = this.mergeSequential;
-    const removeSystemMessages = this.removeSystemMessages;
-    const imputeReactions = this.imputeReactions;
-    const redactPII = this.redactPII;
-
     let processedCount = 0;
 
     for (const threadId of threadIds) {
@@ -78,14 +79,17 @@ export class DatasetGenerator {
       // Yield to event loop AFTER EVERY THREAD to keep server responsive
       await new Promise((resolve) => setImmediate(resolve));
 
-      const thread = this.db.prepare('SELECT is_group, platform, title FROM threads WHERE id = ?').get(threadId) as { is_group: number; platform: string; title: string } | undefined;
+      const thread = this._dbInstance
+        .prepare('SELECT is_group, platform, title FROM threads WHERE id = ?')
+        .get(threadId) as { is_group: number; platform: string; title: string } | undefined;
 
       if (!thread) {
         continue;
       }
       const isGroup = !!thread.is_group;
 
-      let query = 'SELECT sender_name, content, timestamp_ms, media_json, reactions_json FROM messages WHERE thread_id = ?'; // Allow NULL/Empty content to check media
+      let query =
+        'SELECT sender_name, content, timestamp_ms, media_json, reactions_json FROM messages WHERE thread_id = ?';
       const params: (string | number)[] = [threadId];
 
       if (dateRange) {
@@ -94,10 +98,11 @@ export class DatasetGenerator {
       }
       query += ' ORDER BY timestamp_ms ASC';
 
-      const messages = this.db.prepare(query).all(...params) as Message[];
+      const messages = this._dbInstance.prepare(query).all(...params) as Message[];
       if (!messages.length) {
         continue;
       }
+
       let currentSession: { role: 'system' | 'user' | 'assistant'; content: string }[] = [];
       const contextType = isGroup ? 'Group chat' : 'Chat';
 
@@ -110,64 +115,14 @@ export class DatasetGenerator {
       const displayPlatform = platformMap[thread.platform] || thread.platform;
 
       let systemContent = `Context: ${contextType} with "${thread.title || 'Unknown'}" on "${displayPlatform}".`;
-      if (this.personaTag) {
-        systemContent += ` [Persona: ${this.personaTag}]`;
+      if (this._personaTag) {
+        systemContent += ` [Persona: ${this._personaTag}]`;
       }
-      if (this.customInstructions) {
-        systemContent += ` ${this.customInstructions}`;
+      if (this._customInstructions) {
+        systemContent += ` ${this._customInstructions}`;
       }
 
       const systemMsg = { role: 'system' as const, content: systemContent };
-
-      // Helper to finalize a session
-      const finalizeSession = function* (this: DatasetGenerator, sessionRaw: typeof currentSession) {
-        if (sessionRaw.length === 0) {
-          return;
-        }
-
-        // Trim trailing messages that are not from assistant (Soft Block Rule)
-        // We iterate backwards and remove user messages until we hit an assistant message.
-        // This preserves the valid "User -> Assistant" turns in the session.
-        let validEndIndex = sessionRaw.length - 1;
-        while (validEndIndex >= 0 && sessionRaw[validEndIndex].role !== 'assistant') {
-          validEndIndex--;
-        }
-
-        if (validEndIndex < 0) {
-          return; // No assistant messages in this session at all
-        }
-
-        // Take the slice up to the last assistant message
-        const finalSession = sessionRaw.slice(0, validEndIndex + 1);
-
-        const sessionData: DatasetEntry = {
-          messages: [systemMsg, ...finalSession],
-        };
-
-        // Precise Token Counting with Tiktoken
-        // We sum the tokens of all message contents.
-        // Approx: JSON overhead is small, but content is main driver.
-        let tokens = 0;
-        for (const m of sessionData.messages) {
-          tokens += 4; // per-message overhead
-          tokens += this.encoder.encode(m.content).length;
-          tokens += this.encoder.encode(m.role).length;
-        }
-        tokens += 3; // Reply overhead
-
-        // Check if adding this breaches limit
-        if (batchedTokens + tokens > maxTokensPerFile) {
-          // Yield current batch
-          const content = batchedSessions.map((s) => JSON.stringify(s)).join('\n');
-          yield { fileName: `virtual_me_part${fileIndex}.jsonl`, content, tokenCount: batchedTokens };
-          fileIndex++;
-          batchedSessions = [];
-          batchedTokens = 0;
-        }
-
-        batchedSessions.push(sessionData);
-        batchedTokens += tokens;
-      }.bind(this); // Bind this for encoder access
 
       for (let i = 0; i < messages.length; i++) {
         // Yield inside massive threads (every 500 msgs)
@@ -179,90 +134,29 @@ export class DatasetGenerator {
         const prevMsg = i > 0 ? messages[i - 1] : null;
 
         if (prevMsg && msg.timestamp_ms - prevMsg.timestamp_ms > TWO_HOURS_MS) {
-          yield* finalizeSession(currentSession);
+          yield* this._finalizeSession(currentSession, systemMsg, batchState);
           currentSession = [];
         }
 
         const isMe = identityNames.includes(msg.sender_name);
+        const cleanedContent = this._cleanContent(msg);
 
-        let content = msg.content || '';
-
-        // --- System Message Filter (NEW) ---
-        if (removeSystemMessages && content) {
-          const systemPatterns = [
-            /^.* named the group .*$/i,
-            /^.* changed the group photo\.$/i,
-            /^.* added .* to the group\.$/i,
-            /^.* left the group\.$/i,
-            /^.* started a video call\.$/i,
-            /^.* started an audio call\.$/i,
-            /^.* changed the theme to .*$/i,
-            /^You missed a call from .*$/i,
-            /^You called .*$/i,
-          ];
-          if (systemPatterns.some((regex) => regex.test(content))) {
-            continue;
-          }
-        }
-
-        // --- Content Cleaning Pipeline ---
-        // 1. Skip Platform Artifacts
-        if (content === 'MMS Sent') {
+        if (!cleanedContent || (this._removeSystemMessages && this._isSystemMessage(cleanedContent))) {
           continue;
         }
-
-        // 2. Rewrite Attachments
-        if (content === 'You sent an attachment.' || content.endsWith(' sent an attachment.')) {
-          content = '[Sent an attachment]';
-        }
-
-        // 3. Handle Empty Content (Check for Media/Reactions)
-        if (!content) {
-          // Check if it really was empty or just media
-          // We need to parse media_json if we want to be precise, but for now:
-          if (msg.media_json && msg.media_json !== '[]') {
-            content = '[Sent a photo/video]';
-          } else if (msg.reactions_json && msg.reactions_json !== '[]') {
-            // If it's a reaction-only update (common in some exports), we might skip or reword
-            // But usually reactions are metadata on a message, not a standalone message.
-            // If content is empty but has reaction, it might be a "reaction event".
-            // Let's safe-skip empty content unless we are sure.
-            continue;
-          } else {
-            continue;
-          }
-        }
-
-        // URL Filter: Skip messages that are JUST a link
-        const urlOnlyRegex = /^(https?:\/\/[^\s]+)\s*$/i;
-        if (urlOnlyRegex.test(content)) {
-          continue;
-        }
-
-        // PII Redaction
-        if (redactPII) {
-          const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g;
-          const phoneRegex = /\b\+?1?\s*\(?-?\d{3}\)?\s*-?\d{3}\s*-?\d{4}\b/g;
-
-          content = content.replace(emailRegex, '[REDACTED_EMAIL]');
-          // Phone regex is tricky, might catch years or amounts. Use conservative matching if needed.
-          // For now, strict formatting:
-          content = content.replace(phoneRegex, '[REDACTED_PHONE]');
-        }
-        // Cleaning End ---
 
         const role = isMe ? 'assistant' : 'user';
+        let content = cleanedContent;
 
-        if (isGroup && !isMe && includeGroupSpeakerNames) {
+        if (isGroup && !isMe && this._includeGroupSpeakerNames) {
           content = `[${msg.sender_name}]: ${content}`;
         }
 
         // Merge Sequential Logic
         let merged = false;
-        if (mergeSequential && currentSession.length > 0) {
+        if (this._mergeSequential && currentSession.length > 0) {
           const last = currentSession[currentSession.length - 1];
           if (last.role === role) {
-            // Append to last message
             last.content += `\n${content}`;
             merged = true;
           }
@@ -272,42 +166,126 @@ export class DatasetGenerator {
           currentSession.push({ role, content });
         }
 
-        // --- Impute Reactions as Replies (NEW) ---
-        if (imputeReactions && msg.reactions_json) {
-          try {
-            const reactions = JSON.parse(msg.reactions_json) as { actor: string; reaction: string }[];
-            if (Array.isArray(reactions)) {
-              // Check if "Me" reacted
-              const myReaction = reactions.find((r) => identityNames.includes(r.actor));
-              if (myReaction) {
-                // If I reacted to a USER message, it counts as a reply.
-                // If I reacted to my own message, it's weird, but we can treat it as emphasis?
-                // Usually we only care about reacting to OTHERS.
-                // But if it IS me who sent the message, I probably shouldn't reply to myself with a reaction.
-
-                if (!isMe) {
-                  // Push a new Assistant message
-                  // This ensures the session ends with Assistant (Active Block Rule satisfied!)
-                  // We do NOT merge this, as it is a distinct action in time (technically).
-                  const reactionContent = `[Reacted "${myReaction.reaction}"]`;
-                  currentSession.push({ role: 'assistant', content: reactionContent });
-                }
-              }
-            }
-          } catch {
-            // Ignore parse errors
+        // Impute Reactions
+        if (this._imputeReactions && msg.reactions_json) {
+          const reactionReply = this._getReactionReply(msg.reactions_json, identityNames);
+          if (reactionReply && !isMe) {
+            currentSession.push({ role: 'assistant', content: reactionReply });
           }
         }
       }
 
-      // Final
-      yield* finalizeSession(currentSession);
+      yield* this._finalizeSession(currentSession, systemMsg, batchState);
     }
 
     // Yield remainder
-    if (batchedSessions.length > 0) {
-      const content = batchedSessions.map((s) => JSON.stringify(s)).join('\n');
-      yield { fileName: `virtual_me_part${fileIndex}.jsonl`, content, tokenCount: batchedTokens };
+    if (batchState.sessions.length > 0) {
+      const content = batchState.sessions.map((s) => JSON.stringify(s)).join('\n');
+      yield { fileName: `virtual_me_part${batchState.fileIndex}.jsonl`, content, tokenCount: batchState.tokens };
     }
+  }
+
+  private _isSystemMessage(content: string): boolean {
+    const patterns = [
+      /^.* named the group .*$/i,
+      /^.* changed the group photo\.$/i,
+      /^.* added .* to the group\.$/i,
+      /^.* left the group\.$/i,
+      /^.* started a video call\.$/i,
+      /^.* started an audio call\.$/i,
+      /^.* changed the theme to .*$/i,
+      /^You missed a call from .*$/i,
+      /^You called .*$/i,
+    ];
+    return patterns.some((regex) => regex.test(content));
+  }
+
+  private _cleanContent(msg: Message): string | null {
+    let content = msg.content || '';
+
+    if (content === 'MMS Sent') {
+      return null;
+    }
+    if (content === 'You sent an attachment.' || content.endsWith(' sent an attachment.')) {
+      content = '[Sent an attachment]';
+    }
+
+    if (!content) {
+      if (msg.media_json && msg.media_json !== '[]') {
+        content = '[Sent a photo/video]';
+      } else {
+        return null;
+      }
+    }
+
+    const urlOnlyRegex = /^(https?:\/\/[^\s]+)\s*$/i;
+    if (urlOnlyRegex.test(content)) {
+      return null;
+    }
+
+    if (this._redactPII) {
+      const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g;
+      const phoneRegex = /\b\+?1?\s*\(?-?\d{3}\)?\s*-?\d{3}\s*-?\d{4}\b/g;
+      content = content.replace(emailRegex, '[REDACTED_EMAIL]').replace(phoneRegex, '[REDACTED_PHONE]');
+    }
+
+    return content;
+  }
+
+  private _getReactionReply(reactionsJson: string, identityNames: string[]): string | null {
+    try {
+      const reactions = JSON.parse(reactionsJson);
+      if (Array.isArray(reactions)) {
+        const myReaction = reactions.find((r) => identityNames.includes(r.actor));
+        if (myReaction) {
+          return `[Reacted "${myReaction.reaction}"]`;
+        }
+      }
+    } catch {
+      // Ignore
+    }
+    return null;
+  }
+
+  private *_finalizeSession(
+    sessionRaw: { role: 'system' | 'user' | 'assistant'; content: string }[],
+    systemMsg: { role: 'system'; content: string },
+    state: BatchState,
+  ) {
+    if (sessionRaw.length === 0) {
+      return;
+    }
+
+    let validEndIndex = sessionRaw.length - 1;
+    while (validEndIndex >= 0 && sessionRaw[validEndIndex].role !== 'assistant') {
+      validEndIndex--;
+    }
+
+    if (validEndIndex < 0) {
+      return;
+    }
+
+    const finalSession = sessionRaw.slice(0, validEndIndex + 1);
+    const sessionData: DatasetEntry = {
+      messages: [systemMsg, ...finalSession],
+    };
+
+    let tokens = 3; // Reply overhead
+    for (const m of sessionData.messages) {
+      tokens += 4; // per-message overhead
+      tokens += this._encoder.encode(m.content).length;
+      tokens += this._encoder.encode(m.role).length;
+    }
+
+    if (state.tokens + tokens > this._maxTokensPerFile) {
+      const content = state.sessions.map((s) => JSON.stringify(s)).join('\n');
+      yield { fileName: `virtual_me_part${state.fileIndex}.jsonl`, content, tokenCount: state.tokens };
+      state.fileIndex++;
+      state.sessions = [];
+      state.tokens = 0;
+    }
+
+    state.sessions.push(sessionData);
+    state.tokens += tokens;
   }
 }

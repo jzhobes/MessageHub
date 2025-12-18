@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import formidable from 'formidable';
 import fs from 'fs';
-import { getDataDir } from '@/lib/shared/config';
+import appConfig from '@/lib/shared/appConfig';
 
 export const config = {
   api: {
@@ -15,15 +15,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).end(`Method ${req.method} Not Allowed`);
   }
 
-  const dataDir = getDataDir();
+  const dataDir = appConfig.DATA_PATH;
 
   // Ensure data dir exists
   try {
     await fs.promises.mkdir(dataDir, { recursive: true });
-  } catch (e: any) {
+  } catch (e) {
     // If it fails with EEXIST, that's fine (race condition safety).
     // If other error, we fail.
-    if (e.code !== 'EEXIST') {
+    if (e && typeof e === 'object' && 'code' in e && e.code !== 'EEXIST') {
       return res.status(500).json({ error: 'Failed to create data directory' });
     }
   }
@@ -33,11 +33,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     maxFileSize: 100 * 1024 * 1024 * 1024, // 100GB
     maxTotalFileSize: 100 * 1024 * 1024 * 1024, // 100GB
     keepExtensions: true,
-    filename: (_name, _ext, part, _form) => {
+    filename: (_name, _ext, part) => {
       // Use original filename if available, else generic
       return part.originalFilename || `upload_${Date.now()}.zip`;
     },
-    filter: (part) => {
+    filter: () => {
       // Basic filter for zip? Or let user upload anything?
       // User said "pick zip files".
       // Sometimes exports are .json or folders (folders can't be uploaded easily).
@@ -47,10 +47,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   });
 
   try {
-    const [fields, files] = await form.parse(req);
+    const [, files] = await form.parse(req);
     return res.status(200).json({ success: true, count: Object.keys(files).length });
-  } catch (e: any) {
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
     console.error('Upload error', e);
-    return res.status(500).json({ error: e.message || 'Upload failed' });
+    return res.status(500).json({ error: message || 'Upload failed' });
   }
 }
