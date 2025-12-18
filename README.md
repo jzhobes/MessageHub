@@ -30,8 +30,8 @@ MessageHub/
 │   ├── src/
 │   │   ├── components/    # Reusable UI atoms
 │   │   ├── sections/      # Major page layout blocks
-│   │   ├── pages/         # Next.js pages and API routes
-│   │   ├── styles/        # CSS Modules
+│   │   ├── pages/         # Next.js pages, API routes, and page-level CSS modules
+│   │   ├── styles/        # Global/Shared CSS
 │   │   ├── utils/         # Helper functions (DB, Dates, etc.)
 │   │   └── types.ts       # Shared TypeScript interfaces
 └── README.md              # This file

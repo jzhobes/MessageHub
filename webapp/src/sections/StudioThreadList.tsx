@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { FaSpinner } from 'react-icons/fa';
 import { Thread } from '@/lib/shared/types';
-import styles from '@/styles/Studio.module.css';
+import styles from '@/pages/studio.module.css';
 
 interface StudioThreadListProps {
   loading: boolean;

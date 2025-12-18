@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useCallback } from 'react';
-import styles from '@/styles/Studio.module.css';
+import styles from '@/pages/studio.module.css';
 
 interface TextareaAutoProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
   minRows?: number;

@@ -3,12 +3,17 @@ import fs from 'fs';
 
 let cachedPath: string | undefined;
 
+export function setRuntimeDataPath(newPath: string) {
+  process.env.DATA_PATH = newPath;
+  cachedPath = undefined;
+}
+
 export function getDataDir(): string {
   if (cachedPath) {
     return cachedPath;
   }
 
-  // Try environment variable
+  // 2. Try environment variable
   if (process.env.DATA_PATH) {
     let targetPath = process.env.DATA_PATH;
 
@@ -18,7 +23,11 @@ export function getDataDir(): string {
       targetPath = targetPath.replace(/^[a-zA-Z]:\\/, `/mnt/${driveLetter}/`).replace(/\\/g, '/');
     }
 
-    const resolved = path.resolve(process.cwd(), targetPath);
+    // Determine project root to resolve relative env paths correctly
+    const currentDir = process.cwd();
+    const projectRoot = path.basename(currentDir) === 'webapp' ? path.resolve(currentDir, '..') : currentDir;
+
+    const resolved = path.isAbsolute(targetPath) ? targetPath : path.resolve(projectRoot, targetPath);
 
     if (!fs.existsSync(resolved)) {
       console.error(`⚠️ Configured DATA_PATH does not exist: ${resolved}`);

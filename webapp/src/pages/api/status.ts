@@ -1,10 +1,16 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { getDb } from '@/lib/server/db';
+import { getDb, dbExists } from '@/lib/server/db';
 
 import { PlatformMap } from '@/lib/shared/platforms';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
+    if (!dbExists()) {
+      const empty: Record<string, boolean> = {};
+      Object.values(PlatformMap).forEach((label) => (empty[label] = false));
+      return res.status(200).json({ initialized: false, platforms: empty });
+    }
+
     const db = getDb();
 
     const hasThreads = (platform: string) => {
@@ -17,7 +23,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       status[label] = hasThreads(dbKey);
     });
 
-    res.status(200).json(status);
+    res.status(200).json({
+      initialized: true,
+      platforms: status,
+    });
   } catch {
     res.status(500).json({ status: 'error', message: 'Database query failed' });
   }

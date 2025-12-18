@@ -1,5 +1,5 @@
 .threadList {
-  composes: list from '../styles/ThreadListCommon.module.css';
+  composes: list from './ThreadListCommon.module.css';
   width: 100%;
   border-right: 1px solid var(--border-color);
   display: flex;
@@ -18,16 +18,16 @@
 }
 
 .threadListHeader {
-  composes: header from '../styles/ThreadListCommon.module.css';
+  composes: header from './ThreadListCommon.module.css';
   z-index: 10;
 }
 
 .threadItem {
-  composes: item from '../styles/ThreadListCommon.module.css';
+  composes: item from './ThreadListCommon.module.css';
 }
 
 .threadItemActive {
-  composes: itemActive from '../styles/ThreadListCommon.module.css';
+  composes: itemActive from './ThreadListCommon.module.css';
 }
 
 .threadName {
@@ -69,5 +69,11 @@
 
 .noThreads {
   padding: 20px;
+  font-size: 1.2rem;
   color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  height: 100%;
 }

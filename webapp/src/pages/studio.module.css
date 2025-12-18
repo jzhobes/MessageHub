@@ -27,7 +27,7 @@
 }
 
 .paneHeader {
-  composes: header from './ThreadListCommon.module.css';
+  composes: header from '../sections/ThreadListCommon.module.css';
 }
 
 .paneControls {
@@ -40,13 +40,13 @@
 }
 
 .threadList {
-  composes: list from './ThreadListCommon.module.css';
+  composes: list from '../sections/ThreadListCommon.module.css';
   flex: 1;
   overflow-y: auto;
 }
 
 .threadItem {
-  composes: item from './ThreadListCommon.module.css';
+  composes: item from '../sections/ThreadListCommon.module.css';
   display: flex;
   align-items: center;
   user-select: none;
@@ -54,7 +54,7 @@
 
 /* Map the 'selected' class directly to the common itemSelected style */
 .selected {
-  composes: itemSelected from './ThreadListCommon.module.css';
+  composes: itemSelected from '../sections/ThreadListCommon.module.css';
 }
 
 .checkbox {

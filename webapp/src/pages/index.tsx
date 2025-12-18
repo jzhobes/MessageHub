@@ -1,17 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { FaArrowLeft, FaBars, FaSearch } from 'react-icons/fa';
+import { FaArrowLeft, FaBars, FaCog, FaSearch } from 'react-icons/fa';
 import { FiMoon, FiSun } from 'react-icons/fi';
 
-import GlobalSearch from '@/components/Search/GlobalSearch';
+import SearchModal from '@/components/modals/SearchModal';
+import SetupModal from '@/components/modals/SetupModal';
 import { useTheme } from '@/hooks/useTheme';
 import ChatWindow from '@/sections/ChatWindow';
 import Sidebar from '@/sections/Sidebar';
 import ThreadList from '@/sections/ThreadList';
 import { Message, Thread } from '@/lib/shared/types';
 
-import styles from '@/styles/Layout.module.css';
+import styles from '@/components/Layout.module.css';
 
 // Convert raw DB platform identifiers to UI display names
 function mapPlatform(raw: string): string {
@@ -43,6 +44,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [targetMessageId, setTargetMessageId] = useState<string | null>(null);
+  const [showSetup, setShowSetup] = useState(false);
 
   // Layout State
   const [showSidebar, setShowSidebar] = useState(true);
@@ -263,19 +265,31 @@ export default function Home() {
   }, [router.isReady]);
 
   // 2. Initialize Backend Status
+  const [isInitialized, setIsInitialized] = useState(false);
+
   useEffect(() => {
-    fetch('/api/status')
-      .then((res) => res.json())
-      .then((data) => {
+    (async () => {
+      try {
+        const res = await fetch('/api/status');
+        const response = await res.json();
+
+        setIsInitialized(response.initialized);
+
+        // If not initialized (no DB file), show setup
+        if (!response.initialized) {
+          setShowSetup(true);
+        }
+
+        const data = response.platforms;
         setAvailability(data);
         const safePlatform = resolvePlatform(activePlatform, data);
         if (safePlatform !== activePlatform) {
           setActivePlatform(safePlatform);
         }
-      })
-      .catch((err) => {
-        console.error('Failed to fetch status', err);
-      });
+      } catch (e) {
+        console.error('Failed to fetch status', e);
+      }
+    })();
   }, [activePlatform, resolvePlatform]);
 
   // 3. Responsive Check
@@ -413,7 +427,8 @@ export default function Home() {
 
   return (
     <div className={styles.container} data-theme={theme}>
-      <GlobalSearch isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} onNavigate={handleSearchNavigate} />
+      <SetupModal isOpen={showSetup} onClose={() => setShowSetup(false)} onCompleted={() => window.location.reload()} initialStep={isInitialized ? 2 : 0} />
+      <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} onNavigate={handleSearchNavigate} />
 
       {/* Global Header */}
       <div className={styles.topBar}>
@@ -458,6 +473,9 @@ export default function Home() {
         </div>
 
         <div className={styles.themeToggleWrapper}>
+          <button className={`${styles.iconButton} ${styles.headerIconBtn}`} onClick={() => setShowSetup(true)} title="Setup" style={{ marginRight: 8 }}>
+            <FaCog size={20} />
+          </button>
           <button className={`${styles.iconButton} ${styles.headerIconBtn}`} onClick={toggleTheme} title={theme === 'light' ? 'Switch to Dark Mode' : 'Switch to Light Mode'}>
             {!mounted || theme === 'light' ? <FiMoon size={20} /> : <FiSun size={20} />}
           </button>

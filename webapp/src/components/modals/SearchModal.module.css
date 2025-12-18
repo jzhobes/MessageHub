@@ -4,7 +4,8 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(0, 0, 0, 0.75);
+  background-color: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -54,35 +55,14 @@
   font-weight: 500;
 }
 
-.searchInputWrapper {
+.searchTextInput {
   flex: 1;
-  background: var(--input-bg);
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  padding: 10px 14px;
-  display: flex;
-  align-items: center;
-  transition: border-color 0.2s;
 }
 
-.searchInputWrapper:focus-within {
-  border-color: #007bff;
-}
-
-.searchInput {
-  flex: 1;
-  background: transparent;
-  border: none;
-  color: var(--text-primary);
-  font-size: 16px;
-  outline: none;
-  padding: 0;
-  min-width: 0;
-}
+/* Old wrapper and input styles removed */
 
 .searchIcon {
   color: #888;
-  margin-right: 10px;
   font-size: 0.95rem;
   flex-shrink: 0;
 }

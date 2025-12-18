@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
-import styles from '@/styles/Studio.module.css'; // Re-using existing studio styles for now
+import styles from '@/pages/studio.module.css'; // Re-using existing studio styles for now
 
 interface DropdownProps {
   trigger: React.ReactNode;

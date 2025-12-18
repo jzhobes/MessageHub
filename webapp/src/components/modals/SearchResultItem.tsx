@@ -1,7 +1,7 @@
 import React from 'react';
 import { FaFacebook, FaInstagram, FaPhone } from 'react-icons/fa';
 import { SiGooglechat } from 'react-icons/si';
-import styles from './Search.module.css';
+import styles from './SearchModal.module.css';
 
 interface SearchResultItemProps {
   result: {

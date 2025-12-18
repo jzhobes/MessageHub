@@ -1,20 +1,22 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
-import { FaArrowLeft, FaRobot } from 'react-icons/fa';
+import { FaArrowLeft, FaCog, FaRobot } from 'react-icons/fa';
 import { FiMoon, FiSun } from 'react-icons/fi';
 
 import Checkbox from '@/components/Checkbox';
 import TextareaAuto from '@/components/TextareaAuto';
-import ThreadPreviewModal from '@/components/ThreadPreviewModal';
+import TextInput from '@/components/TextInput';
+import ThreadPreviewModal from '@/components/modals/ThreadPreviewModal';
 import { useForm } from '@/hooks/useForm';
 import { useTheme } from '@/hooks/useTheme';
 import { Thread } from '@/lib/shared/types';
 import { StudioControls } from '@/sections/StudioControls';
 import { StudioThreadList } from '@/sections/StudioThreadList';
+import SetupModal from '@/components/modals/SetupModal';
 
-import layoutStyles from '@/styles/Layout.module.css';
-import styles from '@/styles/Studio.module.css';
+import layoutStyles from '@/components/Layout.module.css';
+import styles from './studio.module.css';
 
 const initialState = {
   identityNames: '',
@@ -51,6 +53,7 @@ export default function Studio() {
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   // Preview Modal
   const [previewThread, setPreviewThread] = useState<Thread | null>(null);
+  const [showSetup, setShowSetup] = useState(false);
 
   const { theme, toggleTheme, mounted } = useTheme();
 
@@ -214,6 +217,7 @@ export default function Studio() {
         <title>DataForge AI - MessageHub</title>
       </Head>
 
+      <SetupModal isOpen={showSetup} onClose={() => setShowSetup(false)} onCompleted={() => window.location.reload()} initialStep={2} />
       <div className={layoutStyles.topBar}>
         <div className={layoutStyles.leftSection}>
           <Link href="/" className={layoutStyles.iconButton} title="Back to MessageHub">
@@ -240,6 +244,9 @@ export default function Studio() {
         <div className={layoutStyles.searchSection} />
 
         <div className={layoutStyles.themeToggleWrapper}>
+          <button className={`${layoutStyles.iconButton} ${layoutStyles.headerIconBtn}`} onClick={() => setShowSetup(true)} title="Setup" style={{ marginRight: 8 }}>
+            <FaCog size={20} />
+          </button>
           <button className={`${layoutStyles.iconButton} ${layoutStyles.headerIconBtn}`} onClick={toggleTheme} title={theme === 'light' ? 'Switch to Dark Mode' : 'Switch to Light Mode'}>
             {!mounted || theme === 'light' ? <FiMoon size={20} /> : <FiSun size={20} />}
           </button>
@@ -278,13 +285,13 @@ export default function Studio() {
                     <div className={styles.inputGroup}>
                       <label className={styles.label}>Your Names (Active Speaker)</label>
                       <p className={styles.helperText}>We scan for these names to identify &quot;You&quot; in the chat. Separated by commas.</p>
-                      <input type="text" className={styles.input} value={config.identityNames} onChange={(e) => setField('identityNames', e.target.value)} />
+                      <TextInput value={config.identityNames} onChange={(e) => setField('identityNames', e.target.value)} />
                     </div>
 
                     <div className={`${styles.inputGroup} ${styles.inputGroupItem}`}>
                       <label className={styles.label}>Persona Tag (Optional)</label>
                       <p className={styles.helperText}>Example: &quot;Professional, Tech&quot;, &quot;Casual, Sarcastic&quot;. Multiple tags supported (comma separated).</p>
-                      <input type="text" className={styles.input} placeholder="e.g. Casual, Friendly" value={config.personaTag} onChange={(e) => setField('personaTag', e.target.value)} />
+                      <TextInput placeholder="e.g. Casual, Friendly" value={config.personaTag} onChange={(e) => setField('personaTag', e.target.value)} />
                       <div className={styles.templateContainer}>
                         <span className={styles.templateLabel}>Templates:</span>
                         {PERSONA_TEMPLATES.map((t) => (

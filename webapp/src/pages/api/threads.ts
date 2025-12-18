@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { getDb } from '@/lib/server/db';
+import { getDb, dbExists } from '@/lib/server/db';
 
 /**
  * API Handler to list message threads for a specific platform.
@@ -20,6 +20,10 @@ import { getMyNames } from '@/lib/server/identity';
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { platform } = req.query;
   const platformStr = Array.isArray(platform) ? platform[0] : platform;
+
+  if (!dbExists()) {
+    return res.status(200).json([]);
+  }
 
   const db = getDb();
 

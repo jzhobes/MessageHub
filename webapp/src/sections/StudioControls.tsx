@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { FaCaretDown } from 'react-icons/fa';
 import { Thread } from '@/lib/shared/types';
 import { PlatformMap } from '@/lib/shared/platforms';
-import styles from '@/styles/Studio.module.css';
+import styles from '@/pages/studio.module.css';
 
 interface StudioControlsProps {
   visibleThreads: Thread[];

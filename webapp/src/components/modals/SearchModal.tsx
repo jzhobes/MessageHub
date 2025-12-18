@@ -3,10 +3,11 @@ import { FaSearch, FaSpinner, FaTimes } from 'react-icons/fa';
 import { Virtuoso } from 'react-virtuoso';
 import { useForm } from '@/hooks/useForm';
 import { Thread } from '@/lib/shared/types';
-import styles from './Search.module.css';
+import TextInput from '@/components/TextInput';
+import styles from './SearchModal.module.css';
 import SearchResultItem from './SearchResultItem';
 
-interface GlobalSearchProps {
+interface SearchModalProps {
   isOpen: boolean;
   onClose: () => void;
   onNavigate: (messageId: number) => void;
@@ -28,7 +29,7 @@ const initialConfig = {
   filterThread: 'all',
 };
 
-export default function GlobalSearch({ isOpen, onClose, onNavigate }: GlobalSearchProps) {
+export default function SearchModal({ isOpen, onClose, onNavigate }: SearchModalProps) {
   // State hooks
   const { values: config, setField, resetForm } = useForm(initialConfig);
   const [availableThreads, setAvailableThreads] = useState<Thread[]>([]);
@@ -203,10 +204,14 @@ export default function GlobalSearch({ isOpen, onClose, onNavigate }: GlobalSear
       <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
         <div className={styles.searchHeader}>
           <div className={styles.searchTopRow}>
-            <div className={styles.searchInputWrapper}>
-              <FaSearch className={styles.searchIcon} />
-              <input className={styles.searchInput} autoFocus placeholder="Search messages..." value={config.query} onChange={(e) => setField('query', e.target.value)} />
-            </div>
+            <TextInput
+              autoFocus
+              placeholder="Search messages..."
+              value={config.query}
+              onChange={(e) => setField('query', e.target.value)}
+              adornment={<FaSearch className={styles.searchIcon} />}
+              className={styles.searchTextInput}
+            />
             <button className={styles.closeButton} onClick={onClose}>
               <FaTimes />
             </button>

@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import JSZip from 'jszip';
+import archiver from 'archiver';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
@@ -39,6 +39,25 @@ async function processJob(jobId: string, body: GenerateDatasetBody) {
 
     const { threadIds, identityNames, includeGroupSpeakerNames, mergeSequential, removeSystemMessages, imputeReactions, redactPII, personaTag, customInstructions, dateRange } = body;
 
+    // Prepare Output Stream
+    const tmpDir = os.tmpdir();
+    const fileName = `dataset_${jobId}.zip`;
+    const filePath = path.join(tmpDir, fileName);
+    const outputStream = fs.createWriteStream(filePath);
+
+    const archive = archiver('zip', {
+      zlib: { level: 9 }, // Maximum compression
+    });
+
+    // Promise to track when I/O is actually done
+    const streamFinished = new Promise<void>((resolve, reject) => {
+      outputStream.on('close', resolve);
+      archive.on('error', reject);
+      outputStream.on('error', reject);
+    });
+
+    archive.pipe(outputStream);
+
     const generator = new DatasetGenerator({
       includeGroupSpeakerNames: !!includeGroupSpeakerNames,
       mergeSequential: !!mergeSequential,
@@ -49,12 +68,9 @@ async function processJob(jobId: string, body: GenerateDatasetBody) {
       customInstructions: customInstructions || undefined,
     });
 
-    const zip = new JSZip();
-
     // Pass progress callback
     const generatorStream = generator.generateStream(threadIds, identityNames, dateRange, (current, total) => {
       // Update progress in store
-      // We debounce slightly to avoid map spam if needed, but for local Map it's fast enough.
       jobStore.update(jobId, {
         progress: current,
         total: total,
@@ -63,23 +79,18 @@ async function processJob(jobId: string, body: GenerateDatasetBody) {
 
     let partCount = 0;
     for await (const file of generatorStream) {
-      zip.file(file.fileName, file.content);
+      archive.append(file.content, { name: file.fileName });
       partCount++;
     }
 
     if (partCount === 0) {
+      await archive.abort();
       throw new Error('No valid training data found in selection. Ensure you selected threads where you are an active participant.');
     }
 
-    // Generate ZIP
-    const zipContent = await zip.generateAsync({ type: 'nodebuffer' });
-
-    // Write to temp disk
-    const tmpDir = os.tmpdir();
-    const fileName = `dataset_${jobId}.zip`;
-    const filePath = path.join(tmpDir, fileName);
-
-    fs.writeFileSync(filePath, zipContent);
+    // Finalize the zip (writes central directory)
+    await archive.finalize();
+    await streamFinished;
 
     jobStore.update(jobId, { status: 'completed', resultPath: filePath });
   } catch (error: unknown) {
@@ -101,11 +112,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(404).json({ error: 'Job not found or not completed' });
     }
 
-    if (!fs.existsSync(job.resultPath)) {
+    try {
+      await fs.promises.access(job.resultPath);
+    } catch {
       return res.status(500).json({ error: 'Result file missing from server disk' });
     }
 
-    const stat = fs.statSync(job.resultPath);
+    const stat = await fs.promises.stat(job.resultPath);
 
     res.setHeader('Content-Type', 'application/zip');
     res.setHeader('Content-Disposition', 'attachment; filename=virtual_me_dataset.zip');
@@ -129,13 +142,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
 
       // Run cleanup of old jobs (older than 1 hour)
-      jobStore.cleanup(3600000, (job) => {
-        if (job.resultPath && fs.existsSync(job.resultPath)) {
+      jobStore.cleanup(3600000, async (job) => {
+        if (job.resultPath) {
           try {
-            fs.unlinkSync(job.resultPath);
+            await fs.promises.access(job.resultPath);
+            await fs.promises.unlink(job.resultPath);
             console.log(`Cleaned up artifact for job ${job.id}`);
           } catch (e) {
-            console.error(`Failed to delete artifact for job ${job.id}`, e);
+            // access failed (file not there) or unlink failed
+            // Ignore "not found" errors during cleanup
           }
         }
       });
