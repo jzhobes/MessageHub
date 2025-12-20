@@ -15,7 +15,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ error: 'No files specified' });
   }
 
-  const targetDir = appConfig.DATA_PATH;
+  const targetDir = appConfig.WORKSPACE_PATH;
   const results: { file: string; status: string; error?: string }[] = [];
 
   try {

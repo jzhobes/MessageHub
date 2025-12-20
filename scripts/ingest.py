@@ -13,7 +13,7 @@ from parsers.facebook import ingest_facebook_entry, ingest_instagram_entry
 from parsers.google_chat import ingest_google_chat_thread
 from parsers.google_voice import scan_google_voice
 from utils import (
-    DATA_DIR,
+    WORKSPACE_PATH,
     PROJECT_ROOT,
     clean_google_voice_files,
     clean_json_messages,
@@ -356,8 +356,10 @@ def extract_zips_found(search_dirs, target_root, platform_filter="all"):
 
 def start_ingestion():
     parser = argparse.ArgumentParser(description="Ingest MessageHub data into SQLite.")
-    parser.add_argument("--source", type=str, help="Directory or Zip file to ingest (defaults to configured DATA_DIR)")
-    parser.add_argument("--db", type=str, help="Database file path (defaults to DATA_DIR/messagehub.db)")
+    parser.add_argument(
+        "--source", type=str, help="Directory or Zip file to ingest (defaults to configured WORKSPACE_PATH)"
+    )
+    parser.add_argument("--db", type=str, help="Database file path (defaults to WORKSPACE_PATH/messagehub.db)")
     parser.add_argument(
         "--platform",
         choices=["all", "facebook", "instagram", "google_chat", "google_voice"],
@@ -367,8 +369,8 @@ def start_ingestion():
     args = parser.parse_args()
 
     # Defaults
-    source_arg = args.source if args.source else str(DATA_DIR)
-    db_arg = args.db if args.db else str(DATA_DIR / DB_NAME)
+    source_arg = args.source if args.source else str(WORKSPACE_PATH)
+    db_arg = args.db if args.db else str(WORKSPACE_PATH / DB_NAME)
 
     db_path = Path(db_arg).resolve()
     init_db(db_path)
@@ -379,7 +381,7 @@ def start_ingestion():
     detected_platforms = set()
 
     # Scan project root and data dir for zips
-    scan_locations = [PROJECT_ROOT, DATA_DIR]
+    scan_locations = [PROJECT_ROOT, WORKSPACE_PATH]
 
     # If source path is a specific directory not in default list, add it
     if source_path.is_dir() and source_path not in scan_locations:
@@ -407,7 +409,7 @@ def start_ingestion():
         required_bytes = total_archive_size * 2.5
 
         try:
-            _, _, free_bytes = shutil.disk_usage(DATA_DIR)
+            _, _, free_bytes = shutil.disk_usage(WORKSPACE_PATH)
             if free_bytes < required_bytes:
                 req_gb = required_bytes / (1024**3)
                 free_gb = free_bytes / (1024**3)
@@ -419,18 +421,18 @@ def start_ingestion():
             print(f"  Warning: Could not verify disk space: {e}")
 
     processed_count, detected_platforms, archive_moves = extract_zips_found(
-        scan_locations, DATA_DIR, platform_filter=args.platform
+        scan_locations, WORKSPACE_PATH, platform_filter=args.platform
     )
 
     try:
         # Ingestion
         if source_path.is_file() and source_path.suffix == ".zip":
             print("Zip extracted. Scanning full data directory to locate merged content...")
-            scan_directory(DATA_DIR, db_path, platform_filter=args.platform)
+            scan_directory(WORKSPACE_PATH, db_path, platform_filter=args.platform)
 
         elif source_path.is_dir():
             # Scan the entire data dir (recursive) which now includes extracted zips
-            scan_directory(DATA_DIR, db_path, platform_filter=args.platform)
+            scan_directory(WORKSPACE_PATH, db_path, platform_filter=args.platform)
         else:
             print(f"Invalid source: {source_path}")
 
@@ -448,11 +450,11 @@ def start_ingestion():
         # JSON Cleanup (Facebook/Insta)
         if cleanup_targets:
             print(f"Sweeping JSON messages for: {', '.join(cleanup_targets)}")
-            clean_json_messages(DATA_DIR, platforms=cleanup_targets)
+            clean_json_messages(WORKSPACE_PATH, platforms=cleanup_targets)
 
         # Google Voice Cleanup
         if "google_voice" in detected_platforms:
-            clean_google_voice_files(DATA_DIR)
+            clean_google_voice_files(WORKSPACE_PATH)
 
     except Exception as e:
         print(f"\n[Error]: Ingestion failed unexpectedly: {e}")

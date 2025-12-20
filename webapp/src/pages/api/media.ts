@@ -32,7 +32,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).send('Missing path');
   }
 
-  const baseDir = appConfig.DATA_PATH;
+  const baseDir = appConfig.WORKSPACE_PATH;
   let relativePath = pathStr;
 
   // Platform-specific path adjustments

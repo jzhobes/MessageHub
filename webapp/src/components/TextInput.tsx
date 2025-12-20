@@ -2,15 +2,17 @@ import React, { ReactNode } from 'react';
 import styles from './TextInput.module.css';
 
 interface TextInputProps extends React.InputHTMLAttributes<HTMLInputElement> {
-  adornment?: ReactNode;
+  adornment?: ReactNode; // Standard prefix adornment
+  suffix?: ReactNode; // Suffix adornment for actions/icons at the end
 }
 
 export const TextInput = React.forwardRef<HTMLInputElement, TextInputProps>(
-  ({ adornment, className, ...props }, ref) => {
+  ({ adornment, suffix, className, ...props }, ref) => {
     return (
       <div className={`${styles.inputWrapper} ${className || ''}`}>
-        {adornment && <div className={styles.inputAdornment}>{adornment}</div>}
+        {adornment && <div className={`${styles.adornment} ${styles.start}`}>{adornment}</div>}
         <input ref={ref} className={styles.input} {...props} />
+        {suffix && <div className={`${styles.adornment} ${styles.end}`}>{suffix}</div>}
       </div>
     );
   },

@@ -29,18 +29,18 @@ if ENV_FILE.exists():
     print(f"Loaded config from {ENV_FILE}")
 
 
-def get_data_dir():
+def get_workspace_path():
     """Resolve data directory from root .env or fallback."""
-    data_path = os.getenv("DATA_PATH")
+    workspace_path = os.environ.get("WORKSPACE_PATH")
 
-    if data_path:
+    if workspace_path:
         from pathlib import PureWindowsPath
 
         # Handle Windows paths (e.g. D:\Projects) when running in POSIX (WSL/Mac)
-        if os.name == "posix" and (":" in data_path or "\\" in data_path):
+        if os.name == "posix" and (":" in workspace_path or "\\" in workspace_path):
             try:
                 # Treat the string specifically as a Windows path
-                win_path = PureWindowsPath(data_path)
+                win_path = PureWindowsPath(workspace_path)
 
                 # If absolute Windows path with drive (e.g. D:/Project)
                 if win_path.drive:
@@ -56,13 +56,13 @@ def get_data_dir():
                 # Fallback if parsing fails
                 pass
 
-        return Path(data_path)
+        return Path(workspace_path)
 
     return PROJECT_ROOT / "data"
 
 
-DATA_DIR = get_data_dir()
-print(f"Using Data Directory: {DATA_DIR}")
+WORKSPACE_PATH = get_workspace_path()
+print(f"Using Workspace: {WORKSPACE_PATH}")
 
 
 # -----------------------------------------------------------------------------
@@ -163,7 +163,7 @@ def clean_json_messages(directory, platforms=None):
     print(f"Cleanup Complete. Deleted {deleted_count} files ({mb:.2f} MB).")
 
 
-def clean_google_voice_files(data_dir=DATA_DIR):
+def clean_google_voice_files(data_dir=WORKSPACE_PATH):
     """
     Deletes processed Google Voice HTML files to save space.
     Target: Voice/Calls/*.html

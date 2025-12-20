@@ -239,7 +239,7 @@
 
 .generateBtn:disabled {
   background: #6b7280;
-  cursor: not-allowed;
+  cursor: default;
 }
 
 .generateBtn:active {

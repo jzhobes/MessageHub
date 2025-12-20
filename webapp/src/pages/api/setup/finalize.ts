@@ -8,9 +8,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).end(`Method ${req.method} Not Allowed`);
   }
 
-  const currentPath = process.env.DATA_PATH;
+  const currentPath = process.env.WORKSPACE_PATH;
   if (!currentPath) {
-    return res.status(400).json({ error: 'No runtime DATA_PATH set. Complete setup first.' });
+    return res.status(400).json({ error: 'No runtime WORKSPACE_PATH set. Complete setup first.' });
   }
 
   // Determine Project Root - same logic as elsewhere
@@ -28,15 +28,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     let newContent = content;
-    // Replace existing or append
-    if (/^DATA_PATH=/m.test(newContent)) {
-      newContent = newContent.replace(/^DATA_PATH=.*$/m, `DATA_PATH=${currentPath}`);
+    // Update WORKSPACE_PATH
+    if (/^WORKSPACE_PATH=/m.test(newContent)) {
+      newContent = newContent.replace(/^WORKSPACE_PATH=.*$/m, `WORKSPACE_PATH=${currentPath}`);
     } else {
-      // Add newline if needed
       if (newContent && !newContent.endsWith('\n')) {
         newContent += '\n';
       }
-      newContent += `DATA_PATH=${currentPath}\n`;
+      newContent += `WORKSPACE_PATH=${currentPath}\n`;
     }
 
     await fs.promises.writeFile(envPath, newContent);

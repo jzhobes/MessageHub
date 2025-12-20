@@ -6,14 +6,14 @@ import path from 'path';
  * It handles resolving local data paths across different environments (including WSL).
  */
 class AppConfig {
-  private _dataPath?: string;
+  private _workspacePath?: string;
 
   /**
    * Resolves a raw string path into a validated absolute path.
    * Handles Windows drive-letter mapping (X:\ -> /mnt/x/) for Non-Windows host environments.
    */
   private _resolvePath(targetPath?: string): string {
-    let p = targetPath || process.env.DATA_PATH;
+    let p = targetPath || process.env.WORKSPACE_PATH;
 
     // Fallback if no target or env var is set
     if (!p) {
@@ -40,21 +40,21 @@ class AppConfig {
   }
 
   /**
-   * The absolute path to the data storage folder.
+   * The absolute path to the workspace storage folder.
    */
-  public get DATA_PATH(): string {
-    if (!this._dataPath) {
-      this._dataPath = this._resolvePath();
+  public get WORKSPACE_PATH(): string {
+    if (!this._workspacePath) {
+      this._workspacePath = this._resolvePath();
     }
-    return this._dataPath;
+    return this._workspacePath;
   }
 
   /**
-   * Dynamically update the data storage path at runtime.
+   * Dynamically update the workspace storage path at runtime.
    */
-  public set DATA_PATH(newPath: string) {
-    this._dataPath = this._resolvePath(newPath);
-    process.env.DATA_PATH = this._dataPath;
+  public set WORKSPACE_PATH(newPath: string) {
+    this._workspacePath = this._resolvePath(newPath);
+    process.env.WORKSPACE_PATH = this._workspacePath;
   }
 }
 

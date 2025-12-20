@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { FaCog, FaFileImport, FaDatabase } from 'react-icons/fa';
+
 import BaseModal from './BaseModal';
 import DataPathStep from './setup/DataPathStep';
 import ImportStep from './setup/ImportStep';
 import ScanStep from './setup/ScanStep';
 import { useIngestion } from '@/hooks/useIngestion';
+
 import styles from './SetupModal.module.css';
 
 interface SetupModalProps {
@@ -30,10 +32,16 @@ export default function SetupModal({ isOpen, onClose, onCompleted, initialStep =
   }
 
   // Configuration State
-  const [dataPath, setDataPath] = useState('');
+  const [workspacePath, setWorkspacePath] = useState<string | null>(null);
+  const [pathError, setPathError] = useState<string | null>(null);
   const [resolvedPath, setResolvedPath] = useState<string | null>(null);
   const [remoteFiles, setRemoteFiles] = useState<string[]>([]);
   const [transferMode, setTransferMode] = useState<'copy' | 'move'>('copy');
+
+  const handleUpdateWorkspacePath = (p: string | null) => {
+    setWorkspacePath(p);
+    setPathError(null);
+  };
 
   // Ingestion Hook
   const { isInstalling, isComplete, logs, status, progress, error, runInstall: startIngestion } = useIngestion();
@@ -44,7 +52,7 @@ export default function SetupModal({ isOpen, onClose, onCompleted, initialStep =
       fetch('/api/setup/config')
         .then((r) => r.json())
         .then((data) => {
-          setDataPath(data.dataPath);
+          setWorkspacePath(data.workspacePath);
           setResolvedPath(data.resolved);
         });
     }
@@ -52,20 +60,38 @@ export default function SetupModal({ isOpen, onClose, onCompleted, initialStep =
 
   const saveConfig = async () => {
     try {
-      const res = await fetch('/api/setup/config', {
+      setPathError(null);
+      const configRes = await fetch('/api/setup/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dataPath: dataPath || resolvedPath, create: true }),
+        body: JSON.stringify({ workspacePath: workspacePath ?? resolvedPath, create: true }),
       });
-      const data = await res.json();
-      if (res.ok) {
+      const data = await configRes.json();
+      if (configRes.ok) {
+        setWorkspacePath(data.workspacePath);
         setResolvedPath(data.resolved);
-        alert('Data path saved!');
+
+        // Finalize immediately when switching workspaces via this button
+        try {
+          const finalizeRes = await fetch('/api/setup/finalize', { method: 'POST' });
+          if (finalizeRes.ok) {
+            // Full refresh to ensure clean state with new workspace
+            onCompleted?.();
+            onClose();
+          } else {
+            const fData = await finalizeRes.json();
+            setPathError(fData.error || 'Failed to finalize workspace change');
+          }
+        } catch (e) {
+          setPathError('Network error finalizing workspace change');
+        }
       } else {
-        alert('Error: ' + data.error);
+        setPathError(data.error || 'Failed to update workspace');
+        console.error('Error saving workspace path:', data.error);
       }
-    } catch {
-      alert('Network error');
+    } catch (e) {
+      setPathError('Network error updating workspace');
+      console.error('Network error saving workspace path', e);
     }
   };
 
@@ -152,7 +178,14 @@ export default function SetupModal({ isOpen, onClose, onCompleted, initialStep =
           )}
 
           {activeTab === 'path' && (
-            <DataPathStep dataPath={dataPath} resolvedPath={resolvedPath} onChange={setDataPath} onSave={saveConfig} />
+            <DataPathStep
+              dataPath={workspacePath}
+              resolvedPath={resolvedPath}
+              error={pathError}
+              isInstalling={isInstalling}
+              onChange={handleUpdateWorkspacePath}
+              onSave={saveConfig}
+            />
           )}
         </div>
       </div>

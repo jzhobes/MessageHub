@@ -19,7 +19,7 @@ class DatabaseService {
       return true;
     }
     try {
-      const dbPath = path.join(appConfig.DATA_PATH, 'messagehub.db');
+      const dbPath = path.join(appConfig.WORKSPACE_PATH, 'messagehub.db');
       return fs.existsSync(dbPath);
     } catch {
       return false;
@@ -35,7 +35,7 @@ class DatabaseService {
       return this._instance;
     }
 
-    const dbPath = path.join(appConfig.DATA_PATH, 'messagehub.db');
+    const dbPath = path.join(appConfig.WORKSPACE_PATH, 'messagehub.db');
 
     if (!fs.existsSync(dbPath)) {
       throw new Error(`Database file not found at ${dbPath}. Please run setup.`);

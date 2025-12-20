@@ -10,7 +10,7 @@
 .header {
   display: flex;
   align-items: center;
-  padding: 8px 12px;
+  padding: 4px 12px;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-color);
   gap: 10px;
@@ -20,10 +20,18 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 4px 12px;
+  padding: 0 12px;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-color);
-  font-size: 0.9em;
+  gap: 12px;
+}
+
+.subheaderSlot {
+  flex: 1;
+  display: flex;
+  justify-content: flex-start;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
 }
 
 .addressBar {
@@ -55,7 +63,7 @@
 
 .navButton:disabled {
   opacity: 0.3;
-  cursor: not-allowed;
+  cursor: default;
 }
 
 .list {
@@ -121,7 +129,6 @@
 
 .empty {
   padding: 20px;
-  text-align: center;
   color: var(--text-secondary);
   display: flex;
   flex: 1;

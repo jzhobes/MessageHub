@@ -10,7 +10,7 @@ export async function runStartupChecks() {
   console.log('🔍 [Instrumentation] Running Startup Checks...');
 
   // 1. Check Data Directory
-  const dataDir = appConfig.DATA_PATH;
+  const dataDir = appConfig.WORKSPACE_PATH;
 
   if (fs.existsSync(dataDir)) {
     console.log(`✅ [Instrumentation] Data Directory Found: ${dataDir}`);

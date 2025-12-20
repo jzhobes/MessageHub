@@ -10,7 +10,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).end(`Method ${req.method} Not Allowed`);
   }
 
-  const dataDir = appConfig.DATA_PATH;
+  const dataDir = appConfig.WORKSPACE_PATH;
   const rootDir = path.resolve(process.cwd(), '../'); // Assuming webapp is subfolder of project
   const scriptPath = path.join(rootDir, 'scripts', 'ingest.py');
 
@@ -46,7 +46,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   res.setHeader('Connection', 'keep-alive');
   res.flushHeaders?.();
 
-  const env = { ...process.env, DATA_PATH: dataDir, PYTHONUNBUFFERED: '1' };
+  const env = { ...process.env, WORKSPACE_PATH: dataDir, PYTHONUNBUFFERED: '1' };
 
   const child = spawn(pythonPath, ['-u', scriptPath], { env });
 

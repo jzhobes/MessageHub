@@ -1,5 +1,6 @@
 import fs from 'fs';
 import type { NextApiRequest, NextApiResponse } from 'next';
+
 import fileSystem from '@/lib/server/fileSystem';
 import { getMyNames } from '@/lib/server/identity';
 
@@ -14,15 +15,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     const currentPath = fileSystem.resolveSafePath(mode, requestedPath);
 
-    // Explicit check for existence to return 404
-    try {
-      await fs.promises.access(currentPath);
-    } catch {
-      return res.status(404).json({ error: 'Path not found' });
-    }
-
-    // Parse extensions from query -> "zip,tar,gz" -> ['.zip', '.tar', '.gz'] (or just extensions)
-    // The query param could be "extensions=zip,tar"
+    // Parse extensions
     const extParam = req.query.extensions as string | undefined;
     let extensions: string[] | undefined;
     if (extParam) {
@@ -30,12 +23,32 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const parent = fileSystem.getSafeParent(mode, currentPath);
-    const items = await fileSystem.listContents(currentPath, extensions);
+    const meta = mode === 'workspace' ? await fileSystem.getPathMetadata(currentPath) : null;
+
+    // In import mode, we still 404 if not exists
+    if (mode === 'import' && (!meta || !meta.exists)) {
+      // Manual exists check if meta is null (import mode)
+      let actualExists = true;
+      if (!meta) {
+        try {
+          await fs.promises.access(currentPath);
+        } catch {
+          actualExists = false;
+        }
+      }
+      if (!actualExists) {
+        return res.status(404).json({ error: 'Path not found' });
+      }
+    }
+
+    // If it doesn't exist, we don't try to list contents
+    const items = (meta?.exists ?? true) ? await fileSystem.listContents(currentPath, extensions) : [];
 
     return res.status(200).json({
       path: currentPath,
       parent,
       items,
+      meta,
     });
   } catch (e) {
     if (e instanceof Error && e.message === 'PERMISSION_DENIED') {

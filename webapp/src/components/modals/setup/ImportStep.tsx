@@ -38,7 +38,7 @@ export default function ImportStep({ setRemoteFiles, transferMode, setTransferMo
           filters={IMPORT_ITEM_FILTERS}
           onSelectionChange={setRemoteFiles}
           height="100%"
-          actionPanel={
+          subheader={
             <div className={styles.importActions}>
               <button
                 onClick={() => setTransferMode('copy')}

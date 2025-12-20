@@ -32,7 +32,7 @@ interface GoogleChatUserInfo {
  */
 export async function getMyNames(): Promise<string[]> {
   const myNamesSet = new Set<string>(['Me']);
-  const dataDir = appConfig.DATA_PATH;
+  const dataDir = appConfig.WORKSPACE_PATH;
 
   // Dynamically find Google Chat user info
   let googleChatUserPath = '';
