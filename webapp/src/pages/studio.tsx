@@ -50,7 +50,8 @@ export default function Studio() {
   const [generating, setGenerating] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   // Preview Modal
-  const [previewThread, setPreviewThread] = useState<Thread | null>(null);
+  const [activePreviewThread, setActivePreviewThread] = useState<Thread | null>(null);
+  const [isPreviewThreadOpen, setIsPreviewThreadOpen] = useState(false);
   const [showSetup, setShowSetup] = useState(false);
 
   const { theme, toggleTheme, mounted } = useTheme();
@@ -287,7 +288,8 @@ export default function Studio() {
               onPreview={(id) => {
                 const t = threads.find((th) => th.id === id);
                 if (t) {
-                  setPreviewThread(t);
+                  setActivePreviewThread(t);
+                  setIsPreviewThreadOpen(true);
                 }
               }}
             />
@@ -482,7 +484,12 @@ export default function Studio() {
           </div>
         </div>
       </div>
-      <ThreadPreviewModal isOpen={!!previewThread} onClose={() => setPreviewThread(null)} thread={previewThread} />
+      <ThreadPreviewModal
+        isOpen={isPreviewThreadOpen}
+        onClose={() => setIsPreviewThreadOpen(false)}
+        onAfterClose={() => setActivePreviewThread(null)}
+        thread={activePreviewThread}
+      />
     </div>
   );
 }

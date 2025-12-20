@@ -9,9 +9,10 @@ import { getMyNames } from '@/lib/server/identity';
  */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const requestedPath = req.query.path as string | undefined;
+  const mode = (req.query.mode as 'import' | 'workspace') || 'import';
 
   try {
-    const currentPath = fileSystem.resolveSafePath(requestedPath);
+    const currentPath = fileSystem.resolveSafePath(mode, requestedPath);
 
     // Explicit check for existence to return 404
     try {
@@ -20,8 +21,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(404).json({ error: 'Path not found' });
     }
 
-    const parent = fileSystem.getSafeParent(currentPath);
-    const items = await fileSystem.listContents(currentPath);
+    // Parse extensions from query -> "zip,tar,gz" -> ['.zip', '.tar', '.gz'] (or just extensions)
+    // The query param could be "extensions=zip,tar"
+    const extParam = req.query.extensions as string | undefined;
+    let extensions: string[] | undefined;
+    if (extParam) {
+      extensions = extParam.split(',').map((e) => (e.startsWith('.') ? e : `.${e}`));
+    }
+
+    const parent = fileSystem.getSafeParent(mode, currentPath);
+    const items = await fileSystem.listContents(currentPath, extensions);
 
     return res.status(200).json({
       path: currentPath,

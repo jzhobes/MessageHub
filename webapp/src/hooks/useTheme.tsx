@@ -21,7 +21,12 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const saved = localStorage.getItem('theme');
     if (saved && saved !== theme) {
       setTheme(saved);
-    } else if (!saved && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches && theme !== 'dark') {
+    } else if (
+      !saved &&
+      window.matchMedia &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches &&
+      theme !== 'dark'
+    ) {
       setTheme('dark');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

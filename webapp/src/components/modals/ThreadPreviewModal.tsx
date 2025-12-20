@@ -1,16 +1,14 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Message, Thread } from '@/lib/shared/types';
 import ChatWindow from '@/sections/ChatWindow';
-import BaseModal from './BaseModal';
+import BaseModal, { BaseModalProps, ModalHeader } from './BaseModal';
 import styles from './ThreadPreviewModal.module.css';
 
-interface ThreadPreviewModalProps {
-  isOpen: boolean;
-  onClose: () => void;
+interface ThreadPreviewModalProps extends Pick<BaseModalProps, 'isOpen' | 'onClose' | 'onAfterClose'> {
   thread: Thread | null;
 }
 
-export default function ThreadPreviewModal({ isOpen, onClose, thread }: ThreadPreviewModalProps) {
+export default function ThreadPreviewModal({ isOpen, onClose, onAfterClose, thread }: ThreadPreviewModalProps) {
   // State matching Home page usage of ChatWindow
   const [messages, setMessages] = useState<Message[] | null>(null);
   const [loading, setLoading] = useState(false);
@@ -19,27 +17,7 @@ export default function ThreadPreviewModal({ isOpen, onClose, thread }: ThreadPr
   const [hasMoreOld, setHasMoreOld] = useState(false);
   const [hasMoreNew, setHasMoreNew] = useState(false);
 
-  // Persist thread data during closing animation
-  const lastThreadRef = useRef<Thread | null>(thread);
-  if (thread) {
-    lastThreadRef.current = thread;
-  }
-  const displayThread = thread || lastThreadRef.current;
-
-  const totalPages = displayThread?.messageCount ? Math.ceil(displayThread.messageCount / 100) : 1;
-
-  // Mock activeThread object for ChatWindow props (or just use displayThread directly if it matches)
-  // We construct a fuller object if needed, or pass displayThread if it satisfies requirements.
-  // Ideally ChatWindow accepts a Thread object.
-  const activeThread: Thread | null = displayThread
-    ? ({
-        ...displayThread,
-        // Ensure defaults if missing from dataset thread type vs app thread type
-        platform: displayThread.platform || 'generic',
-        pageCount: totalPages,
-        title: displayThread.title || 'Thread Preview',
-      } as Thread)
-    : null;
+  const totalPages = thread?.messageCount ? Math.ceil(thread.messageCount / 100) : 1;
 
   // Track latest request to avoid race conditions
   const latestRequestRef = useRef<symbol | null>(null);
@@ -58,7 +36,7 @@ export default function ThreadPreviewModal({ isOpen, onClose, thread }: ThreadPr
       try {
         const res = await fetch(
           `/api/messages?threadId=${encodeURIComponent(tid)}&page=${pageNum}&platform=${encodeURIComponent(
-            displayThread?.platform || '',
+            thread?.platform || '',
           )}`,
         );
 
@@ -109,58 +87,62 @@ export default function ThreadPreviewModal({ isOpen, onClose, thread }: ThreadPr
         }
       }
     },
-    [displayThread?.platform],
+    [thread?.platform],
   );
 
   // Initialize on open
   useEffect(() => {
-    if (isOpen && displayThread?.id) {
+    if (isOpen && thread?.id) {
       setVisiblePage(1);
-      loadMessages(displayThread.id, 1, 'reset');
-    } else {
-      setMessages(null);
+      loadMessages(thread.id, 1, 'reset');
     }
-  }, [isOpen, displayThread?.id, loadMessages]);
+  }, [isOpen, thread?.id, loadMessages]);
 
   const handleLoadOld = () => {
-    if (!displayThread?.id) {
+    if (!thread?.id) {
       return;
     }
     const next = pageRange.max + 1;
-    loadMessages(displayThread.id, next, 'older');
+    loadMessages(thread.id, next, 'older');
   };
 
   const handleLoadNew = () => {
-    if (!displayThread?.id) {
+    if (!thread?.id) {
       return;
     }
     const next = pageRange.min - 1;
     if (next < 1) {
       return;
     }
-    loadMessages(displayThread.id, next, 'newer');
+    loadMessages(thread.id, next, 'newer');
   };
 
   return (
     <BaseModal
       isOpen={isOpen}
       onClose={onClose}
-      title={displayThread?.title || 'Thread Preview'}
-      subtitle={
-        <>
-          {displayThread?.platform && <span>{displayThread.platform} </span>}
-          <span style={{ opacity: 0.7 }}>
-            • Page {visiblePage?.toLocaleString()} of {totalPages.toLocaleString()}
-          </span>
-        </>
-      }
+      onAfterClose={() => {
+        setMessages(null);
+        onAfterClose?.();
+      }}
       maxWidth={900}
       height="85vh"
     >
+      <ModalHeader onClose={onClose}>
+        <h2 style={{ margin: 0, fontSize: '1.2rem', color: 'var(--text-primary)' }}>
+          {thread?.title || 'Thread Preview'}
+        </h2>
+        <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+          {thread?.platform && <span>{thread.platform} </span>}
+          <span style={{ opacity: 0.7 }}>
+            • Page {visiblePage?.toLocaleString()} of {totalPages.toLocaleString()}
+          </span>
+        </div>
+      </ModalHeader>
       <div className={styles.messageList}>
         <ChatWindow
           hideHeader
-          activeThread={activeThread}
+          activeThread={thread}
           messages={messages}
           loading={loading}
           hasMoreOld={hasMoreOld}
@@ -168,7 +150,6 @@ export default function ThreadPreviewModal({ isOpen, onClose, thread }: ThreadPr
           pageRange={pageRange}
           onStartReached={handleLoadOld}
           onEndReached={handleLoadNew}
-          activePlatform={displayThread?.platform || ''}
           targetMessageId={null}
           highlightToken={0}
           initializing={loading && messages === null}

@@ -1,6 +1,6 @@
 import os
-
 import re
+import stat
 from pathlib import Path
 
 # External dependencies (assumes venv is active)
@@ -221,6 +221,12 @@ def merge_folders(src, dst):
     try:
         dst.mkdir(parents=True, exist_ok=True)
         shutil.copytree(src, dst, dirs_exist_ok=True)
-        shutil.rmtree(src)
+
+        # Robust deletion for Windows (handles read-only files)
+        def on_rm_error(func, path, exc_info):
+            os.chmod(path, stat.S_IWRITE)
+            func(path)
+
+        shutil.rmtree(src, onerror=on_rm_error)
     except Exception as e:
         print(f"Error merging {src} to {dst}: {e}")

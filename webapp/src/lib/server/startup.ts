@@ -1,5 +1,6 @@
 import { execSync } from 'child_process';
 import fs from 'fs';
+import './env'; // Ensure env is loaded securely at boot
 
 import appConfig from '@/lib/shared/appConfig';
 

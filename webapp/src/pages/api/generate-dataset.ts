@@ -43,7 +43,18 @@ async function processJob(jobId: string, body: GenerateDatasetBody) {
     // Safety delay to ensure checking logic works
     await new Promise((r) => setTimeout(r, 100));
 
-    const { threadIds, identityNames, includeGroupSpeakerNames, mergeSequential, removeSystemMessages, imputeReactions, redactPII, personaTag, customInstructions, dateRange } = body;
+    const {
+      threadIds,
+      identityNames,
+      includeGroupSpeakerNames,
+      mergeSequential,
+      removeSystemMessages,
+      imputeReactions,
+      redactPII,
+      personaTag,
+      customInstructions,
+      dateRange,
+    } = body;
 
     // Prepare Output Stream
     const tmpDir = os.tmpdir();
@@ -91,7 +102,9 @@ async function processJob(jobId: string, body: GenerateDatasetBody) {
 
     if (partCount === 0) {
       await archive.abort();
-      throw new Error('No valid training data found in selection. Ensure you selected threads where you are an active participant.');
+      throw new Error(
+        'No valid training data found in selection. Ensure you selected threads where you are an active participant.',
+      );
     }
 
     // Finalize the zip (writes central directory)

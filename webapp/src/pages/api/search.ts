@@ -59,7 +59,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         // Since we need to parameterize multiple values, we can't just push one param.
         // But the query structure assumes sequential params.
         // We'll push the SQL string and push 3 params.
-        whereConditions.push(`(m.content LIKE ? ESCAPE '\\' OR m.content LIKE ? ESCAPE '\\' OR m.content LIKE ? ESCAPE '\\')`);
+        whereConditions.push(
+          `(m.content LIKE ? ESCAPE '\\' OR m.content LIKE ? ESCAPE '\\' OR m.content LIKE ? ESCAPE '\\')`,
+        );
         params.push(`${sanitized}%`); // Start of msg
         params.push(`% ${sanitized}%`); // After space
         params.push(`%\n${sanitized}%`); // After newline

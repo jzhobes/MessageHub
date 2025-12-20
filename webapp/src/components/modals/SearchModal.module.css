@@ -68,12 +68,9 @@
   flex: 1;
 }
 
-/* Old wrapper and input styles removed */
-
 .searchIcon {
-  color: #888;
   font-size: 0.95rem;
-  flex-shrink: 0;
+  margin: 0 12px;
 }
 
 .filterSelect {

@@ -4,7 +4,7 @@ import { Virtuoso } from 'react-virtuoso';
 import TextInput from '@/components/TextInput';
 import { useForm } from '@/hooks/useForm';
 import { Thread } from '@/lib/shared/types';
-import BaseModal from './BaseModal';
+import BaseModal, { ModalHeader } from './BaseModal';
 import SearchResultItem from './SearchResultItem';
 import styles from './SearchModal.module.css';
 
@@ -206,6 +206,7 @@ export default function SearchModal({ isOpen, onClose, onNavigate }: SearchModal
       overlayClassName={styles.modalOverlay}
       className={styles.modalContent}
     >
+      <ModalHeader onClose={onClose} />
       <div className={styles.searchHeader}>
         <div className={styles.searchTopRow}>
           <TextInput
@@ -213,7 +214,7 @@ export default function SearchModal({ isOpen, onClose, onNavigate }: SearchModal
             placeholder="Search messages..."
             value={config.query}
             onChange={(e) => setField('query', e.target.value)}
-            adornment={<FaSearch className={styles.searchIcon} style={{ margin: '0 12px' }} />}
+            adornment={<FaSearch className={styles.searchIcon} />}
             className={styles.searchTextInput}
           />
         </div>

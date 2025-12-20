@@ -37,9 +37,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   // Platform-specific path adjustments
   if (platformStr === 'Facebook') {
-    relativePath = path.join('Facebook', pathStr.startsWith('your_facebook_activity') ? '' : 'your_facebook_activity', pathStr);
+    relativePath = path.join(
+      'Facebook',
+      pathStr.startsWith('your_facebook_activity') ? '' : 'your_facebook_activity',
+      pathStr,
+    );
   } else if (platformStr === 'Instagram') {
-    relativePath = path.join('Instagram', pathStr.startsWith('your_instagram_activity') ? '' : 'your_instagram_activity', pathStr);
+    relativePath = path.join(
+      'Instagram',
+      pathStr.startsWith('your_instagram_activity') ? '' : 'your_instagram_activity',
+      pathStr,
+    );
   } else if (platformStr === 'Google Chat') {
     // Google Chat paths are usually in Groups subdirectory
     relativePath = path.join('Google Chat/Groups', pathStr);

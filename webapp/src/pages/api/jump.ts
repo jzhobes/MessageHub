@@ -17,7 +17,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       thread_id: string;
       timestamp_ms: number;
     }
-    const msg = dbInstance.prepare('SELECT id, thread_id, timestamp_ms FROM messages WHERE id = ?').get(messageId) as MsgRow | undefined;
+    const msg = dbInstance.prepare('SELECT id, thread_id, timestamp_ms FROM messages WHERE id = ?').get(messageId) as
+      | MsgRow
+      | undefined;
 
     if (!msg) {
       return res.status(404).json({ error: 'Message not found' });

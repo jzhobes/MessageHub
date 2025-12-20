@@ -6,7 +6,15 @@ interface TextareaAutoProps extends React.TextareaHTMLAttributes<HTMLTextAreaEle
   maxRows?: number;
 }
 
-export default function TextareaAuto({ minRows = 3, maxRows = 8, className, value, onChange, style, ...props }: TextareaAutoProps) {
+export default function TextareaAuto({
+  minRows = 3,
+  maxRows = 8,
+  className,
+  value,
+  onChange,
+  style,
+  ...props
+}: TextareaAutoProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const adjustHeight = useCallback(() => {

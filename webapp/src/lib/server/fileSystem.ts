@@ -8,39 +8,39 @@ import os from 'os';
  * It enforces path restrictions based on the FILE_SYSTEM_ROOT environment variable.
  */
 class FileSystemService {
-  private _fileSystemRoot: string;
+  private _importRoot: string;
+  private _workspaceRoot: string;
 
   constructor() {
-    const rawRoot = path.resolve(process.env.FILE_SYSTEM_ROOT || os.homedir());
+    this._importRoot = this.resolveRoot(process.env.ROOT_IMPORT_PATH, 'ROOT_IMPORT_PATH');
+    this._workspaceRoot = this.resolveRoot(process.env.ROOT_WORKSPACE_PATH, 'ROOT_WORKSPACE_PATH');
+  }
 
-    if (!fs.existsSync(rawRoot)) {
-      const homeDir = os.homedir();
-      console.warn(`⚠️  Invalid FILE_SYSTEM_ROOT ("${rawRoot}"). Defaulting to home ("${homeDir}").`);
-      this._fileSystemRoot = homeDir;
-    } else {
-      console.info(`🗂️  File system root set to: ${rawRoot}`);
-      this._fileSystemRoot = rawRoot;
+  private resolveRoot(envPath: string | undefined, name: string): string {
+    const raw = path.resolve(envPath || os.homedir());
+    if (!fs.existsSync(raw)) {
+      const home = os.homedir();
+      console.warn(`⚠️  Invalid ${name} ("${raw}"). Defaulting to home ("${home}").`);
+      return home;
     }
+    console.info(`🗂️  ${name} set to: ${raw}`);
+    return raw;
+  }
+
+  public getRoot(mode: 'import' | 'workspace'): string {
+    return mode === 'workspace' ? this._workspaceRoot : this._importRoot;
   }
 
   /**
-   * Returns the allowed root directory.
+   * Resolves a requested path and ensures it remains within the allowed root for the given mode.
    */
-  public get FILE_SYSTEM_ROOT(): string {
-    return this._fileSystemRoot;
-  }
-
-  /**
-   * Resolves a requested path and ensures it remains within the allowed root.
-   */
-  public resolveSafePath(requestedPath?: string): string {
-    const resolved = path.resolve(requestedPath || this._fileSystemRoot);
+  public resolveSafePath(mode: 'import' | 'workspace', requestedPath?: string): string {
+    const root = this.getRoot(mode);
+    const resolved = path.resolve(requestedPath || root);
 
     // Check if the resolved path is within the allowed root
-    const rootWithSep = this._fileSystemRoot.endsWith(path.sep)
-      ? this._fileSystemRoot
-      : this._fileSystemRoot + path.sep;
-    const isWithin = resolved === this._fileSystemRoot || resolved.startsWith(rootWithSep);
+    const rootWithSep = root.endsWith(path.sep) ? root : root + path.sep;
+    const isWithin = resolved === root || resolved.startsWith(rootWithSep);
 
     if (!isWithin) {
       throw new Error('PERMISSION_DENIED');
@@ -52,9 +52,10 @@ class FileSystemService {
   /**
    * Calculates a safe parent path, returning null if the path is the allowed root.
    */
-  public getSafeParent(currentPath: string): string | null {
+  public getSafeParent(mode: 'import' | 'workspace', currentPath: string): string | null {
+    const root = this.getRoot(mode);
     const parent = path.dirname(currentPath);
-    if (currentPath === this._fileSystemRoot || parent === currentPath) {
+    if (currentPath === root || parent === currentPath) {
       return null;
     }
     return parent;
@@ -62,8 +63,9 @@ class FileSystemService {
 
   /**
    * Lists the contents of a directory with metadata, excluding hidden files.
+   * Optionally filters files by extensions.
    */
-  public async listContents(dirPath: string) {
+  public async listContents(dirPath: string, extensions?: string[]) {
     const dirents = await readdir(dirPath, { withFileTypes: true });
 
     const folders = dirents
@@ -74,10 +76,19 @@ class FileSystemService {
         type: 'folder' as const,
       }));
 
-    // Filter for common export formats
-    const fileDirents = dirents.filter(
-      (d) => d.isFile() && !d.name.startsWith('.') && (d.name.endsWith('.zip') || d.name.endsWith('.json')),
-    );
+    // Filter files
+    const fileDirents = dirents.filter((d) => {
+      if (!d.isFile() || d.name.startsWith('.')) {
+        return false;
+      }
+
+      // If extensions provided, check them
+      if (extensions && extensions.length > 0) {
+        return extensions.some((ext) => d.name.toLowerCase().endsWith(ext.toLowerCase()));
+      }
+
+      return true;
+    });
 
     const files = await Promise.all(
       fileDirents.map(async (d) => {

@@ -20,7 +20,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 12px;
+  padding: 4px 12px;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-color);
   font-size: 0.9em;
@@ -29,8 +29,6 @@
 .addressBar {
   flex: 1;
 }
-
-
 
 .navButton {
   background: none;
@@ -85,6 +83,17 @@
   background: rgba(37, 99, 235, 0.1);
 }
 
+.itemDisabled {
+  opacity: 0.4;
+  cursor: default;
+  /* pointer-events: none; // If we disable pointer events, we can't select text or anything. But for file explorer usually OK */
+}
+
+/* Ensure hover doesn't trigger on disabled items even if pointer-events is auto */
+.itemDisabled:hover {
+  background: transparent;
+}
+
 .icon {
   color: #fbbf24;
   font-size: 1.2em;
@@ -127,4 +136,71 @@
   justify-content: center;
   height: 100%;
   color: var(--text-secondary);
+}
+
+.selectAllButton {
+  background: none;
+  border: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  color: var(--text-primary);
+  padding: 0;
+  transition: opacity 0.2s;
+}
+
+.selectAllHidden {
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+}
+
+.selectAllDisabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.selectAllVisible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.indeterminateBox {
+  width: 14px;
+  height: 14px;
+  border: 2px solid #2563eb;
+  border-radius: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #2563eb;
+}
+
+.indeterminateLine {
+  width: 8px;
+  height: 2px;
+  background: white;
+}
+
+.checkboxHidden {
+  visibility: hidden;
+}
+
+.fileSize {
+  font-size: 0.85em;
+  color: var(--text-secondary);
+  margin-left: 8px;
+  min-width: 60px;
+  text-align: right;
+}
+
+.footer {
+  padding: 8px 12px;
+  border-top: 1px solid var(--border-color);
+  font-size: 0.85em;
+  color: var(--text-secondary);
+  display: flex;
+  justify-content: space-between;
+  background: var(--bg-secondary);
 }

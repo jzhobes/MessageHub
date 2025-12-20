@@ -5,8 +5,8 @@ import fs from 'fs';
 import appConfig from '@/lib/shared/appConfig';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== 'POST') {
-    res.setHeader('Allow', ['POST']);
+  if (req.method !== 'POST' && req.method !== 'GET') {
+    res.setHeader('Allow', ['POST', 'GET']);
     return res.status(405).end(`Method ${req.method} Not Allowed`);
   }
 
@@ -41,13 +41,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   console.log(`Starting ingestion with ${pythonPath} on ${scriptPath} data=${dataDir}`);
 
   res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  // res.setHeader('Content-Encoding', 'none'); // Aggressive SSE support
   res.setHeader('Connection', 'keep-alive');
-  res.flushHeaders?.(); // Ensure headers sent immediately if possible
+  res.flushHeaders?.();
 
   const env = { ...process.env, DATA_PATH: dataDir, PYTHONUNBUFFERED: '1' };
 
-  const child = spawn(pythonPath, [scriptPath], { env });
+  const child = spawn(pythonPath, ['-u', scriptPath], { env });
+
+  // Heartbeat to keep connection alive and force flush
+  const heartbeat = setInterval(() => {
+    res.write(': keepalive\n\n');
+  }, 1000);
 
   const sendEvent = (type: string, payload: unknown) => {
     res.write(`data: ${JSON.stringify({ type, payload })}\n\n`);
@@ -58,6 +64,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     for (const line of lines) {
       if (line.trim()) {
         sendEvent('stdout', line.trim());
+        console.log(`[Ingest] ${line.trim()}`);
       }
     }
   });
@@ -67,21 +74,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     for (const line of lines) {
       if (line.trim()) {
         sendEvent('stderr', line.trim());
+        console.error(`[Ingest Error] ${line.trim()}`);
       }
     }
   });
 
   child.on('close', (code) => {
+    clearInterval(heartbeat);
     sendEvent('done', { code });
     res.end();
   });
 
   child.on('error', (e) => {
+    clearInterval(heartbeat);
     sendEvent('error', e.message);
     res.end();
   });
 
   req.on('close', () => {
+    clearInterval(heartbeat);
     child.kill();
   });
 }

@@ -23,29 +23,28 @@
 }
 
 .modal {
-  background: var(--bg-primary); /* Themed body */
+  background: var(--bg-primary);
   border: 1px solid var(--border-color);
   border-radius: 12px;
   width: 90%;
-  max-width: 900px; /* Increased from 600px */
-  height: 80vh; /* Fixed height for consistent UI */
+  max-width: 900px;
+  height: 80vh;
   max-height: 95vh;
   display: flex;
   flex-direction: column;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
   overflow: hidden;
   color: var(--text-primary);
-  min-height: 500px; /* Increased min-height */
+  min-height: 500px;
 }
 
 .header {
-  padding: 12px 20px; /* Reduced padding */
+  padding: 12px 20px;
   border-bottom: 1px solid var(--border-color);
   display: flex;
-  /* justify-content: space-between; */
   gap: 10px;
   align-items: center;
-  background: var(--bg-secondary); /* Light Gray / Dark Header */
+  background: var(--bg-secondary);
 }
 
 .header h2 {
@@ -72,9 +71,14 @@
     color 0.2s;
 }
 
-.closeButton:hover {
+.closeButton:not(:disabled):hover {
   background: rgba(0, 0, 0, 0.05);
   color: var(--text-primary);
+}
+
+.closeButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .content {
@@ -109,6 +113,11 @@
   gap: 8px;
 }
 
+.stepDescription {
+  color: var(--text-secondary);
+  margin-bottom: 20px;
+}
+
 .step {
   border: 1px solid var(--border-color);
   border-radius: 8px;
@@ -133,47 +142,8 @@
   align-items: center;
 }
 
-.inputWrapper {
-  display: flex;
-  align-items: stretch;
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  overflow: hidden;
-  transition: all 0.2s;
-  background: #ffffff;
-  width: 100%;
-}
-
-.inputWrapper:focus-within {
-  border-color: var(--bubble-sent-bg);
-  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
-}
-
-.inputAdornment {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #e9ecef; /* Shaded background like the example */
-  padding: 0 12px;
-  border-right: 1px solid var(--border-color);
-  color: #6c757d;
-  font-size: 1.1em;
-}
-
-/* Ensure border color matches wrapper on focus? 
-   Usually in these designs the internal border stays simple or disappears. 
-   Keeping it simple for now. */
-
-.input {
-  flex: 1;
-  padding: 10px 12px;
-  border: none;
-  border-radius: 0;
-  background: transparent;
-  color: var(--text-primary);
-  font-family: inherit;
-  outline: none;
-  min-width: 0;
+.adornmentIcon {
+  margin: 0 12px;
 }
 
 .button {
@@ -188,11 +158,11 @@
   white-space: nowrap;
 }
 
-.button:hover {
+.button:not(:disabled):hover {
   filter: brightness(1.1);
 }
 
-.button:active {
+.button:not(:disabled):active {
   filter: brightness(0.9);
 }
 
@@ -212,15 +182,20 @@
   white-space: nowrap;
 }
 
-.secondaryButton:hover {
+.secondaryButton:not(:disabled):hover {
   background: rgba(0, 0, 0, 0.1);
   border-color: rgba(0, 0, 0, 0.15);
+}
+
+.secondaryButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .textLink {
   background: none;
   border: none;
-  color: var(--bubble-sent-bg); /* Use brand blue */
+  color: var(--bubble-sent-bg);
   cursor: pointer;
   padding: 0;
   font-size: inherit;
@@ -233,17 +208,23 @@
   text-decoration: underline;
 }
 
-.terminal {
-  background: #1e1e1e;
-  color: #a9b7c6;
-  font-family: monospace;
-  padding: 12px;
-  border-radius: 6px;
-  height: 200px;
+.queueContainer .consoleBox {
+  border: none;
+  border-radius: 0;
+}
+
+.consoleBox {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  padding: 15px;
+  border-radius: 8px;
+  flex: 1;
   overflow-y: auto;
   font-size: 0.85rem;
+  border: 1px solid var(--border-color);
   white-space: pre-wrap;
-  margin-top: 10px;
+  min-height: 0;
 }
 
 .fileList {
@@ -253,10 +234,9 @@
 }
 
 .progressBar {
-  height: 6px;
-  background: #333;
-  border-radius: 3px;
-  margin-top: 10px;
+  height: 16px;
+  background: var(--bg-secondary);
+  border-radius: 8px;
   overflow: hidden;
 }
 
@@ -264,6 +244,23 @@
   height: 100%;
   background: var(--bubble-sent-bg);
   transition: width 0.3s ease;
+}
+
+.progressInfo {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.statusText {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.percentText {
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--text-primary);
 }
 @keyframes fadeIn {
   from {
@@ -286,8 +283,6 @@
     transform: translateY(10px);
   }
 }
-
-/* ... existing ... */
 
 .stepContent {
   animation: fadeIn 0.3s ease-out;
@@ -355,4 +350,303 @@
 .welcomeText {
   color: var(--text-secondary);
   line-height: 1.6;
+}
+
+/* Sidebar Layout */
+.setupContainer {
+  display: flex;
+  height: 100%;
+  overflow: hidden;
+}
+
+.sidebar {
+  width: 220px;
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border-color);
+  padding: 20px 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebarItem {
+  padding: 12px 24px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-weight: 500;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-left: 3px solid transparent;
+}
+
+.sidebarItem:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--text-primary);
+}
+
+.sidebarActive {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border-left-color: var(--bubble-sent-bg);
+}
+
+.sidebarContent {
+  flex: 1;
+  padding: 30px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.actionButton {
+  font-weight: normal;
+  color: inherit;
+  border: none;
+  background: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.actionButton:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+.actionButtonActive {
+  font-weight: bold;
+  color: #2563eb;
+  background-color: rgba(37, 99, 235, 0.1);
+}
+
+.actionButtonActive:hover {
+  background-color: rgba(37, 99, 235, 0.15);
+}
+
+.stepContainerFull {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.explorerContainer {
+  height: 350px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  margin-bottom: 20px;
+  overflow: hidden;
+}
+
+.explorerActionBtn {
+  font-size: 0.8em !important;
+  padding: 4px 12px !important;
+}
+
+.statusBox {
+  background: var(--input-bg);
+  padding: 15px;
+  border-radius: 8px;
+  font-size: 0.9em;
+}
+
+.statusConnected {
+  color: #10b981;
+}
+
+.statusDisconnected {
+  color: #ef4444;
+}
+
+.statusDetail {
+  margin-top: 8px;
+  color: var(--text-secondary);
+}
+
+.stepFooter {
+  margin-top: 20px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.importExplorer {
+  flex: 1;
+  min-height: 0;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  margin-bottom: 20px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.importActions {
+  display: flex;
+  gap: 5px;
+}
+
+.importSeparator {
+  opacity: 0.3;
+  align-self: center;
+}
+
+.stepMain {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+
+.queueContainer {
+  background: var(--bg-primary);
+  border-radius: 8px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+}
+
+.queueHeader {
+  padding: 12px 15px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.queueHeader h4 {
+  margin: 0;
+  color: var(--text-primary);
+}
+
+.queueEmpty {
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.queueGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.queueGroupTitle {
+  font-size: 0.8em;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.queueGroupTitleNew {
+  color: var(--bubble-sent-bg);
+  text-shadow: none;
+}
+
+.queueList {
+  padding-left: 20px;
+  margin: 0;
+}
+
+.queueListItem {
+  margin-bottom: 4px;
+}
+
+.actionCenter {
+  padding: 16px 0 0;
+  margin-top: auto;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 20px;
+}
+
+.actionCenterEmpty {
+  text-align: center;
+  padding: 20px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.dbIcon {
+  display: block;
+}
+
+.dbIconEmpty {
+  margin: 0 auto 15px;
+}
+
+.completeBanner {
+  margin-top: 10px;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 20px;
+  color: #10b981;
+}
+
+.successText {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+  margin-right: auto;
+}
+
+.errorBanner {
+  color: #ef4444 !important;
+}
+
+.sidebarTitle {
+  padding: 0 24px 20px;
+  font-size: 1.2em;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sidebarTitleEmoji {
+  font-size: 1.4em;
+}
+
+.sidebarFooter {
+  margin-top: auto;
+  padding: 20px;
+}
+
+.bigButton {
+  font-size: 1.1em !important;
+  padding: 10px 24px !important;
+}
+
+.bigButtonSecondary {
+  background: var(--bg-secondary) !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--border-color) !important;
+}
+
+.sidebarCloseBtn {
+  width: 100%;
+  justify-content: center;
+}
+
+.spacingBottom20 {
+  margin-bottom: 20px;
+}
+
+.actionStatusText {
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+}
+
+.spacingTop10 {
+  margin-top: 10px;
 }

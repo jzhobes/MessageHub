@@ -387,7 +387,11 @@ export default function Home() {
         if (threadIdParam !== activeThread?.id) {
           const target = threads.find((t) => t.id === threadIdParam);
           if (target) {
-            setActiveThread(target);
+            // TODO: Commonize backend's Thread type with ThreadRow?
+            setActiveThread({
+              ...target,
+              platform: safePlatform,
+            });
           }
         }
       } else if (activeThread) {
@@ -539,7 +543,6 @@ export default function Home() {
                 pageRange={pageRange}
                 onStartReached={handleLoadOld}
                 onEndReached={handleLoadNew}
-                activePlatform={activePlatform}
                 targetMessageId={targetMessageId}
                 highlightToken={highlightToken}
                 initializing={!!router.query.threadId && !activeThread && availability[activePlatform]}

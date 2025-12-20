@@ -10,7 +10,15 @@ interface LazyViewProps {
   className?: string;
 }
 
-export default function LazyView({ children, onEnter, rootMargin = '0px', threshold = 0, triggerOnce = true, style, className }: LazyViewProps) {
+export default function LazyView({
+  children,
+  onEnter,
+  rootMargin = '0px',
+  threshold = 0,
+  triggerOnce = true,
+  style,
+  className,
+}: LazyViewProps) {
   const [inView, setInView] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 

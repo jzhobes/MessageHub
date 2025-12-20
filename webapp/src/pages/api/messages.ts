@@ -206,7 +206,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // However, if the message looks like a Link Preview (Text + 1 Photo), we keep them together
       // so the frontend can deduplicate the image.
       const hasLink = row.content && /(https?:\/\/[^\s]+)/.test(row.content);
-      const isLikelyPreview = hasText && hasMedia && hasLink && photos.length === 1 && videos.length === 0 && gifs.length === 0 && stickers.length === 0;
+      const isLikelyPreview =
+        hasText &&
+        hasMedia &&
+        hasLink &&
+        photos.length === 1 &&
+        videos.length === 0 &&
+        gifs.length === 0 &&
+        stickers.length === 0;
       const shouldSplit = hasMedia && hasText && !isLikelyPreview;
 
       if (shouldSplit) {

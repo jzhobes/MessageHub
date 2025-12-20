@@ -14,7 +14,6 @@ interface ChatWindowProps {
   pageRange: { min: number; max: number };
   onStartReached: () => void;
   onEndReached: () => void;
-  activePlatform: string;
   targetMessageId: string | null;
   highlightToken: number;
   initializing?: boolean;
@@ -33,7 +32,6 @@ export default function ChatWindow({
   pageRange,
   onStartReached,
   onEndReached,
-  activePlatform,
   targetMessageId,
   highlightToken,
   initializing,
@@ -385,7 +383,7 @@ export default function ChatWindow({
                   highlightToken={highlightKey}
                   showAvatar={showAvatar}
                   showName={showName}
-                  activePlatform={activePlatform}
+                  activePlatform={activeThread?.platform ?? ''}
                   onQuoteClick={() => handleQuoteClick(msg.quoted_message_metadata)}
                 />
               </div>

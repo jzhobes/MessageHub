@@ -22,11 +22,31 @@ interface FileItem {
   size?: number;
 }
 
+interface FileFilterRule {
+  pattern: string;
+  visible?: boolean;
+  selectable?: boolean;
+}
+
 interface FileExplorerProps {
   onSelectionChange: (paths: string[]) => void;
   initialPath?: string;
   height?: number | string;
   actionPanel?: React.ReactNode;
+  mode?: 'import' | 'workspace';
+  filters?: FileFilterRule[];
+  allowSelectAll?: boolean;
+}
+
+function simpleGlobMatch(filename: string, pattern: string): boolean {
+  if (pattern === '*') {
+    return true;
+  }
+  if (pattern.startsWith('*.')) {
+    const ext = pattern.slice(1); // e.g., ".zip"
+    return filename.toLowerCase().endsWith(ext.toLowerCase());
+  }
+  return filename === pattern;
 }
 
 function formatBytes(bytes: number, decimals = 1) {
@@ -40,7 +60,15 @@ function formatBytes(bytes: number, decimals = 1) {
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
 }
 
-export default function FileExplorer({ onSelectionChange, initialPath, height = 300, actionPanel }: FileExplorerProps) {
+export default function FileExplorer({
+  onSelectionChange,
+  initialPath,
+  height = 300,
+  actionPanel,
+  mode = 'import',
+  filters = [],
+  allowSelectAll = true,
+}: FileExplorerProps) {
   const [currentPath, setCurrentPath] = useState(initialPath ?? '');
   const [items, setItems] = useState<FileItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -49,7 +77,55 @@ export default function FileExplorer({ onSelectionChange, initialPath, height = 
   const [selectedSizes, setSelectedSizes] = useState<Record<string, number>>({});
   const [error, setError] = useState<string | null>(null);
 
-  const selectableFiles = useMemo(() => items.filter((i) => i.type === 'file'), [items]);
+  // Apply filters
+  const processedItems = useMemo(() => {
+    if (!filters || filters.length === 0) {
+      return items;
+    }
+
+    return items.filter((item) => {
+      // Folders always visible? Let's assume yes for navigation
+      if (item.type === 'folder') {
+        return true;
+      }
+
+      let isVisible = true; // Default visible if no filters, but here we have filters.
+      // Usually "Deny All" or "Allow All" depends on the first rule or default.
+      // Let's adopt consistent logic: Default TRUE unless a rule says FALSE?
+      // Or Default match logic.
+      // Let's iterate rules. Last match wins.
+      // If no rules match, default is visible.
+
+      for (const rule of filters) {
+        if (simpleGlobMatch(item.name, rule.pattern)) {
+          if (rule.visible !== undefined) {
+            isVisible = rule.visible;
+          }
+        }
+      }
+      return isVisible;
+    });
+  }, [items, filters]);
+
+  const selectableFiles = useMemo(() => {
+    return processedItems.filter((i) => {
+      if (i.type !== 'file') {
+        return false;
+      }
+
+      let isSelectable = true;
+      if (filters && filters.length > 0) {
+        for (const rule of filters) {
+          if (simpleGlobMatch(i.name, rule.pattern)) {
+            if (rule.selectable !== undefined) {
+              isSelectable = rule.selectable;
+            }
+          }
+        }
+      }
+      return isSelectable;
+    });
+  }, [processedItems, filters]);
 
   const { handleSelection, resetSelectionHistory } = useRangeSelection({
     items: selectableFiles,
@@ -71,59 +147,47 @@ export default function FileExplorer({ onSelectionChange, initialPath, height = 
 
   // Fetch directory
   useEffect(() => {
-    let active = true;
+    const controller = new AbortController();
 
     async function load() {
       setLoading(true);
       setError(null);
-      // Reset selection state on path change
-      if (active) {
-        // Optionally, we might want to clear selection or keep it?
-        // Current behavior: FileExplorer usually clears selection on navigate away?
-        // Wait, state `selectedPaths` persists but `items` change.
-        // If `currentPath` changes, `selectedPaths` usually should be cleared or filtered?
-        // In typical file managers, navigating away clears selection of that folder.
-        // Let's assume we maintain selection as is for now unless user clears it.
-        // BUT `rangeSelection` history relies on indices of `items`.
-        // If `items` changes, history MUST be reset.
-      }
 
       try {
         const params = new URLSearchParams();
         if (currentPath) {
           params.set('path', currentPath);
         }
+        params.set('mode', mode);
 
-        const res = await fetch(`/api/system/list?${params.toString()}`);
+        const res = await fetch(`/api/system/list?${params.toString()}`, {
+          signal: controller.signal,
+        });
+
         if (!res.ok) {
-          if (active) {
-            setItems([]);
-          }
+          setItems([]);
           const err = await res.json();
           throw new Error(err.error ?? 'Failed to list');
         }
 
         const data = await res.json();
-        if (active) {
-          if (!currentPath) {
-            setCurrentPath(data.path);
-          }
-          setParentPath(data.parent);
-          setItems(data.items);
-          // Reset range history when items change
-          resetSelectionHistory();
-          // Optionally clear selection if navigating to new folder?
-          // For now, let's clear selection to avoid confusion with new items
-          setSelectedPaths(new Set());
-          setSelectedSizes({});
-          onSelectionChange([]);
+        if (!currentPath) {
+          setCurrentPath(data.path);
         }
+        setParentPath(data.parent);
+        setItems(data.items);
+        resetSelectionHistory();
+        setSelectedPaths(new Set());
+        setSelectedSizes({});
+        onSelectionChange([]);
       } catch (err: unknown) {
-        if (active) {
-          setError(err instanceof Error ? err.message : String(err));
+        if (err instanceof Error && err.name === 'AbortError') {
+          // Ignore abort errors
+          return;
         }
+        setError(err instanceof Error ? err.message : String(err));
       } finally {
-        if (active) {
+        if (!controller.signal.aborted) {
           setLoading(false);
         }
       }
@@ -131,9 +195,9 @@ export default function FileExplorer({ onSelectionChange, initialPath, height = 
 
     load();
     return () => {
-      active = false;
+      controller.abort();
     };
-  }, [currentPath, resetSelectionHistory, onSelectionChange]); // Added deps
+  }, [currentPath, resetSelectionHistory, onSelectionChange, mode]);
 
   const handleToggle = (item: FileItem) => {
     if (item.type === 'file') {
@@ -196,6 +260,7 @@ export default function FileExplorer({ onSelectionChange, initialPath, height = 
       {/* Header / Address Bar */}
       <div className={styles.header}>
         <TextInput
+          autoFocus
           className={styles.addressBar}
           value={currentPath}
           onChange={(e) => setCurrentPath(e.target.value)}
@@ -218,45 +283,34 @@ export default function FileExplorer({ onSelectionChange, initialPath, height = 
 
       {/* Subheader / Actions */}
       <div className={styles.headerActions}>
-        <button
-          onClick={handleToggleAll}
-          style={{
-            background: 'none',
-            border: 'none',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            cursor: 'pointer',
-            color: 'var(--text-primary)',
-            padding: 0,
-            opacity: selectableFiles.length === 0 ? 0.5 : 1,
-            pointerEvents: selectableFiles.length === 0 ? 'none' : 'auto',
-          }}
-        >
-          {allSelected ? (
-            <FaCheckSquare color="#2563eb" size={16} />
-          ) : indeterminate ? (
-            // Indeterminate state visual
-            <div
-              style={{
-                width: 14,
-                height: 14,
-                border: '2px solid #2563eb', // Blue border
-                borderRadius: 2,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                background: '#2563eb', // Blue fill
-              }}
-            >
-              {/* White horizontal line */}
-              <div style={{ width: 8, height: 2, background: 'white' }} />
-            </div>
-          ) : (
-            <FaSquare color="#d1d5db" size={16} />
-          )}
-          <span style={{ fontWeight: 500 }}>Select All</span>
-        </button>
+        {allowSelectAll && (
+          <button
+            onClick={handleToggleAll}
+            className={`${styles.selectAllButton} ${
+              processedItems.some((i) => i.type === 'file') && selectableFiles.length === 0
+                ? styles.selectAllHidden
+                : selectableFiles.length === 0
+                  ? styles.selectAllDisabled
+                  : styles.selectAllVisible
+            }`}
+          >
+            {allSelected ? (
+              <FaCheckSquare color="var(--border-thread-active)" size={16} />
+            ) : indeterminate ? (
+              // Indeterminate state visual
+              <div
+                className={styles.indeterminateBox}
+                style={{ borderColor: 'var(--border-thread-active)', background: 'var(--border-thread-active)' }}
+              >
+                {/* White horizontal line */}
+                <div className={styles.indeterminateLine} />
+              </div>
+            ) : (
+              <FaSquare color="#d1d5db" size={16} />
+            )}
+            <span style={{ fontWeight: 500 }}>Select All</span>
+          </button>
+        )}
 
         {/* External Actions (Copy/Move) */}
         <div>{actionPanel}</div>
@@ -273,23 +327,38 @@ export default function FileExplorer({ onSelectionChange, initialPath, height = 
           <div className={styles.empty} style={{ color: '#ef4444' }}>
             {error}
           </div>
-        ) : items.length === 0 ? (
+        ) : processedItems.length === 0 ? (
           <div className={styles.empty}>
             <FaFolderOpen size={24} />
             &nbsp;Empty folder
           </div>
         ) : (
-          items.map((item) => {
+          processedItems.map((item) => {
             const isSelected = selectedPaths.has(item.path);
+
+            // Determine selectability for specific item
+            let isSelectable = true;
+            if (item.type === 'file' && filters.length > 0) {
+              for (const rule of filters) {
+                if (simpleGlobMatch(item.name, rule.pattern)) {
+                  if (rule.selectable !== undefined) {
+                    isSelectable = rule.selectable;
+                  }
+                }
+              }
+            }
+            if (item.type === 'folder') {
+              isSelectable = false;
+            } // Folders not selectable in this logic
 
             return (
               <div
                 key={item.path}
-                className={`${styles.item} ${isSelected ? styles.itemSelected : ''}`}
+                className={`${styles.item} ${isSelected ? styles.itemSelected : ''} ${!isSelectable && item.type === 'file' ? styles.itemDisabled : ''}`}
                 onClick={() => {
                   if (item.type === 'folder') {
                     handleNavigate(item.path);
-                  } else {
+                  } else if (isSelectable) {
                     handleToggle(item);
                   }
                 }}
@@ -297,13 +366,19 @@ export default function FileExplorer({ onSelectionChange, initialPath, height = 
                 {/* Checkbox for files */}
                 {item.type === 'file' ? (
                   <div
-                    className={styles.checkbox}
+                    className={`${styles.checkbox} ${!isSelectable ? styles.checkboxHidden : ''}`}
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleToggle(item);
+                      if (isSelectable) {
+                        handleToggle(item);
+                      }
                     }}
                   >
-                    {isSelected ? <FaCheckSquare color="#2563eb" size={16} /> : <FaSquare color="#d1d5db" size={16} />}
+                    {isSelected ? (
+                      <FaCheckSquare color="var(--border-thread-active)" size={16} />
+                    ) : (
+                      <FaSquare color="#d1d5db" size={16} />
+                    )}
                   </div>
                 ) : (
                   <div style={{ width: 14 }}></div> // Spacer for folder
@@ -326,17 +401,7 @@ export default function FileExplorer({ onSelectionChange, initialPath, height = 
                 </div>
 
                 {item.type === 'file' && item.size !== undefined && item.size > 0 && (
-                  <div
-                    style={{
-                      fontSize: '0.85em',
-                      color: 'var(--text-secondary)',
-                      marginLeft: 8,
-                      minWidth: 60,
-                      textAlign: 'right',
-                    }}
-                  >
-                    {formatBytes(item.size)}
-                  </div>
+                  <div className={styles.fileSize}>{formatBytes(item.size)}</div>
                 )}
               </div>
             );
@@ -345,18 +410,8 @@ export default function FileExplorer({ onSelectionChange, initialPath, height = 
       </div>
 
       {/* Footer Info */}
-      <div
-        style={{
-          padding: '8px 12px',
-          borderTop: '1px solid var(--border-color)',
-          fontSize: '0.85em',
-          color: 'var(--text-secondary)',
-          display: 'flex',
-          justifyContent: 'space-between',
-          background: 'var(--bg-secondary)',
-        }}
-      >
-        <span>{items.length} items</span>
+      <div className={styles.footer}>
+        <span>{processedItems.length} items</span>
         <span>
           {selectedPaths.size} selected
           {selectedPaths.size > 0 && ` (${formatBytes(totalSelectedSize)})`}
