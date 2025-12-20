@@ -33,7 +33,7 @@ class AppConfig {
     const resolved = path.isAbsolute(p) ? p : path.resolve(projectRoot, p);
 
     if (!fs.existsSync(resolved)) {
-      console.warn(`⚠️ Configuration path does not exist: ${resolved}`);
+      console.warn(`⚠️  Configuration path does not exist: ${resolved}`);
     }
 
     return resolved;

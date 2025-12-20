@@ -49,6 +49,21 @@ class DatabaseService {
       throw e;
     }
   }
+
+  /**
+   * Closes the database connection and resets the singleton instance.
+   */
+  public close(): void {
+    if (this._instance) {
+      try {
+        this._instance.close();
+      } catch (e) {
+        console.error('Error closing database connection:', e);
+      } finally {
+        this._instance = null;
+      }
+    }
+  }
 }
 
 // Export a single instance of the database service as default

@@ -6,6 +6,7 @@ import shutil
 import sqlite3
 import sys
 import tarfile
+import threading
 import time
 import zipfile
 
@@ -180,9 +181,20 @@ def extract_zips_found(search_dirs, target_root, platform_filter="all"):
     Returns: tuple (processed_count, set_of_platforms_detected, archive_moves)
     archive_moves: list of (original_Path, processed_Path)
     """
+    return extract_zips_found_with_opts(search_dirs, target_root, platform_filter, False)
+
+
+def extract_zips_found_with_opts(search_dirs, target_root, platform_filter="all", delete_after=False):
+    """
+    Scans specified directories for .zip files and extracts them
+    into a subdirectory of target_root named after the zip file.
+    Returns: tuple (processed_count, set_of_platforms_detected, archive_moves)
+    archive_moves: list of (original_Path, processed_Path_or_None)
+    """
     processed = 0
     target_root = Path(target_root)
     archive_moves = []
+    extraction_lock = threading.Lock()
 
     seen_zips = set()
     detected_platforms = set()
@@ -278,8 +290,25 @@ def extract_zips_found(search_dirs, target_root, platform_filter="all"):
                     archive_obj.close()
                 return False, None, None
 
-            # Perform Extraction
-            archive_obj.extractall(dest_dir)
+            # Prepare destination directory (Locked)
+            with extraction_lock:
+                if not dest_dir.exists():
+                    dest_dir.mkdir(parents=True, exist_ok=True)
+                elif dest_dir.is_file():
+                    print(f"  [Error] Cannot extract to {dest_dir}: file already exists with this name.")
+                    return False, None, None
+
+            # Perform Extraction (Unlocked for Parallelism)
+            members = archive_obj.namelist() if is_zip else archive_obj.getmembers()
+            total_members = len(members)
+            print(f"[ArchiveStarted]: {archive_path.name}|{total_members}")
+            for i, member in enumerate(members):
+                try:
+                    archive_obj.extract(member, dest_dir)
+                    if (i + 1) % 50 == 0 or (i + 1) == total_members:
+                        print(f"[ArchiveProgress]: {archive_path.name}|{i + 1}|{total_members}")
+                except Exception as e:
+                    print(f"  Warning: Failed to extract {member} from {archive_path.name}: {e}")
 
             if is_zip:
                 archive_obj.close()
@@ -290,16 +319,29 @@ def extract_zips_found(search_dirs, target_root, platform_filter="all"):
 
             # Post-Processing: Move archive to .processed
             try:
-                processed_dir = target_root / ".processed"
-                processed_dir.mkdir(exist_ok=True)
-                destination = processed_dir / archive_path.name
-                if destination.exists():
-                    timestamp = int(time.time())
-                    destination = processed_dir / f"{archive_path.stem}_{timestamp}{archive_path.suffix}"
-                shutil.move(str(archive_path), str(destination))
+                with extraction_lock:
+                    processed_dir = target_root / ".processed"
+                    os.makedirs(processed_dir, exist_ok=True)
+
+                    destination = processed_dir / archive_path.name
+                    if destination.exists():
+                        timestamp = int(time.time() * 1000)
+                        destination = processed_dir / f"{archive_path.stem}_{timestamp}{archive_path.suffix}"
+
+                    # Double check archive still exists (might have been moved by another thread if somehow duplicated)
+                    if not archive_path.exists():
+                        return True, local_detected, None
+
+                    if delete_after:
+                        archive_path.unlink()
+                        print(f"  [Post] Deleted archive: {archive_path.name}")
+                        return True, local_detected, (archive_path, None)
+                    else:
+                        shutil.move(str(archive_path), str(destination))
+                        return True, local_detected, (archive_path, destination)
                 return True, local_detected, (archive_path, destination)
             except Exception as e:
-                print(f"  Warning: Move failed for {archive_path.name}: {e}")
+                print(f"  Warning: Move/Delete failed for {archive_path.name}: {e}")
                 return True, local_detected, None
 
         except Exception as e:
@@ -331,7 +373,7 @@ def extract_zips_found(search_dirs, target_root, platform_filter="all"):
         src = target_root / "Takeout" / "Voice"
         dst = target_root / "Voice"
         if src.exists():
-            print("  Merging Google Voice folder...")
+            print("  Consolidating Google Voice data...")
             merge_folders(src, dst)
 
     # Google Chat
@@ -339,7 +381,7 @@ def extract_zips_found(search_dirs, target_root, platform_filter="all"):
         src = target_root / "Takeout" / "Google Chat"
         dst = target_root / "Google Chat"
         if src.exists():
-            print("  Merging Google Chat folder...")
+            print("  Consolidating Google Chat data...")
             merge_folders(src, dst)
 
     # Final cleanup: remove empty Takeout folder
@@ -365,6 +407,11 @@ def start_ingestion():
         choices=["all", "facebook", "instagram", "google_chat", "google_voice"],
         default="all",
         help="Target specific platform",
+    )
+    parser.add_argument(
+        "--delete-archives",
+        action="store_true",
+        help="Delete archives after successful extraction (no .processed folder)",
     )
     args = parser.parse_args()
 
@@ -420,21 +467,29 @@ def start_ingestion():
         except Exception as e:
             print(f"  Warning: Could not verify disk space: {e}")
 
-    processed_count, detected_platforms, archive_moves = extract_zips_found(
-        scan_locations, WORKSPACE_PATH, platform_filter=args.platform
+    processed_count, detected_platforms, archive_moves = extract_zips_found_with_opts(
+        scan_locations, WORKSPACE_PATH, platform_filter=args.platform, delete_after=args.delete_archives
     )
 
     try:
         # Ingestion
-        if source_path.is_file() and source_path.suffix == ".zip":
-            print("Zip extracted. Scanning full data directory to locate merged content...")
+        if (source_path.is_file() and source_path.suffix == ".zip") or processed_count > 0:
+            if processed_count > 0:
+                print(
+                    f"Archives processed ({processed_count}). Scanning full data directory to locate merged content..."
+                )
+            else:
+                print("Zip extracted. Scanning full data directory to locate merged content...")
             scan_directory(WORKSPACE_PATH, db_path, platform_filter=args.platform)
 
         elif source_path.is_dir():
             # Scan the entire data dir (recursive) which now includes extracted zips
             scan_directory(WORKSPACE_PATH, db_path, platform_filter=args.platform)
         else:
-            print(f"Invalid source: {source_path}")
+            # Fallback: if we had zips but source_path itself is gone/invalid now,
+            # we should still scan the workspace because extraction worked.
+            print(f"Scanning workspace directory: {WORKSPACE_PATH}")
+            scan_directory(WORKSPACE_PATH, db_path, platform_filter=args.platform)
 
         # Cleanup JSONs for non-Google platforms
         cleanup_targets = []
@@ -461,7 +516,7 @@ def start_ingestion():
         if archive_moves:
             print(f"Rolling back {len(archive_moves)} archive moves...")
             for original, processed in archive_moves:
-                if processed.exists():
+                if processed and processed.exists():
                     try:
                         shutil.move(str(processed), str(original))
                         print(f"  Restored {original.name}")

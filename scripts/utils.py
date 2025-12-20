@@ -173,10 +173,10 @@ def clean_google_voice_files(data_dir=WORKSPACE_PATH):
     if not voice_root.exists():
         sub = Path(data_dir) / "Takeout" / "Voice"
         if sub.exists():
-            voice_root = sub
-
-    if not voice_root.exists():
-        return
+            print("  Consolidating Google Voice data from Takeout...")
+            merge_folders(sub, voice_root)  # Merge Takeout/Voice into Voice
+        else:
+            return  # No Google Voice data found
 
     print("Cleaning up Google Voice HTML files...")
     deleted_count = 0
@@ -217,7 +217,6 @@ def merge_folders(src, dst):
     if not src.exists():
         return
 
-    print(f"Merging {src.name} into {dst.name}...")
     try:
         dst.mkdir(parents=True, exist_ok=True)
         shutil.copytree(src, dst, dirs_exist_ok=True)

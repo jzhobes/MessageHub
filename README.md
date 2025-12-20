@@ -51,8 +51,9 @@ MessageHub/
    - **Your Facebook activity** > **Messages**
    - **Personal information** > **Profile information** (Required for "You" detection)
 4. **Format** > **JSON**
-5. **Media quality** > **Higher quality** (optional, but recommended)
-6. **Start export**
+5. **Start export**
+
+> [!TIP] > **Media quality** (Higher vs. Lower) is a personal preference for your viewing experience. It has **no impact** on the DataForge AI Studio or LLM data training, as the studio only processes text and reaction metadata.
 
 **Instagram:**
 
@@ -81,13 +82,13 @@ Create a `.env` file in the **project root**. This configuration is used by both
 ```bash
 # Path to your data directory (where zips and database live)
 # Can be absolute (/Users/you/data) or relative (./data)
-DATA_PATH=data
+WORKSPACE_PATH=data
 
 # Optional: Instagram Auth for unauthenticated link previews
 INSTAGRAM_AUTH={"sessionid":"<sessionid>","csrftoken":"<csrftoken>"}
 ```
 
-_If `DATA_PATH` is omitted, the `data/` folder in the project root is used by default._
+_If `WORKSPACE_PATH` is omitted, the `data/` folder in the project root is used by default._
 
 #### (Optional) Getting Instagram Auth
 
@@ -100,42 +101,23 @@ To enable rich link previews for Instagram links (bypassing login walls):
 
 ---
 
-### 3. Ingest Data
+---
 
-First, set up the Python environment (install dependencies like `beautifulsoup4` and `python-dateutil`):
+### 3. Setup & Ingestion (Setup Wizard)
 
-**Unix (Mac/Linux):**
+The recommended way to set up MessageHub is via the built-in **Setup Wizard**.
 
-```bash
-./setup.sh
-```
-
-**Windows:**
-
-```cmd
-setup.bat
-```
-
-Move your downloaded `.zip` files into your configured data folder (default: `data/`). Then run the ingestion script:
-
-```bash
-./venv/bin/python3 scripts/ingest.py
-# On Windows: venv\Scripts\python scripts/ingest.py
-```
-
-**What this script does:**
-
-1.  **Scans** for `.zip` files (Facebook, Instagram, Google Chat).
-2.  **Extracts** them into organized, merged platform folders (`Facebook`, `Instagram`, etc.).
-3.  **Parses** message JSONs, fixing text encoding (mojibake) on the fly.
-4.  **Populates** a local SQLite database (`messagehub.db`) for fast access.
-5.  **Cleans up** bulky `messages.json` files for Facebook/Instagram to save disk space (media is preserved).
+1.  **Start the App**: (See section 4 below).
+2.  **Welcome**: When you first visit the app, click **"Get Started"** on the splash screen.
+3.  **Workspace**: Select the folder where you want your records to live (defaults to `data/`).
+4.  **Import**: Select your exported `.zip` / `.tar.gz` files using the in-app file explorer.
+5.  **Process**: Click **"Run Process"**. MessageHub will extract, merge, and index your files automatically.
 
 ---
 
-### 4. Run the Viewer
+### 4. Running the Viewer
 
-Navigate to the webapp directory and start the dev server:
+Navigate to the `webapp` directory and start the development server:
 
 ```bash
 cd webapp
@@ -144,6 +126,8 @@ npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) to browse your messages.
+
+---
 
 ### 5. DataForge AI (Fine-Tuning Studio)
 
@@ -156,6 +140,20 @@ MessageHub includes a tool to create **"Virtual You"** datasets for training AI 
     - **Cleanup**: Auto-remove system messages ("You missed a call") and PII (emails/phones).
     - **Reactions**: Convert reactions (👍) into text replies (`[Reacted "👍"]`) for better context.
 4.  **Generate**: The server will process thousands of messages in the background and produce a `.zip` containing optimized `.jsonl` files ready for upload to OpenAI.
+
+---
+
+### 6. Manual Ingestion (CLI)
+
+If you prefer to run the ingestion manually or from a server headlessly, you can still use the CLI tools:
+
+1.  **Configure environment**: Set `WORKSPACE_PATH` in your `.env`.
+2.  **Move Zips**: Place your archives in your workspace folder.
+3.  **Run Script**:
+    ```bash
+    ./venv/bin/python3 scripts/ingest.py
+    # On Windows: venv\Scripts\python scripts/ingest.py
+    ```
 
 ## Technical Details
 

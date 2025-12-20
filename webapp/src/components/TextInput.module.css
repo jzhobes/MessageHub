@@ -2,7 +2,7 @@
   display: flex;
   align-items: stretch;
   border: 1px solid var(--border-color);
-  border-radius: 6px;
+  border-radius: var(--radius-1);
   overflow: hidden;
   transition: all 0.2s;
   background: var(--bg-primary, #ffffff);

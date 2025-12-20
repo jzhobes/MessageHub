@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
 import {
   FaFolder,
   FaFileArchive,
@@ -36,14 +36,20 @@ interface FileExplorerProps {
   height?: number | string;
   subheader?: React.ReactNode;
   addressBarSuffix?: React.ReactNode;
-  footer?: React.ReactNode;
+  footer?: React.ReactNode | ((data: FileExplorerFooterData) => React.ReactNode);
   mode?: 'import' | 'workspace';
   filters?: FileFilterRule[];
   allowSelectAll?: boolean;
   onError?: (error: { message: string; status?: number } | null) => void;
   onMetadataChange?: (metadata: PathMetadata) => void;
   onPathChange?: (path: string) => void;
-  onSelectionChange?: (paths: string[]) => void;
+  onSelectionChange?: (paths: string[], totalSize: number) => void;
+}
+
+export interface FileExplorerFooterData {
+  selectedCount: number;
+  totalSize: number;
+  visibleCount: number;
 }
 
 function simpleGlobMatch(filename: string, pattern: string): boolean {
@@ -57,7 +63,7 @@ function simpleGlobMatch(filename: string, pattern: string): boolean {
   return filename === pattern;
 }
 
-function formatBytes(bytes: number, decimals = 1) {
+export function formatBytes(bytes: number, decimals = 1) {
   if (!+bytes) {
     return '0 B';
   }
@@ -92,10 +98,10 @@ export default function FileExplorer({
   const [selectedSizes, setSelectedSizes] = useState<Record<string, number>>({});
   const [error, setError] = useState<{ message: string; status?: number } | null>(null);
 
-  const onPathChangeRef = React.useRef(onPathChange);
-  const onSelectionChangeRef = React.useRef(onSelectionChange);
-  const onErrorRef = React.useRef(onError);
-  const onMetadataChangeRef = React.useRef(onMetadataChange);
+  const onPathChangeRef = useRef(onPathChange);
+  const onSelectionChangeRef = useRef(onSelectionChange);
+  const onErrorRef = useRef(onError);
+  const onMetadataChangeRef = useRef(onMetadataChange);
 
   useEffect(() => {
     onPathChangeRef.current = onPathChange;
@@ -189,13 +195,16 @@ export default function FileExplorer({
       setSelectedPaths(ids);
       // Re-calculate sizes based on new selection
       const newSizes: Record<string, number> = {};
+      let total = 0;
       selectableFiles.forEach((item: FileItem) => {
         if (ids.has(item.path)) {
-          newSizes[item.path] = item.size ?? 0;
+          const s = item.size ?? 0;
+          newSizes[item.path] = s;
+          total += s;
         }
       });
       setSelectedSizes(newSizes);
-      onSelectionChangeRef.current?.(Array.from(ids));
+      onSelectionChangeRef.current?.(Array.from(ids), total);
     },
     getId: (item: FileItem) => item.path,
   });
@@ -239,7 +248,7 @@ export default function FileExplorer({
         resetSelectionHistory();
         setSelectedPaths(new Set());
         setSelectedSizes({});
-        onSelectionChangeRef.current?.([]);
+        onSelectionChangeRef.current?.([], 0);
       } catch (e) {
         if (e instanceof Error && e.name === 'AbortError') {
           // Ignore abort errors
@@ -294,15 +303,16 @@ export default function FileExplorer({
     // Update logic same as hook callback
     setSelectedPaths(next);
     const newSizes: Record<string, number> = {};
+    let total = 0;
     selectableFiles.forEach((item: FileItem) => {
       if (next.has(item.path)) {
-        newSizes[item.path] = item.size ?? 0;
-      } else {
-        // No-op
+        const s = item.size ?? 0;
+        newSizes[item.path] = s;
+        total += s;
       }
     });
     setSelectedSizes(newSizes);
-    onSelectionChangeRef.current?.(Array.from(next));
+    onSelectionChangeRef.current?.(Array.from(next), total);
 
     resetSelectionHistory();
   };
@@ -486,7 +496,15 @@ export default function FileExplorer({
       </div>
       {/* Footer Info */}
       <div className={styles.footer}>
-        {footer ?? (
+        {typeof footer === 'function' ? (
+          footer({
+            selectedCount: selectedPaths.size,
+            totalSize: totalSelectedSize,
+            visibleCount: visibleItems.length,
+          })
+        ) : footer ? (
+          footer
+        ) : (
           <>
             <span>{visibleItems.length} items</span>
             {selectedPaths.size > 0 && (

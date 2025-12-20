@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
   FaQuoteLeft,
   FaFileDownload,
@@ -49,9 +49,9 @@ export default function MessageItem({
   onQuoteClick?: () => void;
 }) {
   const hasTextContent = !!msg.content;
-  const bubbleRef = React.useRef<HTMLDivElement>(null);
+  const bubbleRef = useRef<HTMLDivElement>(null);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (isTarget && bubbleRef.current && highlightToken) {
       const animation = bubbleRef.current.animate(
         [

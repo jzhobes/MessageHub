@@ -40,19 +40,57 @@ export function useIngestion() {
     totalFilesRef.current = 0;
     processedFilesRef.current = 0;
 
-    // Transfer Remote
-    if (remoteFiles.length > 0) {
-      setStatus('Moving files...');
+    const hasTransfer = remoteFiles.length > 0;
+    const transferWeight = 40; // 0-40%
+    const ingestOffset = hasTransfer ? transferWeight : 0;
+    const ingestWeight = 100 - ingestOffset;
+
+    // --- 1. Transfer Remote ---
+    if (hasTransfer) {
+      setStatus(`${transferMode === 'copy' ? 'Copying' : 'Moving'} files...`);
       try {
-        await fetch('/api/setup/transfer', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ files: remoteFiles, operation: transferMode }),
+        // Use GET with EventSource for simple streaming progress
+        const params = new URLSearchParams({
+          files: JSON.stringify(remoteFiles),
+          operation: transferMode,
         });
-        setLogs((p) => [...p, `Transferred ${remoteFiles.length} files.`]);
-      } catch {
-        setError('File transfer failed');
-        setLogs((p) => [...p, 'Transfer failed.']);
+
+        await new Promise<void>((resolve, reject) => {
+          const evt = new EventSource(`/api/setup/transfer?${params.toString()}`);
+
+          evt.onmessage = (event) => {
+            const json = JSON.parse(event.data);
+            if (json.type === 'log') {
+              setLogs((p) => [...p, json.payload]);
+            }
+            if (json.type === 'progress') {
+              const { index, total, file, status, error: fileErr } = json.payload;
+              const pct = Math.floor((index / total) * transferWeight);
+              setProgress(pct);
+              setLogs((p) => [...p, `[${index}/${total}] ${file}: ${status}${fileErr ? ` (${fileErr})` : ''}`]);
+            }
+            if (json.type === 'done') {
+              evt.close();
+              resolve();
+            }
+            if (json.type === 'error') {
+              evt.close();
+              reject(new Error(json.payload));
+            }
+          };
+
+          evt.onerror = () => {
+            evt.close();
+            reject(new Error('Connection to transfer service lost'));
+          };
+        });
+
+        setLogs((p) => [...p, `Transfer complete.`]);
+        setProgress(transferWeight);
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'File transfer failed';
+        setError(message);
+        setLogs((p) => [...p, `Transfer failed: ${message}`]);
         setIsInstalling(false);
         return;
       }
@@ -60,12 +98,13 @@ export function useIngestion() {
 
     // Upload Browser Files (Placeholder for now as in current SetupModal) if (files.length > 0) ...
 
-    // Ingest
+    // --- 2. Ingest ---
     setStatus('Scanning...');
     setIsInstalling(true);
-    setProgress(5); // Start at 5%
+    // Start ingestion progress at offset (5% of its own range)
+    setProgress(ingestOffset + Math.round(ingestWeight * 0.05));
 
-    const evtSource = new EventSource('/api/setup/ingest');
+    const evtSource = new EventSource(`/api/setup/ingest?deleteArchives=true`);
 
     evtSource.onmessage = (event) => {
       try {
@@ -90,15 +129,32 @@ export function useIngestion() {
             totalArchivesRef.current = parseInt(totalArchivesMatch[1], 10);
           }
 
+          // Parse ArchiveStarted
+          if (json.payload.includes('[ArchiveStarted]:')) {
+            const parts = json.payload.split(']:')[1].trim().split('|');
+            setStatus(`Extracting ${parts[0]}...`);
+          }
+
+          // Parse ArchiveProgress
+          if (json.payload.includes('[ArchiveProgress]:')) {
+            const parts = json.payload.split(']:')[1].trim().split('|');
+            const name = parts[0];
+            const current = parseInt(parts[1], 10);
+            const total = parseInt(parts[2], 10);
+            setStatus(`Extracting ${name} (${current}/${total})...`);
+          }
+
           // Parse ArchiveExtracted
           if (json.payload.includes('[ArchiveExtracted]:')) {
             extractedArchivesRef.current += 1;
-            setStatus('Extracting ' + json.payload.split(']:')[1].trim() + '...');
+            const name = json.payload.split(']:')[1].trim();
+            setStatus(`Extracted ${name}`);
 
-            // Phase 1 Progress: 0-30%
+            // Extraction phase: first 30% of ingestion weight
             if (totalArchivesRef.current > 0) {
-              const pct = Math.min(Math.round((extractedArchivesRef.current / totalArchivesRef.current) * 30), 30);
-              setProgress(Math.max(pct, 5));
+              const phasePct = (extractedArchivesRef.current / totalArchivesRef.current) * 0.3;
+              const globalPct = ingestOffset + Math.round(phasePct * ingestWeight);
+              setProgress(globalPct);
             }
           }
 
@@ -113,24 +169,22 @@ export function useIngestion() {
             setStatus(json.payload.split(']:')[1].trim() + '...');
             processedFilesRef.current += 1;
 
-            // Phase 2 Progress: 30-100% (or 0-100 if no archives)
+            // Ingestion phase: 30% to 100% of ingestion weight
             const hasArchives = totalArchivesRef.current > 0;
-            const basePct = hasArchives ? 30 : 0;
-            const range = hasArchives ? 70 : 100;
+            const startOfPhase = hasArchives ? 0.3 : 0.0;
+            const sizeOfPhase = 1.0 - startOfPhase;
 
             if (totalFilesRef.current > 0) {
-              const filePct = processedFilesRef.current / totalFilesRef.current;
-              const finalPct = Math.min(Math.round(basePct + filePct * range), 99);
-              setProgress(Math.max(finalPct, 5));
+              const phaseProgress = processedFilesRef.current / totalFilesRef.current;
+              const phasePct = startOfPhase + phaseProgress * sizeOfPhase;
+              const globalPct = ingestOffset + Math.min(Math.round(phasePct * ingestWeight), 99);
+              setProgress(globalPct);
             } else {
-              // Fallback
-              setProgress((prev) => Math.min(prev + 2, 95));
+              // Fallback bump
+              setProgress((prev) => Math.min(prev + 1, 99));
             }
           } else if (json.payload.includes('[Committed]:')) {
             setStatus(json.payload.split(']:')[1].trim());
-            if (totalFilesRef.current === 0) {
-              setProgress((prev) => Math.min(prev + 2, 95));
-            }
           }
         }
 

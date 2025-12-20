@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { FaDatabase, FaCheckCircle } from 'react-icons/fa';
-import styles from '../SetupModal.module.css';
+
+import styles from '@/components/modals/SetupModal.module.css';
 
 interface ScanStepProps {
   runInstall: () => void;

@@ -80,31 +80,31 @@
 .messageAlignLeft :global(.messageBubble),
 .messageAlignLeft :global(.linkPreview),
 .messageAlignLeft :global(.previewContainer) > img {
-  border-radius: 4px 18px 18px 4px;
+  border-radius: var(--radius-1) var(--radius-3) var(--radius-3) var(--radius-1);
 }
 
 .messageAlignLeft.firstMessage :global(.messageBubble) {
-  border-top-left-radius: 18px;
+  border-top-left-radius: var(--radius-3);
 }
 
 .messageAlignLeft.lastMessage:not(:has(:global(.previewContainer))) :global(.messageBubble),
 .messageAlignLeft.lastMessage :global(.linkPreview),
 .messageAlignLeft.lastMessage :global(.previewContainer) > img {
-  border-bottom-left-radius: 18px;
+  border-bottom-left-radius: var(--radius-3);
 }
 
 .messageAlignRight :global(.messageBubble),
 .messageAlignRight :global(.linkPreview),
 .messageAlignRight :global(.previewContainer) > img {
-  border-radius: 18px 4px 4px 18px;
+  border-radius: var(--radius-3) var(--radius-1) var(--radius-1) var(--radius-3);
 }
 
 .messageAlignRight.firstMessage :global(.messageBubble) {
-  border-top-right-radius: 18px;
+  border-top-right-radius: var(--radius-3);
 }
 
 .messageAlignRight.lastMessage:not(:has(:global(.previewContainer))) :global(.messageBubble),
 .messageAlignRight.lastMessage :global(.linkPreview),
 .messageAlignRight.lastMessage :global(.previewContainer) > img {
-  border-bottom-right-radius: 18px;
+  border-bottom-right-radius: var(--radius-3);
 }

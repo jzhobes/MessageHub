@@ -11,6 +11,7 @@ import ChatWindow from '@/sections/ChatWindow';
 import Sidebar from '@/sections/Sidebar';
 import ThreadList from '@/sections/ThreadList';
 import styles from '@/components/Layout.module.css';
+import { useApp } from '@/context/AppContext';
 
 // Convert raw DB platform identifiers to UI display names
 function mapPlatform(raw: string): string {
@@ -49,12 +50,7 @@ export default function Home() {
   const [isMobile, setIsMobile] = useState(false);
   const [highlightToken, setHighlightToken] = useState(0);
   // Availability & Router State
-  const [availability, setAvailability] = useState<Record<string, boolean>>({
-    Facebook: false,
-    Instagram: false,
-    'Google Chat': false,
-    'Google Voice': false,
-  });
+  const { isInitialized, availability } = useApp();
   const [isRouterReady, setIsRouterReady] = useState(false);
 
   // Pagination State
@@ -265,32 +261,18 @@ export default function Home() {
   }, [router.isReady]);
 
   // 2. Initialize Backend Status
-  const [isInitialized, setIsInitialized] = useState(false);
-
   useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch('/api/status');
-        const response = await res.json();
+    if (isInitialized === false) {
+      setShowSetup(true);
+    }
 
-        setIsInitialized(response.initialized);
-
-        // If not initialized (no DB file), show setup
-        if (!response.initialized) {
-          setShowSetup(true);
-        }
-
-        const data = response.platforms;
-        setAvailability(data);
-        const safePlatform = resolvePlatform(activePlatform, data);
-        if (safePlatform !== activePlatform) {
-          setActivePlatform(safePlatform);
-        }
-      } catch (e) {
-        console.error('Failed to fetch status', e);
+    if (availability) {
+      const safePlatform = resolvePlatform(activePlatform, availability);
+      if (safePlatform !== activePlatform) {
+        setActivePlatform(safePlatform);
       }
-    })();
-  }, [activePlatform, resolvePlatform]);
+    }
+  }, [activePlatform, resolvePlatform, isInitialized, availability]);
 
   // 3. Responsive Check
   useEffect(() => {
@@ -436,6 +418,7 @@ export default function Home() {
         onClose={() => setShowSetup(false)}
         onCompleted={() => window.location.reload()}
         initialStep={isInitialized ? 2 : 0}
+        isFirstRun={isInitialized === false}
       />
       <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} onNavigate={handleSearchNavigate} />
 

@@ -14,7 +14,7 @@ import { Thread } from '@/lib/shared/types';
 import { StudioControls } from '@/sections/StudioControls';
 import { StudioThreadList } from '@/sections/StudioThreadList';
 import layoutStyles from '@/components/Layout.module.css';
-import styles from './studio.module.css';
+import styles from '@/pages/studio.module.css';
 
 const initialState = {
   identityNames: '',
@@ -40,8 +40,6 @@ const INSTRUCTION_TEMPLATES = [
 ];
 
 export default function Studio() {
-  // ... existing code ...
-
   const [threads, setThreads] = useState<Thread[]>([]);
   const [selectedIds, setSelectedIds] = useState(new Set<string>());
   const [loading, setLoading] = useState(true);
@@ -221,6 +219,7 @@ export default function Studio() {
         onClose={() => setShowSetup(false)}
         onCompleted={() => window.location.reload()}
         initialStep={2}
+        isFirstRun={false}
       />
       <div className={layoutStyles.topBar}>
         <div className={layoutStyles.leftSection}>

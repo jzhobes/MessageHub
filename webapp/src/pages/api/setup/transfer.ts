@@ -1,37 +1,56 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import fs from 'fs';
 import path from 'path';
+import { setupSSE } from '@/lib/server/sse';
 import appConfig from '@/lib/shared/appConfig';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== 'POST') {
-    res.setHeader('Allow', ['POST']);
+  if (req.method !== 'POST' && req.method !== 'GET') {
+    res.setHeader('Allow', ['POST', 'GET']);
     return res.status(405).end(`Method ${req.method} Not Allowed`);
   }
 
-  const { files, operation } = req.body; // files: string[], operation: 'copy' | 'move'
+  let files: string[] = [];
+  let operation: 'copy' | 'move' = 'copy';
+
+  if (req.method === 'POST') {
+    files = req.body.files;
+    operation = req.body.operation;
+  } else {
+    try {
+      files = JSON.parse(req.query.files as string);
+      operation = (req.query.operation as 'copy' | 'move') || 'copy';
+    } catch {
+      return res.status(400).json({ error: 'Invalid query parameters' });
+    }
+  }
 
   if (!files || !Array.isArray(files) || files.length === 0) {
     return res.status(400).json({ error: 'No files specified' });
   }
 
+  // Setup SSE
+  const stream = setupSSE(res, { heartbeat: true });
+
   const targetDir = appConfig.WORKSPACE_PATH;
-  const results: { file: string; status: string; error?: string }[] = [];
 
   try {
     // Ensure data dir exists
     if (!fs.existsSync(targetDir)) {
+      stream.send('log', `Creating target directory: ${targetDir}`);
       await fs.promises.mkdir(targetDir, { recursive: true });
     }
 
+    stream.send('log', `Starting ${operation} of ${files.length} files to ${targetDir}`);
+
+    let count = 0;
     for (const sourcePath of files) {
+      count++;
       const fileName = path.basename(sourcePath);
       const destPath = path.join(targetDir, fileName);
 
       try {
         if (operation === 'move') {
-          // Rename (Move)
-          // If cross-device link error (EXDEV), fallback to copy+unlink
           try {
             await fs.promises.rename(sourcePath, destPath);
           } catch (e) {
@@ -43,20 +62,30 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             }
           }
         } else {
-          // Copy
           await fs.promises.copyFile(sourcePath, destPath);
         }
-        results.push({ file: fileName, status: 'success' });
+
+        stream.send('progress', {
+          index: count,
+          total: files.length,
+          file: fileName,
+          status: 'success',
+        });
       } catch (e) {
-        const message = e instanceof Error ? e.message : String(e);
-        console.error(`Failed to ${operation} ${sourcePath}`, e);
-        results.push({ file: fileName, status: 'error', error: message });
+        stream.send('progress', {
+          index: count,
+          total: files.length,
+          file: fileName,
+          status: 'error',
+          error: e instanceof Error ? e.message : String(e),
+        });
       }
     }
 
-    res.status(200).json({ success: true, results });
+    stream.send('done', { success: true });
   } catch (e) {
-    const message = e instanceof Error ? e.message : String(e);
-    res.status(500).json({ error: message || 'Transfer failed' });
+    stream.send('error', e instanceof Error ? e.message : String(e));
+  } finally {
+    stream.close();
   }
 }

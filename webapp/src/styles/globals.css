@@ -32,6 +32,29 @@
   --highlight-border: #000;
   --bg-primary: #ffffff;
   --bg-secondary: #f2f2f7;
+
+  /* Standardized Border Radii */
+  --radius-1: 4px; /* Small: Buttons, Inputs, Tags */
+  --radius-2: 12px; /* Medium: Cards, Panes, Tooltips */
+  --radius-3: 18px; /* Large: Modals, Main Content Sections */
+}
+
+/* Border Radius Utility Classes */
+.bR-1 {
+  border-radius: var(--radius-1);
+}
+.bR-2 {
+  border-radius: var(--radius-2);
+}
+.bR-3 {
+  border-radius: var(--radius-3);
+}
+.bR-circle {
+  border-radius: 50%;
+}
+
+:root {
+  --radius-circle: 50%;
 }
 
 [data-theme='dark'] {

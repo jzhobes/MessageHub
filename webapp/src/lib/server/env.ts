@@ -30,9 +30,9 @@ ROOT_WORKSPACE_PATH="${home}"
   const result = dotenv.config({ path: envPath });
 
   if (result.error) {
-    console.error('❌ Failed to load .env file:', result.error);
+    console.error('❌  Failed to load .env file:', result.error);
   } else {
-    console.info('✅ Environment variables loaded from .env');
+    console.info('✅  Environment variables loaded from .env');
   }
 }
 
