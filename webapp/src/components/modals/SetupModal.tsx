@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FaCog, FaFileImport, FaDatabase, FaSpinner } from 'react-icons/fa';
+import { FaCog, FaFileImport, FaDatabase, FaCheckCircle } from 'react-icons/fa';
 
 import { useIngestion } from '@/hooks/useIngestion';
 import BaseModal from './BaseModal';
@@ -55,6 +55,8 @@ export default function SetupModal({
   const [resolvedPath, setResolvedPath] = useState<string | null>(null);
   const [remoteFiles, setRemoteFiles] = useState<string[]>([]);
   const [transferMode, setTransferMode] = useState<'copy' | 'move'>('copy');
+  const [isExistingWorkspace, setIsExistingWorkspace] = useState(false);
+  const [hasExistingArchives, setHasExistingArchives] = useState(false);
 
   const handleUpdateWorkspacePath = (p: string | null) => {
     setWorkspacePath(p);
@@ -62,19 +64,54 @@ export default function SetupModal({
   };
 
   // Ingestion Hook
-  const { isInstalling, isComplete, logs, status, progress, error, runInstall: startIngestion } = useIngestion();
+  const {
+    isInstalling,
+    isComplete,
+    logs,
+    status,
+    progress,
+    error,
+    activeTransfers,
+    runInstall: startIngestion,
+  } = useIngestion();
 
   // Side-effect: Load config on open
   useEffect(() => {
-    if (isOpen) {
-      fetch('/api/setup/config')
-        .then((r) => r.json())
-        .then((data) => {
-          setWorkspacePath(data.workspacePath);
-          setResolvedPath(data.resolved);
-        });
+    if (!isOpen) {
+      return;
     }
+
+    (async () => {
+      try {
+        const response = await fetch('/api/setup/config');
+        const data = await response.json();
+        setWorkspacePath(data.workspacePath);
+        setResolvedPath(data.resolved);
+      } catch (err) {
+        console.error('Failed to load config:', err);
+      }
+    })();
   }, [isOpen]);
+
+  const isPathTab = activeTab === 'path';
+  const isScanTab = activeTab === 'scan';
+  const isFastFinish = isPathTab && isFirstRun && isExistingWorkspace;
+  const isFullyDone = isComplete || (isScanTab && remoteFiles.length === 0 && !hasExistingArchives);
+
+  // Background Finalization: Seal the deal as soon as we're done
+  useEffect(() => {
+    if (!isFirstRun || !isFullyDone || !isOpen) {
+      return;
+    }
+
+    (async () => {
+      try {
+        await fetch('/api/setup/finalize', { method: 'POST' });
+      } catch (e) {
+        console.error('Background finalization failed:', e);
+      }
+    })();
+  }, [isFullyDone, isFirstRun, isOpen]);
 
   const saveConfig = async () => {
     try {
@@ -99,8 +136,7 @@ export default function SetupModal({
           const finalizeRes = await fetch('/api/setup/finalize', { method: 'POST' });
           if (finalizeRes.ok) {
             // Full refresh to ensure clean state with new workspace
-            onCompleted?.();
-            onClose();
+            window.location.reload();
           } else {
             const fData = await finalizeRes.json();
             setPathError(fData.error || 'Failed to finalize workspace change');
@@ -118,8 +154,6 @@ export default function SetupModal({
     }
   };
 
-  const [isSaving, setIsSaving] = useState(false);
-
   const handleRunInstall = () => {
     startIngestion(remoteFiles, transferMode);
   };
@@ -127,14 +161,55 @@ export default function SetupModal({
   const currentIndex = steps.indexOf(activeTab as 'path' | 'import' | 'scan');
 
   const handleNext = async () => {
+    if (isInstalling) {
+      return;
+    }
+
     if (activeTab === 'welcome') {
-      setActiveTab(steps[0]);
-    } else if (activeTab === 'path') {
-      setIsSaving(true);
+      setActiveTab('path');
+      return;
+    }
+
+    if (activeTab === 'path') {
       await saveConfig();
-      setIsSaving(false);
+
+      if (isFirstRun) {
+        // Validation check for first run
+        if (!workspacePath && !resolvedPath) {
+          return;
+        }
+
+        // Smart Skip: If existing workspace detected, finalize and finish now
+        if (isExistingWorkspace) {
+          try {
+            const finalizeRes = await fetch('/api/setup/finalize', { method: 'POST' });
+            if (finalizeRes.ok) {
+              window.location.reload();
+              return;
+            }
+          } catch (e) {
+            console.error('Failed to auto-finalize existing workspace:', e);
+          }
+        }
+      }
       setActiveTab('import');
-    } else if (currentIndex < steps.length - 1) {
+      return;
+    }
+
+    if (activeTab === 'import') {
+      setActiveTab('scan');
+      return;
+    }
+
+    if (activeTab === 'scan') {
+      if (isComplete) {
+        onCompleted?.();
+        onClose();
+      }
+      return;
+    }
+
+    if (currentIndex < steps.length - 1) {
       setActiveTab(steps[currentIndex + 1]);
     }
   };
@@ -165,6 +240,9 @@ export default function SetupModal({
               onCompleted?.();
               onClose();
             }}
+            onQueueUpdate={setHasExistingArchives}
+            isFirstRun={isFirstRun}
+            activeTransfers={activeTransfers}
           />
         );
       case 'import':
@@ -185,8 +263,7 @@ export default function SetupModal({
             isInstalling={isInstalling}
             onChange={handleUpdateWorkspacePath}
             onSave={saveConfig}
-            onAdvance={() => setActiveTab('import')}
-            onGoBack={() => setActiveTab('welcome')}
+            onExistingWorkspaceDetected={setIsExistingWorkspace}
             isFirstRun={isFirstRun}
           />
         );
@@ -210,6 +287,84 @@ export default function SetupModal({
     }
   };
 
+  const renderFooter = () => {
+    if (activeTab === 'welcome') {
+      return null;
+    }
+
+    // Primary Button Configuration
+    const getPrimaryButtonContent = () => {
+      if (isScanTab) {
+        if (isFullyDone) {
+          return (
+            <>
+              <FaCheckCircle /> Open MessageHub
+            </>
+          );
+        }
+        if (isInstalling) {
+          return 'Processing...';
+        }
+        return 'Start Processing';
+      }
+
+      if (activeTab === 'import' && remoteFiles.length === 0) {
+        return 'Skip';
+      }
+
+      if (isFastFinish) {
+        return 'Finish';
+      }
+      return 'Next';
+    };
+
+    const handlePrimaryAction = async () => {
+      if (isScanTab) {
+        if (isFullyDone) {
+          if (isFirstRun) {
+            // Finalize has already been called in the background useEffect,
+            // or we call it one last time to be safe and reload.
+            window.location.reload();
+            return;
+          }
+          onCompleted?.();
+          onClose();
+        } else {
+          handleRunInstall();
+        }
+      } else {
+        handleNext();
+      }
+    };
+
+    const isPrimaryDisabled = isScanTab ? isInstalling && !isComplete : isPathTab && !resolvedPath && !workspacePath;
+
+    return (
+      <div className={styles.wizardFooter}>
+        <button className={styles.secondaryButton} disabled={isInstalling || isComplete} onClick={handleBack}>
+          Back
+        </button>
+
+        <div className={styles.progressDots}>
+          {!isFastFinish &&
+            steps.map((step, idx) => (
+              <div key={step} className={`${styles.dot} ${idx === currentIndex ? styles.dotActive : ''}`} />
+            ))}
+        </div>
+
+        <button
+          key={isScanTab ? 'btn-scan' : 'btn-next'}
+          className={`${styles.button} ${isFullyDone ? styles.primaryButton : ''}`}
+          onClick={handlePrimaryAction}
+          disabled={isPrimaryDisabled}
+          style={isScanTab ? { minWidth: 160 } : undefined}
+        >
+          {getPrimaryButtonContent()}
+        </button>
+      </div>
+    );
+  };
+
   return (
     <BaseModal
       isOpen={isOpen}
@@ -229,50 +384,7 @@ export default function SetupModal({
             >
               {renderContent()}
             </div>
-
-            {activeTab !== 'welcome' && (
-              <div className={styles.wizardFooter}>
-                <button className={styles.secondaryButton} onClick={handleBack} disabled={isInstalling}>
-                  Back
-                </button>
-
-                <div className={styles.progressDots}>
-                  {steps.map((step, idx) => (
-                    <div key={step} className={`${styles.dot} ${idx === currentIndex ? styles.dotActive : ''}`} />
-                  ))}
-                </div>
-
-                {activeTab === 'scan' ? (
-                  <button
-                    className={styles.button}
-                    onClick={() => {
-                      if (isComplete) {
-                        onCompleted?.();
-                        onClose();
-                      }
-                    }}
-                    disabled={isInstalling || !isComplete}
-                  >
-                    Finish
-                  </button>
-                ) : (
-                  <button
-                    className={styles.button}
-                    onClick={handleNext}
-                    disabled={isSaving || (activeTab === 'path' && !resolvedPath && !workspacePath)}
-                  >
-                    {isSaving ? (
-                      <>
-                        <FaSpinner className={styles.spinner} style={{ marginRight: 8 }} />
-                        Saving...
-                      </>
-                    ) : (
-                      'Next'
-                    )}
-                  </button>
-                )}
-              </div>
-            )}
+            {renderFooter()}
           </div>
         ) : (
           <div className={styles.setupContainer}>

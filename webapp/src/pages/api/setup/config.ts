@@ -3,6 +3,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 
 import appConfig from '@/lib/shared/appConfig';
 import fileSystem from '@/lib/server/fileSystem';
+import { persistWorkspacePath } from '@/lib/server/env';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === 'GET') {
@@ -72,6 +73,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Update runtime config only if valid (exists)
     if (finalExists) {
       appConfig.WORKSPACE_PATH = workspacePath;
+      try {
+        await persistWorkspacePath(workspacePath);
+      } catch (e) {
+        console.error('Failed to persist workspace path to .env:', e);
+      }
     }
 
     return res.status(200).json({ workspacePath, exists: finalExists, resolved, isEmpty: finalEmpty });

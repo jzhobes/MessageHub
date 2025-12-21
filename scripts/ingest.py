@@ -75,9 +75,10 @@ def init_db(db_path):
     print(f"Database initialized at {db_path}")
 
 
-def scan_directory(scan_path, db_path, platform_filter="all"):
+def scan_directory(scan_path, db_path, platform_filter="all", limit_platforms=None):
     """
     Recursively scans the provided directory for chat export data.
+    If limit_platforms is provided (a set), only those platforms will be scanned.
     """
     conn = sqlite3.connect(db_path)
     # Enable Write-Ahead Logging for concurrency during ingestion and subsequent reads
@@ -99,6 +100,10 @@ def scan_directory(scan_path, db_path, platform_filter="all"):
         for p in possible_voice_roots:
             calls_dir = p / "Calls"
             if calls_dir.exists():
+                # Filter check
+                if limit_platforms is not None and "google_voice" not in limit_platforms:
+                    continue
+
                 # Google Voice is structurally one "item" acting as a bulk ingest,
                 # but we can count it as 1 major task.
                 files_to_process.append((999, p, "google_voice"))  # 999 as placeholder priority
@@ -110,25 +115,36 @@ def scan_directory(scan_path, db_path, platform_filter="all"):
             p_root = Path(root)
             path_str = str(p_root).lower()
 
+            # Platform detection
             is_chat = "google chat" in path_str
             is_fb = "facebook" in path_str or "messenger" in path_str
             is_insta = "instagram" in path_str
 
-            if platform_filter != "all":
-                if platform_filter == "google_chat" and not is_chat:
-                    continue
-                if platform_filter == "facebook" and not is_fb:
-                    continue
-                if platform_filter == "instagram" and not is_insta:
-                    continue
-                if platform_filter == "google_voice":
-                    continue
-
+            # Platform filtering
+            target_platform = None
             if is_chat:
-                files_to_process.append((1, p_root, "google_chat"))
+                target_platform = "google_chat"
             elif is_fb:
-                files_to_process.append((2, p_root, "facebook"))
+                target_platform = "facebook"
             elif is_insta:
+                target_platform = "instagram"
+
+            if not target_platform:
+                continue
+
+            # 1. Check --platform flag
+            if platform_filter != "all" and platform_filter != target_platform:
+                continue
+
+            # 2. Check Archive Detection (Archive-Driven)
+            if limit_platforms is not None and target_platform not in limit_platforms:
+                continue
+
+            if target_platform == "google_chat":
+                files_to_process.append((1, p_root, "google_chat"))
+            elif target_platform == "facebook":
+                files_to_process.append((2, p_root, "facebook"))
+            elif target_platform == "instagram":
                 files_to_process.append((3, p_root, "instagram"))
 
     total_files_count = len(files_to_process)
@@ -351,7 +367,7 @@ def extract_zips_found_with_opts(search_dirs, target_root, platform_filter="all"
     # Run Parallel
     # Limit workers to avoid disk thrashing, but beneficial for decompression
     max_workers = min(4, len(all_archives))
-    print(f"Starting parallel extraction of {len(all_archives)} archives (Workers: {max_workers})...")
+    print(f"Starting extraction of {len(all_archives)} archives...")
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = [executor.submit(process_archive, a) for a in all_archives]
@@ -473,23 +489,21 @@ def start_ingestion():
 
     try:
         # Ingestion
-        if (source_path.is_file() and source_path.suffix == ".zip") or processed_count > 0:
-            if processed_count > 0:
-                print(
-                    f"Archives processed ({processed_count}). Scanning full data directory to locate merged content..."
-                )
-            else:
-                print("Zip extracted. Scanning full data directory to locate merged content...")
+        if processed_count > 0:
+            print(
+                f"Archives processed ({processed_count}). Scanning workspace for {', '.join(detected_platforms)} content..."
+            )
+            scan_directory(WORKSPACE_PATH, db_path, platform_filter=args.platform, limit_platforms=detected_platforms)
+        elif source_path.is_file() and source_path.suffix == ".zip":
+            # Direct zip path support (treat as 'all' because we didn't use extract_zips_found_with_opts to get detected set)
+            print("Specified zip extracted. Scanning for content...")
             scan_directory(WORKSPACE_PATH, db_path, platform_filter=args.platform)
-
-        elif source_path.is_dir():
-            # Scan the entire data dir (recursive) which now includes extracted zips
-            scan_directory(WORKSPACE_PATH, db_path, platform_filter=args.platform)
+        elif source_path.is_dir() and any(seen_zips_count):
+            # If we had zips but processed_count was 0? (Shouldn't happen with our logic but being safe)
+            scan_directory(WORKSPACE_PATH, db_path, platform_filter=args.platform, limit_platforms=detected_platforms)
         else:
-            # Fallback: if we had zips but source_path itself is gone/invalid now,
-            # we should still scan the workspace because extraction worked.
-            print(f"Scanning workspace directory: {WORKSPACE_PATH}")
-            scan_directory(WORKSPACE_PATH, db_path, platform_filter=args.platform)
+            # No archives found or selected - Skip scanning as data only enters thru archives
+            print("No new archives to process. Skipping workspace scan.")
 
         # Cleanup JSONs for non-Google platforms
         cleanup_targets = []

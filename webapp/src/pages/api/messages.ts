@@ -54,12 +54,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   let googleChatUserPath = '';
   const gcUsersDir = path.join(dataDir, 'Google Chat/Users');
   try {
-    if (
-      await fs
-        .stat(gcUsersDir)
-        .then(() => true)
-        .catch(() => false)
-    ) {
+    const stats = await fs.stat(gcUsersDir);
+    if (stats.isDirectory()) {
       const folders = await fs.readdir(gcUsersDir);
       for (const folder of folders) {
         if (folder.startsWith('User ')) {

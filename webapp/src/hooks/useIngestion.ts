@@ -1,17 +1,25 @@
 import { useState, useRef, useEffect } from 'react';
 
+export interface ArchiveProgress {
+  name: string;
+  current: number;
+  total: number;
+}
+
 export function useIngestion() {
   const [isInstalling, setIsInstalling] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
   const [logs, setLogs] = useState<string[]>([]);
   const [status, setStatus] = useState('');
   const [progress, setProgress] = useState(0);
+  const [activeTransfers, setActiveTransfers] = useState<Record<string, ArchiveProgress>>({});
 
-  // Use refs for counting to avoid stale closures in SSE handler
+  // Use refs for counting and tracking to avoid stale closures in SSE handler
   const totalArchivesRef = useRef(0);
   const extractedArchivesRef = useRef(0);
   const totalFilesRef = useRef(0);
   const processedFilesRef = useRef(0);
+  const transferMapRef = useRef<Record<string, ArchiveProgress>>({});
 
   const [error, setError] = useState<string | null>(null);
 
@@ -31,14 +39,17 @@ export function useIngestion() {
     setIsInstalling(true);
     setIsComplete(false);
     setError(null);
-    setLogs(['Initializing...']);
+    // setLogs(['Initializing...']);
+    setLogs([]);
     setProgress(0);
+    setActiveTransfers({});
 
     // Reset refs
     totalArchivesRef.current = 0;
     extractedArchivesRef.current = 0;
     totalFilesRef.current = 0;
     processedFilesRef.current = 0;
+    transferMapRef.current = {};
 
     const hasTransfer = remoteFiles.length > 0;
     const transferWeight = 40; // 0-40%
@@ -96,8 +107,6 @@ export function useIngestion() {
       }
     }
 
-    // Upload Browser Files (Placeholder for now as in current SetupModal) if (files.length > 0) ...
-
     // --- 2. Ingest ---
     setStatus('Scanning...');
     setIsInstalling(true);
@@ -111,10 +120,9 @@ export function useIngestion() {
         const json = JSON.parse(event.data);
 
         if (json.payload && typeof json.payload === 'string') {
-          setLogs((p) => [...p, json.payload]);
-
           // Parse explicit Error signals from backend
           if (json.payload.includes('[Error]:')) {
+            setLogs((p) => [...p, json.payload]);
             const err = json.payload.split('[Error]:')[1].trim();
             setError(err);
             setStatus('Failed');
@@ -127,12 +135,26 @@ export function useIngestion() {
           const totalArchivesMatch = json.payload.match(/\[TotalArchives\]: (\d+)/);
           if (totalArchivesMatch) {
             totalArchivesRef.current = parseInt(totalArchivesMatch[1], 10);
+            setLogs((p) => [...p, json.payload]);
           }
 
           // Parse ArchiveStarted
           if (json.payload.includes('[ArchiveStarted]:')) {
             const parts = json.payload.split(']:')[1].trim().split('|');
-            setStatus(`Extracting ${parts[0]}...`);
+            const name = parts[0];
+            const total = parts.length > 1 ? parseInt(parts[1], 10) : 0;
+
+            setStatus(`Extracting ${name}...`);
+            setLogs((p) => [...p, `Starting extraction: ${name}`]);
+
+            // Initialize progress bar immediately at 0
+            if (total > 0) {
+              transferMapRef.current = {
+                ...transferMapRef.current,
+                [name]: { name, current: 0, total },
+              };
+              setActiveTransfers({ ...transferMapRef.current });
+            }
           }
 
           // Parse ArchiveProgress
@@ -141,7 +163,34 @@ export function useIngestion() {
             const name = parts[0];
             const current = parseInt(parts[1], 10);
             const total = parseInt(parts[2], 10);
-            setStatus(`Extracting ${name} (${current}/${total})...`);
+
+            // Update tracker ref and state
+            transferMapRef.current = {
+              ...transferMapRef.current,
+              [name]: { name, current, total },
+            };
+            setActiveTransfers({ ...transferMapRef.current });
+
+            // Do NOT add progress ticks to logs to keep them clean
+            return;
+          }
+
+          // Parse MergeProgress (Folder Consolidation)
+          if (json.payload.includes('[MergeProgress]:')) {
+            const parts = json.payload.split(']:')[1].trim().split('|');
+            const name = `Consolidating ${parts[0]}`;
+            const current = parseInt(parts[1], 10);
+            const total = parseInt(parts[2], 10);
+
+            // Update tracker ref and state
+            transferMapRef.current = {
+              ...transferMapRef.current,
+              [name]: { name, current, total },
+            };
+            setActiveTransfers({ ...transferMapRef.current });
+
+            // Do NOT add progress ticks to logs to keep them clean
+            return;
           }
 
           // Parse ArchiveExtracted
@@ -149,6 +198,13 @@ export function useIngestion() {
             extractedArchivesRef.current += 1;
             const name = json.payload.split(']:')[1].trim();
             setStatus(`Extracted ${name}`);
+            setLogs((p) => [...p, `Finished: ${name}`]);
+
+            // Remove from tracker
+            const newMap = { ...transferMapRef.current };
+            delete newMap[name];
+            transferMapRef.current = newMap;
+            setActiveTransfers(newMap);
 
             // Extraction phase: first 30% of ingestion weight
             if (totalArchivesRef.current > 0) {
@@ -162,10 +218,12 @@ export function useIngestion() {
           const totalMatch = json.payload.match(/\[TotalFiles\]: (\d+)/);
           if (totalMatch) {
             totalFilesRef.current = parseInt(totalMatch[1], 10);
+            setLogs((p) => [...p, json.payload]);
           }
 
           // Track progress (Ingestion)
           if (json.payload.includes('[Ingesting]:')) {
+            setLogs((p) => [...p, json.payload]);
             setStatus(json.payload.split(']:')[1].trim() + '...');
             processedFilesRef.current += 1;
 
@@ -184,7 +242,13 @@ export function useIngestion() {
               setProgress((prev) => Math.min(prev + 1, 99));
             }
           } else if (json.payload.includes('[Committed]:')) {
+            setLogs((p) => [...p, json.payload]);
             setStatus(json.payload.split(']:')[1].trim());
+          } else {
+            // General status logs
+            if (!json.payload.startsWith('[')) {
+              setLogs((p) => [...p, json.payload]);
+            }
           }
         }
 
@@ -200,6 +264,7 @@ export function useIngestion() {
             setLogs((p) => [...p, 'Done!']);
           }
           setIsInstalling(false);
+          setActiveTransfers({});
           evtSource.close();
         }
 
@@ -208,6 +273,7 @@ export function useIngestion() {
           setLogs((p) => [...p, `Error: ${json.payload}`]);
           evtSource.close();
           setIsInstalling(false);
+          setActiveTransfers({});
         }
       } catch (e) {
         console.error('Failed to parse SSE', e);
@@ -232,6 +298,7 @@ export function useIngestion() {
     status,
     progress,
     error,
+    activeTransfers,
     runInstall,
   };
 }

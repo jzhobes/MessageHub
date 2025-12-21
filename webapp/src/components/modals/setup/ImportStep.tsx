@@ -79,14 +79,14 @@ export default function ImportStep({ isFirstRun, setRemoteFiles, transferMode, s
                     </div>
                     <div className={styles.actionStatusText}>
                       {transferMode === 'move' ? (
-                        <span style={{ color: '#f59e0b', display: 'flex' }}>
-                          <FaTriangleExclamation size={16} />
+                        <span style={{ display: 'flex' }}>
+                          <FaTriangleExclamation color="#f59e0b" size={16} />
                           &nbsp;
-                          <strong>Move Mode:</strong>&nbsp;Original archives will be&nbsp;<strong>deleted</strong>.
+                          <strong>Move Mode:</strong>&nbsp;Original archives will be&nbsp;<strong>deleted</strong>
                         </span>
                       ) : (
                         <>
-                          <strong>Copy Mode:</strong> Originals will remain untouched.
+                          <strong>Copy Mode:</strong> Originals will remain untouched
                         </>
                       )}
                     </div>

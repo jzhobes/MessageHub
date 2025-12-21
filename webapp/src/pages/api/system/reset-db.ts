@@ -24,33 +24,46 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const dbPath = path.join(appConfig.WORKSPACE_PATH, 'messagehub.db');
     console.log(`Resetting database at ${dbPath}`);
 
-    // 1. Check if it exists
-    try {
-      await fs.promises.access(dbPath);
-    } catch {
-      return res.status(200).json({ success: true, message: 'Database does not exist, nothing to reset.' });
-    }
+    // 1. Close active connection and delete DB if it exists
+    const dbExists = db.exists();
+    if (dbExists) {
+      db.close();
 
-    // 2. Close active connection
-    db.close();
+      const dbPath = path.join(appConfig.WORKSPACE_PATH, 'messagehub.db');
+      const filesToDelete = [dbPath, `${dbPath}-shm`, `${dbPath}-wal`];
 
-    // 3. Delete the main DB file and auxiliary WAL files
-    const filesToDelete = [dbPath, `${dbPath}-shm`, `${dbPath}-wal`];
-
-    for (const file of filesToDelete) {
-      try {
-        await fs.promises.access(file);
-        await fs.promises.unlink(file);
-        console.log(`[Reset] Deleted: ${file}`);
-      } catch (e) {
-        // Just skip if file doesn't exist, log other errors
-        if (e && typeof e === 'object' && 'code' in e && e.code !== 'ENOENT') {
-          console.warn(`[Reset] Could not delete ${file}:`, e);
+      for (const file of filesToDelete) {
+        try {
+          await fs.promises.unlink(file);
+          console.log(`[Reset] Deleted file: ${file}`);
+        } catch (e) {
+          // Just skip if file doesn't exist (ENOENT)
+          if (e && typeof e === 'object' && 'code' in e && e.code !== 'ENOENT') {
+            console.warn(`[Reset] Could not delete file ${file}:`, e);
+          }
         }
       }
     }
 
-    return res.status(200).json({ success: true, message: 'Database successfully reset.' });
+    // 2. Delete platform directories and metadata
+    const dirsToDelete = ['Facebook', 'Instagram', 'Voice', 'Google Chat', 'Takeout', '.processed'];
+
+    for (const d of dirsToDelete) {
+      const dirPath = path.join(appConfig.WORKSPACE_PATH, d);
+      try {
+        await fs.promises.rm(dirPath, { recursive: true, force: true });
+        console.log(`[Reset] Deleted directory: ${dirPath}`);
+      } catch (e) {
+        if (e && typeof e === 'object' && 'code' in e && e.code !== 'ENOENT') {
+          console.warn(`[Reset] Could not delete directory ${dirPath}:`, e);
+        }
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Workspace data successfully reset.',
+    });
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     console.error('Failed to reset database:', e);

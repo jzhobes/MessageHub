@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import {
-  FaEye,
   FaEyeSlash,
   FaFolder,
   FaCheckCircle,
@@ -8,7 +7,6 @@ import {
   FaExclamationTriangle,
   FaReply,
   FaSpinner,
-  FaFileImport,
   FaTrash,
 } from 'react-icons/fa';
 
@@ -33,8 +31,7 @@ interface DataPathStepProps {
   isInstalling?: boolean;
   onChange: (s: string | null) => void;
   onSave: () => void;
-  onAdvance: () => void;
-  onGoBack?: () => void;
+  onExistingWorkspaceDetected?: (isExisting: boolean) => void;
 }
 
 const PathValidationStatus = ({
@@ -127,8 +124,7 @@ export default function DataPathStep({
   isInstalling,
   onChange,
   onSave,
-  onAdvance,
-  onGoBack,
+  onExistingWorkspaceDetected,
 }: DataPathStepProps) {
   const [metadata, setMetadata] = useState<PathMetadata | null>(null);
   const [explorerError, setExplorerError] = useState<{ message: string; status?: number } | null>(null);
@@ -137,6 +133,10 @@ export default function DataPathStep({
   const [resetError, setResetError] = useState<string | null>(null);
   const [showDangerZone, setShowDangerZone] = useState(false);
   const [isResetComplete, setIsResetComplete] = useState(false);
+
+  React.useEffect(() => {
+    onExistingWorkspaceDetected?.(!!metadata?.isExistingWorkspace);
+  }, [metadata?.isExistingWorkspace, onExistingWorkspaceDetected]);
 
   const canUseLocation =
     !isInstalling &&
@@ -173,14 +173,6 @@ export default function DataPathStep({
       setResetError('Network error resetting database');
       setIsResetting(false);
     }
-  };
-
-  const handleSwitchInstead = () => {
-    setShowDangerZone(false);
-    // Focus or browse logic could be added here
-    // For now, just browsing to parent is a nice touch to show transition
-    const parent = dataPath?.split('/').slice(0, -1).join('/') || '/';
-    onChange(parent);
   };
 
   return (
@@ -240,37 +232,41 @@ export default function DataPathStep({
           footer={
             <div className={styles.workspaceExplorerFooter}>
               {!isFirstRun ? (
-                resolvedPath ? (
-                  <button className={styles.textLink} onClick={() => onChange(resolvedPath)}>
-                    <FaReply size={10} style={{ marginRight: 4 }} /> Current Workspace
-                  </button>
-                ) : (
-                  <span className={styles.activeStatusNone}>None (Setting Required)</span>
-                )
+                <>
+                  {resolvedPath ? (
+                    <>
+                      <button className={styles.textLink} onClick={() => onChange(resolvedPath)}>
+                        <FaReply size={10} style={{ marginRight: 4 }} /> Current Workspace
+                      </button>
+                      <button
+                        className={`${styles.textLink} ${styles.textLinkDanger} ${showDangerZone ? styles.textLinkActive : ''}`}
+                        onClick={() => setShowDangerZone(!showDangerZone)}
+                      >
+                        {showDangerZone ? (
+                          <>
+                            <FaEyeSlash size={12} style={{ marginRight: 4 }} /> Hide Wipe Options
+                          </>
+                        ) : (
+                          <>
+                            <FaTrash size={12} style={{ marginRight: 4, color: '#ef4444' }} /> Wipe Active Workspace
+                          </>
+                        )}
+                      </button>
+                    </>
+                  ) : (
+                    <span className={styles.activeStatusNone}>None (Setting Required)</span>
+                  )}
+                </>
               ) : (
                 // Spacer to maintain footer height
                 <div>&nbsp;</div>
-              )}
-
-              {metadata?.isActive && metadata?.isExistingWorkspace && (
-                <button className={styles.textLink} onClick={() => setShowDangerZone(!showDangerZone)}>
-                  {showDangerZone ? (
-                    <>
-                      <FaEyeSlash size={12} style={{ marginRight: 4 }} /> Manage Data
-                    </>
-                  ) : (
-                    <>
-                      <FaEye size={12} style={{ marginRight: 4 }} /> Manage Data
-                    </>
-                  )}
-                </button>
               )}
             </div>
           }
         />
       </div>
 
-      {showDangerZone && metadata?.isActive && metadata?.isExistingWorkspace && (
+      {!isFirstRun && showDangerZone && resolvedPath && (
         <div className={styles.dangerZone}>
           {!isResetComplete ? (
             <>
@@ -278,39 +274,35 @@ export default function DataPathStep({
                 <FaTrash /> Danger Zone: Clear Data
               </div>
               <p className={styles.dangerDescription}>
-                This will permanently delete the <strong>messagehub.db</strong> file in your current workspace but will
-                NOT touch your raw archive files. You will need to re-run the scan/ingestion process to see your
-                messages again.
+                This will permanently delete the <strong>messagehub.db</strong> file and{' '}
+                <strong>all data folders</strong> (Facebook, Instagram, Google Takeout, etc.) at:
+                <code className={styles.dangerPath}>{resolvedPath}</code>
+                Archive files <strong>outside of this workspace</strong> will not be touched.
               </p>
 
               <div className={styles.resetConfirmation}>
-                <TextInput
-                  placeholder='Type "RESET" to confirm'
-                  value={resetConfirm}
-                  onChange={(e) => setResetConfirm(e.target.value)}
-                  className={styles.resetInput}
-                  disabled={isResetting}
-                />
                 <div className={styles.dangerActions}>
+                  <TextInput
+                    autoFocus
+                    placeholder='Type "RESET" to confirm'
+                    value={resetConfirm}
+                    onChange={(e) => setResetConfirm(e.target.value)}
+                    className={styles.resetInput}
+                    disabled={isResetting}
+                  />
                   <button
                     className={`${styles.button} ${styles.resetButton}`}
                     onClick={handleReset}
                     disabled={resetConfirm !== 'RESET' || isResetting}
+                    style={{ flex: 1 }}
                   >
                     {isResetting ? (
                       <>
-                        <FaSpinner className="spinner" /> Resetting...
+                        <FaSpinner className="spinner" color="#fff" /> Processing...
                       </>
                     ) : (
-                      'Permanently Delete Database'
+                      'Wipe This Workspace'
                     )}
-                  </button>
-                  <button
-                    className={styles.textLink}
-                    style={{ color: 'var(--text-secondary)' }}
-                    onClick={handleSwitchInstead}
-                  >
-                    <FaReply size={10} /> Switch Workspace Instead
                   </button>
                 </div>
                 {resetError && <div className={styles.errorBanner}>{resetError}</div>}
@@ -320,41 +312,15 @@ export default function DataPathStep({
             <div className={styles.resetSuccessView}>
               <div className={styles.successTitle}>
                 <FaCheckCircle color="#22c55e" size={20} />
-                <span>Database Successfully Deleted</span>
+                <span>Workspace Successfully Reset</span>
               </div>
               <p className={styles.dangerDescription}>
-                The database has been wiped. Your workspace is now empty and ready for fresh data.
+                All database records and extracted files have been wiped. The application needs to reload to initialize
+                your fresh workspace.
               </p>
               <div className={styles.successActions}>
-                <button
-                  className={`${styles.button} ${styles.primaryButton}`}
-                  onClick={() => {
-                    // Stay here, but move to next tab
-                    onAdvance();
-                  }}
-                >
-                  <FaFileImport /> Re-import Data to this Folder
-                </button>
-                <button
-                  className={`${styles.button} ${styles.secondaryButton}`}
-                  onClick={() => {
-                    onChange(null);
-                    setIsResetComplete(false);
-                    onGoBack?.();
-                  }}
-                >
-                  Go Back
-                </button>
-                <button
-                  className={`${styles.button} ${styles.bigButtonSecondary}`}
-                  onClick={() => {
-                    setIsResetComplete(false);
-                    setShowDangerZone(false);
-                    setResetConfirm('');
-                    handleSwitchInstead();
-                  }}
-                >
-                  <FaFolder /> Switch to a Different Workspace
+                <button className={`${styles.button} ${styles.primaryButton}`} onClick={() => window.location.reload()}>
+                  <FaCheckCircle /> Reload to Start Fresh
                 </button>
               </div>
             </div>

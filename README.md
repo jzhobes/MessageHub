@@ -111,7 +111,8 @@ The recommended way to set up MessageHub is via the built-in **Setup Wizard**.
 2.  **Welcome**: When you first visit the app, click **"Get Started"** on the splash screen.
 3.  **Workspace**: Select the folder where you want your records to live (defaults to `data/`).
 4.  **Import**: Select your exported `.zip` / `.tar.gz` files using the in-app file explorer.
-5.  **Process**: Click **"Run Process"**. MessageHub will extract, merge, and index your files automatically.
+5.  **Process**: Click **"Start Processing"**. MessageHub will extract, merge, and index your files automatically.
+6.  **Open**: Once complete, click **"Open MessageHub"** to enter your dashboard.
 
 ---
 

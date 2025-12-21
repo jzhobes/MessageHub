@@ -205,8 +205,7 @@ def clean_google_voice_files(data_dir=WORKSPACE_PATH):
 
 def merge_folders(src, dst):
     """
-    Recursively merges src directory into dst directory.
-    Uses shutil.copytree with dirs_exist_ok=True (Python 3.8+).
+    Recursively merges src directory into dst directory with progress reporting.
     Deletes src after successful merge.
     """
     import shutil
@@ -217,15 +216,62 @@ def merge_folders(src, dst):
     if not src.exists():
         return
 
-    try:
-        dst.mkdir(parents=True, exist_ok=True)
-        shutil.copytree(src, dst, dirs_exist_ok=True)
+    # Phase 1: Count total files (Discovery)
+    total_files = 0
+    for root, _, filenames in os.walk(src):
+        total_files += len(filenames)
 
-        # Robust deletion for Windows (handles read-only files)
-        def on_rm_error(func, path, exc_info):
+    if total_files == 0:
+        # Just clean up the empty folder
+        try:
+            shutil.rmtree(src)
+        except Exception as e:
+            print(f"Warning: Could not remove empty source folder {src}: {e}")
+        return
+
+    # Phase 2: Targeted Move with Progress
+    current_count = 0
+    folder_name = src.name
+
+    for root, dirs, filenames in os.walk(src):
+        rel_path = Path(root).relative_to(src)
+        target_dir = dst / rel_path
+        target_dir.mkdir(parents=True, exist_ok=True)
+
+        for f in filenames:
+            src_file = Path(root) / f
+            dst_file = target_dir / f
+
+            # Move (fast on same drive)
+            try:
+                if dst_file.exists():
+                    try:
+                        dst_file.unlink()  # Overwrite if exists
+                    except Exception:
+                        pass
+
+                shutil.move(str(src_file), str(dst_file))
+            except Exception:
+                # Fallback to copy if move fails (e.g. cross-device)
+                try:
+                    shutil.copy2(str(src_file), str(dst_file))
+                    src_file.unlink()
+                except Exception as e2:
+                    print(f"Error merging file {src_file}: {e2}")
+
+            current_count += 1
+            if current_count % 100 == 0 or current_count == total_files:
+                print(f"[MergeProgress]: {folder_name}|{current_count}|{total_files}")
+
+    # Phase 3: Cleanup empty directories
+    def on_rm_error(func, path, exc_info):
+        try:
             os.chmod(path, stat.S_IWRITE)
             func(path)
+        except Exception:
+            pass
 
+    try:
         shutil.rmtree(src, onerror=on_rm_error)
-    except Exception as e:
-        print(f"Error merging {src} to {dst}: {e}")
+    except Exception:
+        pass
