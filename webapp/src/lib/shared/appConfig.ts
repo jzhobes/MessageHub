@@ -13,11 +13,32 @@ class AppConfig {
    * Handles Windows drive-letter mapping (X:\ -> /mnt/x/) for Non-Windows host environments.
    */
   private _resolvePath(targetPath?: string): string {
+    // Determine project root first
+    const currentDir = process.cwd();
+    const projectRoot = path.basename(currentDir) === 'webapp' ? path.resolve(currentDir, '..') : currentDir;
+
     let p = targetPath || process.env.WORKSPACE_PATH;
 
-    // Fallback if no target or env var is set
+    // If no path in process.env, try reading from .env file directly
+    // This is critical because process.env won't pick up changes made by the setup wizard without a restart.
     if (!p) {
-      return path.resolve(process.cwd(), '../data');
+      try {
+        const envPath = path.join(projectRoot, '.env');
+        if (fs.existsSync(envPath)) {
+          const content = fs.readFileSync(envPath, 'utf8');
+          const match = /^WORKSPACE_PATH=(.*)$/m.exec(content);
+          if (match && match[1]) {
+            p = match[1].trim().replace(/^["']|["']$/g, '');
+          }
+        }
+      } catch (e) {
+        console.error('Failed to read .env file during path resolution:', e);
+      }
+    }
+
+    // Final fallback: default data directory in project root
+    if (!p) {
+      return path.resolve(projectRoot, 'data');
     }
 
     // Map Windows drive letters to WSL/Linux style paths if needed
@@ -25,10 +46,6 @@ class AppConfig {
       const driveLetter = p.charAt(0).toLowerCase();
       p = p.replace(/^[a-zA-Z]:\\/, `/mnt/${driveLetter}/`).replace(/\\/g, '/');
     }
-
-    // Logic to find project root (handle running from inside /webapp or top-level)
-    const currentDir = process.cwd();
-    const projectRoot = path.basename(currentDir) === 'webapp' ? path.resolve(currentDir, '..') : currentDir;
 
     const resolved = path.isAbsolute(p) ? p : path.resolve(projectRoot, p);
 

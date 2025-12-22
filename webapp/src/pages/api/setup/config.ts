@@ -2,6 +2,7 @@ import fs from 'fs';
 import type { NextApiRequest, NextApiResponse } from 'next';
 
 import appConfig from '@/lib/shared/appConfig';
+import db from '@/lib/server/db';
 import fileSystem from '@/lib/server/fileSystem';
 import { persistWorkspacePath } from '@/lib/server/env';
 
@@ -72,6 +73,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Update runtime config only if valid (exists)
     if (finalExists) {
+      // Close active connection before changing path to prevent zombie instances
+      db.close();
       appConfig.WORKSPACE_PATH = workspacePath;
       try {
         await persistWorkspacePath(workspacePath);
@@ -80,7 +83,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     }
 
-    return res.status(200).json({ workspacePath, exists: finalExists, resolved, isEmpty: finalEmpty });
+    return res.status(200).json({
+      workspacePath,
+      exists: finalExists,
+      resolved,
+      isEmpty: finalEmpty,
+      isExistingWorkspace: meta.isExistingWorkspace,
+    });
   }
 
   res.setHeader('Allow', ['GET', 'POST']);

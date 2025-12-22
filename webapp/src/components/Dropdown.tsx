@@ -83,9 +83,7 @@ export function DropdownItem({ children, onClick, className }: DropdownItemProps
     <div
       className={className || styles.dropdownItem}
       onClick={(e) => {
-        e.stopPropagation(); // Prevent re-triggering parent but we want to close?
-        // Actually usually we want the click to propagate so the outside listener doesn't fire?
-        // Wait, standard behavior is item click usually closes.
+        e.stopPropagation();
         onClick?.();
       }}
     >

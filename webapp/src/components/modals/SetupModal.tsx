@@ -98,7 +98,7 @@ export default function SetupModal({
   const isFastFinish = isPathTab && isFirstRun && isExistingWorkspace;
   const isFullyDone = isComplete || (isScanTab && remoteFiles.length === 0 && !hasExistingArchives);
 
-  // Background Finalization: Seal the deal as soon as we're done
+  // Background Finalization: Automatic finalization when first-run ingestion completes.
   useEffect(() => {
     if (!isFirstRun || !isFullyDone || !isOpen) {
       return;
@@ -126,21 +126,17 @@ export default function SetupModal({
         setWorkspacePath(data.workspacePath);
         setResolvedPath(data.resolved);
 
-        // Don't finalize and refresh on first run!
+        // First-run configuration does not trigger immediate finalization or refresh.
         if (isFirstRun) {
           return;
         }
 
-        // Finalize immediately when switching workspaces via this button (Settings mode)
+        // Settings mode: Finalize changes and reload when switching to an existing workspace.
         try {
-          const finalizeRes = await fetch('/api/setup/finalize', { method: 'POST' });
-          if (finalizeRes.ok) {
-            // Full refresh to ensure clean state with new workspace
-            window.location.reload();
-          } else {
-            const fData = await finalizeRes.json();
-            setPathError(fData.error || 'Failed to finalize workspace change');
+          if (data.isExistingWorkspace) {
+            await fetch('/api/setup/finalize', { method: 'POST' });
           }
+          window.location.reload();
         } catch {
           setPathError('Network error finalizing workspace change');
         }
@@ -249,9 +245,10 @@ export default function SetupModal({
         return (
           <ImportStep
             isFirstRun={isFirstRun}
-            setRemoteFiles={setRemoteFiles}
+            setRemoteFiles={(files: string[]) => setRemoteFiles(files)}
             transferMode={transferMode}
             setTransferMode={setTransferMode}
+            onConfirm={() => setActiveTab('scan')}
           />
         );
       case 'path':
@@ -400,12 +397,17 @@ export default function SetupModal({
                   className={`${styles.sidebarItem} ${activeTab === step ? styles.sidebarActive : ''}`}
                   onClick={() => setActiveTab(step)}
                 >
-                  {step === 'scan' && <FaDatabase />}
-                  {step === 'import' && <FaFileImport />}
-                  {step === 'path' && <FaCog />}
-                  <span style={{ textTransform: 'capitalize' }}>
+                  <div className={styles.sidebarIconWrapper}>
+                    {step === 'scan' && <FaDatabase />}
+                    {step === 'import' && <FaFileImport />}
+                    {step === 'path' && <FaCog />}
+                  </div>
+                  <span style={{ textTransform: 'capitalize', flex: 1 }}>
                     {step === 'scan' ? 'Overview' : step === 'path' ? 'Workspace' : step}
                   </span>
+                  {step === 'scan' && remoteFiles.length > 0 && (
+                    <span className={styles.sidebarBadge}>{remoteFiles.length}</span>
+                  )}
                 </div>
               ))}
 

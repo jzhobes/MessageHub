@@ -16,7 +16,6 @@ if not exist venv (
 call venv\Scripts\activate
 
 echo Installing dependencies from scripts\requirements.txt...
-python -m pip install --upgrade pip
 pip install -r scripts\requirements.txt
 
 echo.

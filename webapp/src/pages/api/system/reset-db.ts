@@ -30,7 +30,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       db.close();
 
       const dbPath = path.join(appConfig.WORKSPACE_PATH, 'messagehub.db');
-      const filesToDelete = [dbPath, `${dbPath}-shm`, `${dbPath}-wal`];
+      const previewCachePath = path.join(appConfig.WORKSPACE_PATH, 'preview_cache.json');
+      const filesToDelete = [dbPath, `${dbPath}-shm`, `${dbPath}-wal`, previewCachePath];
 
       for (const file of filesToDelete) {
         try {

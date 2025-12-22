@@ -39,7 +39,6 @@ export function useIngestion() {
     setIsInstalling(true);
     setIsComplete(false);
     setError(null);
-    // setLogs(['Initializing...']);
     setLogs([]);
     setProgress(0);
     setActiveTransfers({});

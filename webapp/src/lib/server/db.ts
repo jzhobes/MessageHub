@@ -11,13 +11,7 @@ import appConfig from '@/lib/shared/appConfig';
 class DatabaseService {
   private _instance: Database.Database | null = null;
 
-  /**
-   * Checks if the database file exists in the current data directory.
-   */
   public exists(): boolean {
-    if (this._instance) {
-      return true;
-    }
     try {
       const dbPath = path.join(appConfig.WORKSPACE_PATH, 'messagehub.db');
       return fs.existsSync(dbPath);

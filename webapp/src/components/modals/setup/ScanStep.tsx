@@ -66,7 +66,7 @@ export default function ScanStep({
     <div className={styles.stepContainerFull}>
       <h2 className={styles.stepTitle}>Overview</h2>
       <p className={styles.stepDescription}>
-        Process selected files (and any existing files in the Data Directory) into the database.
+        Process your selected imports and any existing archives in the Data Directory.
       </p>
 
       {!isInstalling && !isComplete && !error && (
@@ -79,7 +79,7 @@ export default function ScanStep({
               {existingArchives.length === 0 && remoteFiles.length === 0 ? (
                 <div className={styles.queueEmptySection}>
                   <FaDatabase size={32} color="var(--text-secondary)" className={styles.dbIconEmpty} />
-                  <p className={styles.spacingBottom20}>No files found in workspace or queue.</p>
+                  <p className={styles.spacingBottom20}>Your processing queue is empty.</p>
                   <button className={styles.secondaryButton} onClick={onGoToImport}>
                     Find Files to Import
                   </button>

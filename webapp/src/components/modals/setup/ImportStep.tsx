@@ -1,10 +1,9 @@
-import React from 'react';
-import { FaCopy, FaShare } from 'react-icons/fa';
+import React, { useState } from 'react';
+import { FaCopy, FaShare, FaArrowRight, FaDatabase } from 'react-icons/fa';
 
 import FileExplorer, { formatBytes } from '@/components/FileExplorer';
-
-import styles from '@/components/modals/SetupModal.module.css';
 import { FaTriangleExclamation } from 'react-icons/fa6';
+import styles from '@/components/modals/SetupModal.module.css';
 
 const IMPORT_ITEM_FILTERS = [
   {
@@ -21,12 +20,26 @@ const IMPORT_ITEM_FILTERS = [
 
 interface ImportStepProps {
   isFirstRun?: boolean;
-  setRemoteFiles: (f: string[], totalSize: number) => void;
+  setRemoteFiles: (files: string[], totalSize: number) => void;
   transferMode: 'copy' | 'move';
   setTransferMode: (m: 'copy' | 'move') => void;
+  onConfirm?: () => void;
 }
 
-export default function ImportStep({ isFirstRun, setRemoteFiles, transferMode, setTransferMode }: ImportStepProps) {
+export default function ImportStep({
+  isFirstRun,
+  setRemoteFiles,
+  transferMode,
+  setTransferMode,
+  onConfirm,
+}: ImportStepProps) {
+  const [selectionCount, setSelectionCount] = useState(0);
+
+  function handleSelectionChange(files: string[], size: number) {
+    setSelectionCount(files.length);
+    setRemoteFiles(files, size);
+  }
+
   return (
     <div className={styles.stepContainerFull}>
       <h2 className={styles.stepTitle}>Import Chats</h2>
@@ -39,8 +52,21 @@ export default function ImportStep({ isFirstRun, setRemoteFiles, transferMode, s
         <FileExplorer
           mode="import"
           filters={IMPORT_ITEM_FILTERS}
-          onSelectionChange={setRemoteFiles}
+          onSelectionChange={handleSelectionChange}
           height="100%"
+          addressBarSuffix={
+            !isFirstRun && (
+              <button
+                className={`${styles.button} ${styles.explorerActionBtn}`}
+                disabled={selectionCount === 0}
+                onClick={onConfirm}
+                title="Proceed to overview to start processing"
+              >
+                <FaDatabase size={16} />
+                Confirm
+              </button>
+            )
+          }
           subheader={
             <div className={styles.importActions}>
               <button
@@ -62,38 +88,34 @@ export default function ImportStep({ isFirstRun, setRemoteFiles, transferMode, s
               </button>
             </div>
           }
-          footer={
-            isFirstRun
-              ? ({ visibleCount, selectedCount, totalSize }) => (
+          footer={({ visibleCount, selectedCount, totalSize }) => (
+            <>
+              <div className={styles.actionStatusText}>
+                <span>{visibleCount} items</span>
+                {selectedCount > 0 && (
                   <>
-                    <div className={styles.actionStatusText}>
-                      <span>{visibleCount} items</span>
-                      {selectedCount > 0 && (
-                        <>
-                          |
-                          <span>
-                            {selectedCount} selected ({formatBytes(totalSize)})
-                          </span>
-                        </>
-                      )}
-                    </div>
-                    <div className={styles.actionStatusText}>
-                      {transferMode === 'move' ? (
-                        <span style={{ display: 'flex' }}>
-                          <FaTriangleExclamation color="#f59e0b" size={16} />
-                          &nbsp;
-                          <strong>Move Mode:</strong>&nbsp;Original archives will be&nbsp;<strong>deleted</strong>
-                        </span>
-                      ) : (
-                        <>
-                          <strong>Copy Mode:</strong> Originals will remain untouched
-                        </>
-                      )}
-                    </div>
+                    |
+                    <span>
+                      {selectedCount} selected ({formatBytes(totalSize)})
+                    </span>
                   </>
-                )
-              : null
-          }
+                )}
+              </div>
+              <div className={styles.actionStatusText}>
+                {transferMode === 'move' ? (
+                  <span style={{ display: 'flex' }}>
+                    <FaTriangleExclamation color="#f59e0b" size={16} />
+                    &nbsp;
+                    <strong>Move Mode:</strong>&nbsp;Original archives will be&nbsp;<strong>deleted</strong>
+                  </span>
+                ) : (
+                  <>
+                    <strong>Copy Mode:</strong> Originals will remain untouched
+                  </>
+                )}
+              </div>
+            </>
+          )}
         />
       </div>
     </div>

@@ -172,8 +172,8 @@
 }
 
 .secondaryButton {
-  background: rgba(0, 0, 0, 0.05);
-  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
   color: var(--text-primary);
   cursor: pointer;
   padding: 8px 16px;
@@ -183,8 +183,8 @@
 }
 
 .secondaryButton:not(:disabled):hover {
-  background: rgba(0, 0, 0, 0.1);
-  border-color: rgba(0, 0, 0, 0.15);
+  background: var(--bg-primary);
+  border-color: var(--bubble-sent-bg);
 }
 
 .secondaryButton:disabled {
@@ -386,7 +386,7 @@
 }
 
 .sidebarItem:hover {
-  background: rgba(0, 0, 0, 0.05);
+  background: var(--bg-primary);
   color: var(--text-primary);
 }
 
@@ -394,6 +394,28 @@
   background: var(--bg-primary);
   color: var(--text-primary);
   border-left-color: var(--bubble-sent-bg);
+}
+
+.sidebarIconWrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+}
+
+.sidebarBadge {
+  background: var(--bubble-sent-bg);
+  color: white;
+  font-size: 0.72rem;
+  font-weight: bold;
+  padding: 0 6px;
+  border-radius: 10px;
+  min-width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 12px;
 }
 
 .sidebarContent {
@@ -966,4 +988,27 @@
   color: var(--text-secondary);
   line-height: 1.4;
   flex: 1;
+}
+
+.continueButtonSuffix {
+  border-radius: 0 !important;
+  height: 100%;
+  padding: 0 16px !important;
+  font-size: 0.9rem !important;
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+  animation: slideInLeft 0.3s ease-out;
+  border: none !important;
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }

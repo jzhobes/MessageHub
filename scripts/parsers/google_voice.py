@@ -123,12 +123,9 @@ def ingest_google_voice_thread(cursor, thread_data):
 
                 # 3. Content
                 content_text = ""
-                # <q>Text</q>
                 q_el = msg_el.find("q")
                 if q_el:
-                    # BS4 get_text with separator handles <br> -> \n automatically if configured,
-                    # but simple get_text might ignore br?
-                    # Actually get_text("\n") joins strings.
+                    # BS4 get_text with separator handles <br> -> \n automatically
                     content_text = q_el.get_text("\n").strip()
 
                 # Fallback content for call logs

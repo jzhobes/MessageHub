@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { promises as fs } from 'fs';
 import path from 'path';
+import appConfig from '@/lib/shared/appConfig';
 import { getInstagramHeaders } from '@/lib/server/instagram';
 
 /**
@@ -13,7 +14,12 @@ interface PreviewMetadata {
   description: string | null;
 }
 
-const CACHE_FILE = path.join(process.cwd(), 'preview_cache.json');
+/**
+ * Gets the absolute path to the preview cache file within the current workspace.
+ */
+function getCachePath(): string {
+  return path.join(appConfig.WORKSPACE_PATH, 'preview_cache.json');
+}
 
 /**
  * Reads the preview cache from disk.
@@ -21,8 +27,9 @@ const CACHE_FILE = path.join(process.cwd(), 'preview_cache.json');
  */
 async function readCache(): Promise<Record<string, PreviewMetadata>> {
   try {
+    const cachePath = getCachePath();
     // Only try to read if file exists (catch error)
-    const data = await fs.readFile(CACHE_FILE, 'utf8');
+    const data = await fs.readFile(cachePath, 'utf8');
     return JSON.parse(data);
   } catch {
     // Ignore ENOENT (file not found), log others if strict
@@ -36,7 +43,8 @@ async function readCache(): Promise<Record<string, PreviewMetadata>> {
  */
 async function writeCache(data: Record<string, PreviewMetadata>) {
   try {
-    await fs.writeFile(CACHE_FILE, JSON.stringify(data, null, 2));
+    const cachePath = getCachePath();
+    await fs.writeFile(cachePath, JSON.stringify(data, null, 2));
   } catch (e) {
     console.error('Failed to write preview cache', e);
   }

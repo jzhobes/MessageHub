@@ -6,11 +6,11 @@ It also features **DataForge AI**, a built-in studio for curating high-quality d
 
 ## Features
 
+- **Integrated Setup Wizard:** Automatically configure your workspace, import archives, and build your database with zero command-line interaction.
 - **Unified Dashboard:** Toggle between Facebook Messenger, Instagram DMs, Google Chat, and Google Voice histories.
-- **DataForge AI Studio:** Select specific threads, filter system noise, and generate formatted JSONL datasets for OpenAI fine-tuning.
 - **Global Search:** Instantly search all archives. Click any result to **jump** to that message in its original context.
-- **Rich Media Support:** View photos, videos, and reactions directly in the chat stream.
-- **Automated Ingestion:** A single script handles Zip extraction, data merging, and database population.
+- **Smart Ingestion:** Automatically handles duplicate messages across overlapping exports and supports incremental updates.
+- **DataForge AI Studio:** Select specific threads, filter system noise, and generate formatted JSONL datasets for OpenAI fine-tuning.
 
 ## Project Structure
 
@@ -41,6 +41,12 @@ MessageHub/
 
 ### 1. Data Export & Prerequisites
 
+**Prerequisites:**
+
+- **Node.js 18+** (for the web application)
+- **Python 3.10+** (for the ingestion engine)
+- **Virtual Environment**: The app expects a Python environment at `./venv` in the project root.
+
 #### Exporting Data
 
 **Facebook:**
@@ -52,6 +58,8 @@ MessageHub/
    - **Personal information** > **Profile information** (Required for "You" detection)
 4. **Format** > **JSON**
 5. **Start export**
+
+> [!TIP] > **Incremental Exports & Safe Imports**: Meta allows you to export a **custom date range**. Since MessageHub automatically handles **duplicate messages**, you can import newer date ranges without worrying about overlapping data or double-counting messages in your database.
 
 > [!TIP] > **Media quality** (Higher vs. Lower) is a personal preference for your viewing experience. It has **no impact** on the DataForge AI Studio or LLM data training, as the studio only processes text and reaction metadata.
 
@@ -77,18 +85,19 @@ MessageHub/
 
 ### 2. Configuration (.env)
 
-Create a `.env` file in the **project root**. This configuration is used by both the ingestion script and the webapp.
+You don't need to create this file manually. The **Setup Wizard** will automatically initialize a `.env` file in the project root during your first run. It stores your workspace location and security boundaries:
 
 ```bash
-# Path to your data directory (where zips and database live)
-# Can be absolute (/Users/you/data) or relative (./data)
-WORKSPACE_PATH=data
+# Path to your active data directory
+WORKSPACE_PATH="/path/to/your/data"
+
+# Security boundaries for the file explorer (auto-set to your home directory)
+ROOT_IMPORT_PATH="/Users/yourname"
+ROOT_WORKSPACE_PATH="/Users/yourname"
 
 # Optional: Instagram Auth for unauthenticated link previews
 INSTAGRAM_AUTH={"sessionid":"<sessionid>","csrftoken":"<csrftoken>"}
 ```
-
-_If `WORKSPACE_PATH` is omitted, the `data/` folder in the project root is used by default._
 
 #### (Optional) Getting Instagram Auth
 
@@ -103,30 +112,38 @@ To enable rich link previews for Instagram links (bypassing login walls):
 
 ---
 
-### 3. Setup & Ingestion (Setup Wizard)
+### 3. Quick Start (Run & Setup)
 
-The recommended way to set up MessageHub is via the built-in **Setup Wizard**.
+MessageHub comes with a unified start script that handles Python environment setup, all necessary dependency installations, and launching the application.
 
-1.  **Start the App**: (See section 4 below).
-2.  **Welcome**: When you first visit the app, click **"Get Started"** on the splash screen.
-3.  **Workspace**: Select the folder where you want your records to live (defaults to `data/`).
-4.  **Import**: Select your exported `.zip` / `.tar.gz` files using the in-app file explorer.
-5.  **Process**: Click **"Start Processing"**. MessageHub will extract, merge, and index your files automatically.
-6.  **Open**: Once complete, click **"Open MessageHub"** to enter your dashboard.
+**Mac / Linux:**
+
+```bash
+./start.sh
+```
+
+**Windows:**
+
+```batch
+start.bat
+```
+
+1.  **Automated Environment**: The script will create a `./venv` and run `npm install` automatically on the first run.
+2.  **App Ready**: Once the server starts, open [http://localhost:3000](http://localhost:3000).
+3.  **Setup Wizard**: You will be greeted by the **Setup Wizard** to configure your workspace and import your data.
 
 ---
 
-### 4. Running the Viewer
+### 4. Setup Wizard Flow
 
-Navigate to the `webapp` directory and start the development server:
+1.  **Welcome**: Click **"Get Started"** on the splash screen.
+2.  **Workspace**: Select any folder on your machine where you want your database and settings to live.
+3.  **Import**: Select your exported `.zip` / `.tar.gz` files using the in-app file explorer to stage them for ingestion.
+4.  **Confirm & Process**: Click **"Confirm"** then **"Start Processing"**. MessageHub handles extraction, merging, and indexing automatically.
+5.  **Review**: Once complete, enter your dashboard to search and browse your messages.
 
-```bash
-cd webapp
-npm install
-npm run dev
-```
-
-Open [http://localhost:3000](http://localhost:3000) to browse your messages.
+> [!NOTE]
+> It is safe to re-import the same files or overlapping archives. MessageHub uses a unique constraint to ensure each message is only stored once.
 
 ---
 
@@ -146,25 +163,22 @@ MessageHub includes a tool to create **"Virtual You"** datasets for training AI 
 
 ### 6. Manual Ingestion (CLI)
 
-If you prefer to run the ingestion manually or from a server headlessly, you can still use the CLI tools:
+If you prefer to run ingestion headlessly via CLI, you can still access the underlying pipeline:
 
-1.  **Configure environment**: Set `WORKSPACE_PATH` in your `.env`.
-2.  **Move Zips**: Place your archives in your workspace folder.
-3.  **Run Script**:
+1.  **Configure environment**: Assign `WORKSPACE_PATH` in your `.env`.
+2.  **Move Archives**: Place your `.zip` / `.tar.gz` files in the workspace directory.
+3.  **Run Ingest**: (Defaults to scanning your workspace if no source is provided)
+
     ```bash
+    # Mac / Linux
     ./venv/bin/python3 scripts/ingest.py
-    # On Windows: venv\Scripts\python scripts/ingest.py
+
+    # Windows
+    venv\Scripts\python scripts\ingest.py
     ```
 
 ## Technical Details
 
-- **Frontend:** [Next.js](https://nextjs.org/) (React) with a modular component architecture.
-- **Database:** SQLite (`messagehub.db`) accessed via `better-sqlite3` for high-performance querying.
-- **Dataset Engine:**
-  - **Async Processing:** Non-blocking job queue for generating large datasets without freezing the UI.
-  - **Tokenization:** Uses `tiktoken` to strictly adhere to LLM context limits (2M tokens/file).
-- **Ingestion:** Python-based pipeline (`ingest.py`) handles:
-  - Zip extraction and merging (handling split archives).
-  - Data parsing and ingestion into SQLite.
-  - Media path resolution.
-  - Selective JSON cleanup.
+- **Interface:** Next.js, React
+- **Database:** SQLite
+- **Ingestion:** Python
