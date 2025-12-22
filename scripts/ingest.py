@@ -536,7 +536,7 @@ def start_ingestion():
             print(f"  Warning: Could not verify disk space: {e}")
 
     processed_count, detected_platforms, archive_moves = extract_zips_found_with_opts(
-        scan_locations, WORKSPACE_PATH, platform_filter=args.platform, delete_after=args.delete_archives
+        scan_locations, WORKSPACE_PATH, args.platform, args.delete_archives
     )
 
     try:

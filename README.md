@@ -1,14 +1,14 @@
 # MessageHub
 
-MessageHub is a unified local viewer for your personal chat archives. It aggregates and displays message history from **Facebook**, **Instagram**, **Google Chat**, and **Google Voice** exports in a single, modern web interface.
+MessageHub is a unified local viewer for your personal chat archives. It aggregates and displays message history from **Facebook**, **Instagram**, **Google Chat**, **Google Voice**, and **Google Mail (Gmail)** exports in a single, modern web interface.
 
 It also features **DataForge AI**, a built-in studio for curating high-quality datasets to fine-tune Large Language Models (LLMs) on your authentic voice.
 
 ## Features
 
 - **Integrated Setup Wizard:** Automatically configure your workspace, import archives, and build your database with zero command-line interaction.
-- **Unified Dashboard:** Toggle between Facebook Messenger, Instagram DMs, Google Chat, and Google Voice histories.
-- **Global Search:** Instantly search all archives. Click any result to **jump** to that message in its original context.
+- **Unified Dashboard:** Toggle between Facebook Messenger, Instagram DMs, Google Chat, Google Voice, and Gmail histories.
+- **Global Search:** Search all archives with support for **glob-like syntax** in queries and **selection filtering**. Click any result to **jump** to that message in its original context.
 - **Smart Ingestion:** Automatically handles duplicate messages across overlapping exports and supports incremental updates.
 - **DataForge AI Studio:** Select specific threads, filter system noise, and generate formatted JSONL datasets for OpenAI fine-tuning.
 
@@ -16,14 +16,15 @@ It also features **DataForge AI**, a built-in studio for curating high-quality d
 
 ```
 MessageHub/
-├── data/                  # Default location for your exported chat history data
+├── data/                  # Default workspace location
 │   ├── Facebook/
 │   ├── Instagram/
 │   ├── Google Chat/
 │   ├── Google Voice/
-│   └── messagehub.db      # SQLite database containing all message data
+│   ├── Google Mail/       # MBOX archives and extracted attachments
+│   └── messagehub.db      # SQLite database (FTS5 indexed) containing all message data
 ├── scripts/               # Python processing scripts
-│   ├── parsers/           # Platform-specific parsers
+│   ├── parsers/           # Platform-specific parsers (FB, IG, GChat, GVoice, GMail)
 │   ├── ingest.py          # Main script: Zip extraction + DB Ingestion
 │   └── utils.py           # Shared logic
 ├── webapp/                # Next.js frontend application
@@ -32,8 +33,8 @@ MessageHub/
 │   │   ├── sections/      # Major page layout blocks
 │   │   ├── pages/         # Next.js pages, API routes, and page-level CSS modules
 │   │   ├── styles/        # Global/Shared CSS
-│   │   ├── utils/         # Helper functions (DB, Dates, etc.)
-│   │   └── types.ts       # Shared TypeScript interfaces
+│   │   ├── lib/           # Shared logic and server-side utilities
+│   │   └── types/         # Shared TypeScript interfaces
 └── README.md              # This file
 ```
 
@@ -45,7 +46,7 @@ MessageHub/
 
 - **Node.js 18+** (for the web application)
 - **Python 3.10+** (for the ingestion engine)
-- **Virtual Environment**: The app expects a Python environment at `./venv` in the project root.
+- **Virtual Environment**: Managed automatically (created at `./venv` on first run).
 
 #### Exporting Data
 
@@ -76,10 +77,12 @@ MessageHub/
 **Google:**
 
 1. Go to [Google Takeout](https://takeout.google.com/).
-2. Select **Google Chat**. (Select **Voice** if desired).
-3. Click **Next Step**.
-4. Change file size to 4 GB or larger to minimize split zips (though split zips are supported).
-5. Click **Create export**.
+2. Select **Google Chat**, **Voice**, and **Mail** as desired.
+3. For **Mail**:
+   - **Crucial for DataForge AI:** Make sure the **"Sent"** folder is included, as this contains your authentic writing voice for LLM training.
+4. Click **Next Step**.
+5. Select your preferred file type (**both .zip and .tgz are supported**) and change the file size to 4 GB or larger to minimize split archives.
+6. Click **Create export**.
 
 ---
 
@@ -179,6 +182,26 @@ If you prefer to run ingestion headlessly via CLI, you can still access the unde
 
 ## Technical Details
 
-- **Interface:** Next.js, React
-- **Database:** SQLite
-- **Ingestion:** Python
+- **Interface:** Next.js, React, Tailwind CSS (optional)
+- **Database:** SQLite with **FTS5 Trigram** indexing for sub-second global search
+- **Ingestion:** Python 3.10+ (multithreaded)
+
+## Development & Testing
+
+MessageHub includes a set of **"Golden Archives"** for local testing without using your private data.
+
+1.  **Golden Archives**: Located in `samples/`, these are tiny, anonymized examples of each supported platform's data format.
+2.  **Build Sample Workspace**: Run the following to create a `data_samples/` directory and populate it with a test database:
+
+    ```bash
+    # Mac/Linux
+    ./build_samples.sh
+
+    # Windows
+    build_samples.bat
+    ```
+
+3.  **Run with Samples**: You can temporarily point the app at this workspace in your `.env`:
+    ```bash
+    WORKSPACE_PATH="/path/to/MessageHub/data_samples"
+    ```
