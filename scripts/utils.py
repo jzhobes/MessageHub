@@ -1,6 +1,6 @@
 import os
-
 import re
+import stat
 from pathlib import Path
 
 # External dependencies (assumes venv is active)
@@ -29,18 +29,18 @@ if ENV_FILE.exists():
     print(f"Loaded config from {ENV_FILE}")
 
 
-def get_data_dir():
+def get_workspace_path():
     """Resolve data directory from root .env or fallback."""
-    data_path = os.getenv("DATA_PATH")
+    workspace_path = os.environ.get("WORKSPACE_PATH")
 
-    if data_path:
+    if workspace_path:
         from pathlib import PureWindowsPath
 
         # Handle Windows paths (e.g. D:\Projects) when running in POSIX (WSL/Mac)
-        if os.name == "posix" and (":" in data_path or "\\" in data_path):
+        if os.name == "posix" and (":" in workspace_path or "\\" in workspace_path):
             try:
                 # Treat the string specifically as a Windows path
-                win_path = PureWindowsPath(data_path)
+                win_path = PureWindowsPath(workspace_path)
 
                 # If absolute Windows path with drive (e.g. D:/Project)
                 if win_path.drive:
@@ -56,13 +56,13 @@ def get_data_dir():
                 # Fallback if parsing fails
                 pass
 
-        return Path(data_path)
+        return Path(workspace_path)
 
     return PROJECT_ROOT / "data"
 
 
-DATA_DIR = get_data_dir()
-print(f"Using Data Directory: {DATA_DIR}")
+WORKSPACE_PATH = get_workspace_path()
+print(f"Using Workspace: {WORKSPACE_PATH}")
 
 
 # -----------------------------------------------------------------------------
@@ -163,7 +163,7 @@ def clean_json_messages(directory, platforms=None):
     print(f"Cleanup Complete. Deleted {deleted_count} files ({mb:.2f} MB).")
 
 
-def clean_google_voice_files(data_dir=DATA_DIR):
+def clean_google_voice_files(data_dir=WORKSPACE_PATH):
     """
     Deletes processed Google Voice HTML files to save space.
     Target: Voice/Calls/*.html
@@ -173,10 +173,10 @@ def clean_google_voice_files(data_dir=DATA_DIR):
     if not voice_root.exists():
         sub = Path(data_dir) / "Takeout" / "Voice"
         if sub.exists():
-            voice_root = sub
-
-    if not voice_root.exists():
-        return
+            print("  Consolidating Google Voice data from Takeout...")
+            merge_folders(sub, voice_root)  # Merge Takeout/Voice into Voice
+        else:
+            return  # No Google Voice data found
 
     print("Cleaning up Google Voice HTML files...")
     deleted_count = 0
@@ -205,8 +205,7 @@ def clean_google_voice_files(data_dir=DATA_DIR):
 
 def merge_folders(src, dst):
     """
-    Recursively merges src directory into dst directory.
-    Uses shutil.copytree with dirs_exist_ok=True (Python 3.8+).
+    Recursively merges src directory into dst directory with progress reporting.
     Deletes src after successful merge.
     """
     import shutil
@@ -217,10 +216,62 @@ def merge_folders(src, dst):
     if not src.exists():
         return
 
-    print(f"Merging {src.name} into {dst.name}...")
+    # Phase 1: Count total files (Discovery)
+    total_files = 0
+    for root, _, filenames in os.walk(src):
+        total_files += len(filenames)
+
+    if total_files == 0:
+        # Just clean up the empty folder
+        try:
+            shutil.rmtree(src)
+        except Exception as e:
+            print(f"Warning: Could not remove empty source folder {src}: {e}")
+        return
+
+    # Phase 2: Targeted Move with Progress
+    current_count = 0
+    folder_name = src.name
+
+    for root, dirs, filenames in os.walk(src):
+        rel_path = Path(root).relative_to(src)
+        target_dir = dst / rel_path
+        target_dir.mkdir(parents=True, exist_ok=True)
+
+        for f in filenames:
+            src_file = Path(root) / f
+            dst_file = target_dir / f
+
+            # Move (fast on same drive)
+            try:
+                if dst_file.exists():
+                    try:
+                        dst_file.unlink()  # Overwrite if exists
+                    except Exception:
+                        pass
+
+                shutil.move(str(src_file), str(dst_file))
+            except Exception:
+                # Fallback to copy if move fails (e.g. cross-device)
+                try:
+                    shutil.copy2(str(src_file), str(dst_file))
+                    src_file.unlink()
+                except Exception as e2:
+                    print(f"Error merging file {src_file}: {e2}")
+
+            current_count += 1
+            if current_count % 100 == 0 or current_count == total_files:
+                print(f"[MergeProgress]: {folder_name}|{current_count}|{total_files}")
+
+    # Phase 3: Cleanup empty directories
+    def on_rm_error(func, path, exc_info):
+        try:
+            os.chmod(path, stat.S_IWRITE)
+            func(path)
+        except Exception:
+            pass
+
     try:
-        dst.mkdir(parents=True, exist_ok=True)
-        shutil.copytree(src, dst, dirs_exist_ok=True)
-        shutil.rmtree(src)
-    except Exception as e:
-        print(f"Error merging {src} to {dst}: {e}")
+        shutil.rmtree(src, onerror=on_rm_error)
+    except Exception:
+        pass

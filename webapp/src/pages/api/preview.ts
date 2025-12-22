@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { promises as fs } from 'fs';
 import path from 'path';
+import appConfig from '@/lib/shared/appConfig';
 import { getInstagramHeaders } from '@/lib/server/instagram';
 
 /**
@@ -13,7 +14,12 @@ interface PreviewMetadata {
   description: string | null;
 }
 
-const CACHE_FILE = path.join(process.cwd(), 'preview_cache.json');
+/**
+ * Gets the absolute path to the preview cache file within the current workspace.
+ */
+function getCachePath(): string {
+  return path.join(appConfig.WORKSPACE_PATH, 'preview_cache.json');
+}
 
 /**
  * Reads the preview cache from disk.
@@ -21,8 +27,9 @@ const CACHE_FILE = path.join(process.cwd(), 'preview_cache.json');
  */
 async function readCache(): Promise<Record<string, PreviewMetadata>> {
   try {
+    const cachePath = getCachePath();
     // Only try to read if file exists (catch error)
-    const data = await fs.readFile(CACHE_FILE, 'utf8');
+    const data = await fs.readFile(cachePath, 'utf8');
     return JSON.parse(data);
   } catch {
     // Ignore ENOENT (file not found), log others if strict
@@ -36,7 +43,8 @@ async function readCache(): Promise<Record<string, PreviewMetadata>> {
  */
 async function writeCache(data: Record<string, PreviewMetadata>) {
   try {
-    await fs.writeFile(CACHE_FILE, JSON.stringify(data, null, 2));
+    const cachePath = getCachePath();
+    await fs.writeFile(cachePath, JSON.stringify(data, null, 2));
   } catch (e) {
     console.error('Failed to write preview cache', e);
   }
@@ -110,7 +118,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             }
 
             if (!image) {
-              image = 'https://upload.wikimedia.org/wikipedia/en/thumb/b/bd/Reddit_Logo_Icon.svg/220px-Reddit_Logo_Icon.svg.png';
+              image =
+                'https://upload.wikimedia.org/wikipedia/en/thumb/b/bd/Reddit_Logo_Icon.svg/220px-Reddit_Logo_Icon.svg.png';
             }
 
             console.log(`[Preview] Reddit JSON success: ${title}`);
@@ -142,19 +151,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         };
 
         const getMeta = (propName: string) => {
-          const p1 = new RegExp(`<meta\\s+[^>]*property=["']${propName}["']\\s+[^>]*content=["']([^"']+)["']`, 'i').exec(html);
+          const p1 = new RegExp(
+            `<meta\\s+[^>]*property=["']${propName}["']\\s+[^>]*content=["']([^"']+)["']`,
+            'i',
+          ).exec(html);
           if (p1) {
             return decodeHtmlEntities(p1[1]);
           }
-          const p2 = new RegExp(`<meta\\s+[^>]*content=["']([^"']+)["']\\s+[^>]*property=["']${propName}["']`, 'i').exec(html);
+          const p2 = new RegExp(
+            `<meta\\s+[^>]*content=["']([^"']+)["']\\s+[^>]*property=["']${propName}["']`,
+            'i',
+          ).exec(html);
           if (p2) {
             return decodeHtmlEntities(p2[1]);
           }
-          const p3 = new RegExp(`<meta\\s+[^>]*name=["']${propName}["']\\s+[^>]*content=["']([^"']+)["']`, 'i').exec(html);
+          const p3 = new RegExp(`<meta\\s+[^>]*name=["']${propName}["']\\s+[^>]*content=["']([^"']+)["']`, 'i').exec(
+            html,
+          );
           if (p3) {
             return decodeHtmlEntities(p3[1]);
           }
-          const p4 = new RegExp(`<meta\\s+[^>]*content=["']([^"']+)["']\\s+[^>]*name=["']${propName}["']`, 'i').exec(html);
+          const p4 = new RegExp(`<meta\\s+[^>]*content=["']([^"']+)["']\\s+[^>]*name=["']${propName}["']`, 'i').exec(
+            html,
+          );
           if (p4) {
             return decodeHtmlEntities(p4[1]);
           }
@@ -169,7 +188,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     }
 
-    console.log(`[Preview] LIVE RESULT for ${targetUrl}: title=${title ? 'found' : 'missing'}, image=${image ? 'found' : 'missing'}`);
+    console.log(
+      `[Preview] LIVE RESULT for ${targetUrl}: title=${title ? 'found' : 'missing'}, image=${image ? 'found' : 'missing'}`,
+    );
 
     const result = {
       url: targetUrl,

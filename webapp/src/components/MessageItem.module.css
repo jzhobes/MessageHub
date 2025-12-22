@@ -26,7 +26,7 @@
 .profileImage {
   width: 32px;
   height: 32px;
-  border-radius: 50%;
+  border-radius: var(--radius-circle);
   background-color: #e1e1e1;
   color: #666;
   font-size: 12px;
@@ -123,7 +123,7 @@
   margin-top: -5px;
   padding: 8px 12px;
   background-color: var(--bg-quote);
-  border-radius: 12px 12px 2px 2px;
+  border-radius: var(--radius-2) var(--radius-2) 2px 2px;
   font-size: 0.9rem;
   color: inherit;
   text-align: left;
@@ -145,7 +145,7 @@
 .quoteAvatar {
   width: 16px;
   height: 16px;
-  border-radius: 50%;
+  border-radius: var(--radius-circle);
   background-color: #888;
   color: #fff;
   font-size: 10px;
@@ -178,7 +178,7 @@
 .reactionBubble {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
-  border-radius: 12px;
+  border-radius: var(--radius-2);
   padding: 2px 6px;
   font-size: 0.8rem;
   margin-right: 4px;
@@ -201,7 +201,7 @@
   gap: 8px;
   padding: 8px;
   background: rgba(0, 0, 0, 0.1);
-  border-radius: 8px;
+  border-radius: var(--radius-1);
   text-decoration: none;
   color: inherit;
 }

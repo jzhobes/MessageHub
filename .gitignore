@@ -1,5 +1,7 @@
-data/
 .DS_Store
+
+# data directory
+data*/
 
 # env files (can opt-in for committing if needed)
 .env*
@@ -8,9 +10,6 @@ data/
 
 # preview cache
 preview_cache.json
-
-# database
-data/messagehub.db
 
 # virtual environment
 venv/

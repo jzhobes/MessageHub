@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { getDb, dbExists } from '@/lib/server/db';
+import db from '@/lib/server/db';
 import { getMyNames } from '@/lib/server/identity';
 import { getPlatformLabel } from '@/lib/shared/platforms';
 
@@ -18,11 +18,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { platform } = req.query;
   const platformStr = Array.isArray(platform) ? platform[0] : platform;
 
-  if (!dbExists()) {
+  if (!db.exists()) {
     return res.status(200).json([]);
   }
 
-  const db = getDb();
   const myNames = await getMyNames();
 
   // Create absolute SQL placeholders like '?, ?, ?' for the "IN" clause
@@ -61,13 +60,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       participants_json: string;
     }
 
-    const rows = db.prepare(query).all(...params) as unknown as ExtendedThreadRow[];
+    const dbInstance = db.get();
+    const rows = dbInstance.prepare(query).all(...params) as unknown as ExtendedThreadRow[];
 
     // 2. Calculate "Clone Score"
     const threadsWithScore = rows.map((row) => {
-      const myCount = row.my_msgs || 0;
-      const total = row.total_msgs || 1;
-      const avgLen = row.my_avg_len || 0;
+      const myCount = row.my_msgs ?? 0;
+      const total = row.total_msgs ?? 1;
+      const avgLen = row.my_avg_len ?? 0;
 
       // Title Generation Logic
       let title = row.title;
@@ -105,7 +105,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // log(10 chars) ~= 2.3
       // log(50 chars) ~= 3.9
       // Formula: log(len) * 6
-      const logLen = Math.log(avgLen || 1);
+      const logLen = Math.log(avgLen ?? 1);
       const substanceScore = Math.min(Math.max(0, logLen * 6), 25);
 
       // 4. Volume Score (0-25 pts)

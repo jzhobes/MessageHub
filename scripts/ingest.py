@@ -1,15 +1,25 @@
-import sqlite3
 import argparse
-import zipfile
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import os
 from pathlib import Path
+import shutil
+import sqlite3
+import sys
+import tarfile
+import threading
+import time
+import zipfile
 
-# External dependencies (assumes venv is active)
-# (BeautifulSoup import removed as it is now used in parsers, not here)
-
-from utils import DATA_DIR, PROJECT_ROOT, merge_folders
-from parsers.google_voice import scan_google_voice
 from parsers.facebook import ingest_facebook_entry, ingest_instagram_entry
 from parsers.google_chat import ingest_google_chat_thread
+from parsers.google_voice import scan_google_voice
+from utils import (
+    WORKSPACE_PATH,
+    PROJECT_ROOT,
+    clean_google_voice_files,
+    clean_json_messages,
+    merge_folders,
+)
 
 # --- Constants ---
 DB_NAME = "messagehub.db"
@@ -65,15 +75,10 @@ def init_db(db_path):
     print(f"Database initialized at {db_path}")
 
 
-# --- Ingestion Logic ---
-
-
-# --- Main Scanner ---
-
-
-def scan_directory(scan_path, db_path, platform_filter="all"):
+def scan_directory(scan_path, db_path, platform_filter="all", limit_platforms=None):
     """
     Recursively scans the provided directory for chat export data.
+    If limit_platforms is provided (a set), only those platforms will be scanned.
     """
     conn = sqlite3.connect(db_path)
     # Enable Write-Ahead Logging for concurrency during ingestion and subsequent reads
@@ -84,79 +89,100 @@ def scan_directory(scan_path, db_path, platform_filter="all"):
     print(f"Scanning {scan_path}...")
 
     # Explicitly check for Google Voice folder first (since it's structural, not recursive searching for message_1.json)
-    # We look for "Voice/Calls" usually relative to data root
-    # Check scan_path/Voice, and scan_path (if it IS Voice)
-
-    # Check filter
     process_voice = platform_filter == "all" or platform_filter == "google_voice"
 
+    # Prepare sets for counting
+    files_to_process = []
+
+    # Count Google Voice folders if needed
     if process_voice:
         possible_voice_roots = [scan_path / "Voice", scan_path / "Takeout/Voice", scan_path]
         for p in possible_voice_roots:
-            if (p / "Calls").exists():
-                scan_google_voice(cursor, p)
+            calls_dir = p / "Calls"
+            if calls_dir.exists():
+                # Filter check
+                if limit_platforms is not None and "google_voice" not in limit_platforms:
+                    continue
+
+                # Google Voice is structurally one "item" acting as a bulk ingest,
+                # but we can count it as 1 major task.
+                files_to_process.append((999, p, "google_voice"))  # 999 as placeholder priority
                 break
 
-    total_threads = 0
-    total_msgs = 0
-    total_skipped = 0
-
-    # For standard platforms (FB/Insta/Google Chat)
-    processed_dirs = set()
-
-    # Let's use os.walk for compat
-    import os
-
+    # Count Standard Chat Files
     for root, dirs, files in os.walk(scan_path):
         if "message_1.json" in files or "messages.json" in files:
             p_root = Path(root)
-            if p_root in processed_dirs:
-                continue
-
             path_str = str(p_root).lower()
 
-            count = 0
-            skipped = 0
-
-            # Skip if accidentally inside Google Voice (though GV doesn't use message_1.json usually)
-
-            # --- Platform Filtering ---
-            # Helper to check if current path matches requested platform
-            # We check path string vs platform keywords
-
+            # Platform detection
             is_chat = "google chat" in path_str
             is_fb = "facebook" in path_str or "messenger" in path_str
             is_insta = "instagram" in path_str
 
-            if platform_filter != "all":
-                if platform_filter == "google_chat" and not is_chat:
-                    continue
-                if platform_filter == "facebook" and not is_fb:
-                    continue
-                if platform_filter == "instagram" and not is_insta:
-                    continue
-                # if platform_filter is google_voice, skip all these folders as they are processed separately above
-                if platform_filter == "google_voice":
-                    continue
-
+            # Platform filtering
+            target_platform = None
             if is_chat:
-                print(f"Ingesting Google Chat: {p_root.name}")
-                count, skipped = ingest_google_chat_thread(cursor, p_root)
+                target_platform = "google_chat"
             elif is_fb:
-                print(f"Ingesting Facebook: {p_root.name}")
-                count, skipped = ingest_facebook_entry(cursor, p_root)
+                target_platform = "facebook"
             elif is_insta:
-                print(f"Ingesting Instagram: {p_root.name}")
-                count, skipped = ingest_instagram_entry(cursor, p_root)
+                target_platform = "instagram"
 
-            if count > 0 or skipped > 0:
-                total_threads += 1
-                total_msgs += count
-                total_skipped += skipped
-                processed_dirs.add(p_root)
-                if total_threads % 10 == 0:
-                    conn.commit()
-                    print(f"  ... Committed {total_threads} threads ({total_msgs} messages, {total_skipped} skipped)")
+            if not target_platform:
+                continue
+
+            # 1. Check --platform flag
+            if platform_filter != "all" and platform_filter != target_platform:
+                continue
+
+            # 2. Check Archive Detection (Archive-Driven)
+            if limit_platforms is not None and target_platform not in limit_platforms:
+                continue
+
+            if target_platform == "google_chat":
+                files_to_process.append((1, p_root, "google_chat"))
+            elif target_platform == "facebook":
+                files_to_process.append((2, p_root, "facebook"))
+            elif target_platform == "instagram":
+                files_to_process.append((3, p_root, "instagram"))
+
+    total_files_count = len(files_to_process)
+    print(f"[TotalFiles]: {total_files_count}")  # Signal for UI
+
+    # Initialize counters
+    total_threads = 0
+    total_msgs = 0
+    total_skipped = 0
+    processed_dirs = set()
+
+    for _, p_root, platform_type in files_to_process:
+        if p_root in processed_dirs:
+            continue
+
+        count = 0
+        skipped = 0
+
+        if platform_type == "google_voice":
+            scan_google_voice(cursor, p_root)
+        elif platform_type == "google_chat":
+            print(f"[Ingesting]: Google Chat - {p_root.name}")
+            count, skipped = ingest_google_chat_thread(cursor, p_root)
+        elif platform_type == "facebook":
+            print(f"[Ingesting]: Facebook - {p_root.name}")
+            count, skipped = ingest_facebook_entry(cursor, p_root)
+        elif platform_type == "instagram":
+            print(f"[Ingesting]: Instagram - {p_root.name}")
+            count, skipped = ingest_instagram_entry(cursor, p_root)
+
+        if count > 0 or skipped > 0:
+            total_threads += 1
+            total_msgs += count
+            total_skipped += skipped
+            processed_dirs.add(p_root)
+            if total_threads % 10 == 0:
+                conn.commit()
+                print(f"  [Committed]: {total_threads} threads ({total_msgs} messages, {total_skipped} skipped)")
 
     conn.commit()
     conn.close()
@@ -168,200 +194,349 @@ def extract_zips_found(search_dirs, target_root, platform_filter="all"):
     """
     Scans specified directories for .zip files and extracts them
     into a subdirectory of target_root named after the zip file.
-    Returns: tuple (processed_count, set_of_platforms_detected)
+    Returns: tuple (processed_count, set_of_platforms_detected, archive_moves)
+    archive_moves: list of (original_Path, processed_Path)
+    """
+    return extract_zips_found_with_opts(search_dirs, target_root, platform_filter, False)
+
+
+def extract_zips_found_with_opts(search_dirs, target_root, platform_filter="all", delete_after=False):
+    """
+    Scans specified directories for .zip files and extracts them
+    into a subdirectory of target_root named after the zip file.
+    Returns: tuple (processed_count, set_of_platforms_detected, archive_moves)
+    archive_moves: list of (original_Path, processed_Path_or_None)
     """
     processed = 0
     target_root = Path(target_root)
+    archive_moves = []
+    extraction_lock = threading.Lock()
 
     seen_zips = set()
     detected_platforms = set()
 
+    # Collect all archives first
+    all_archives = []
     for d in search_dirs:
         d_path = Path(d)
         if not d_path.exists():
             continue
+        archives = list(d_path.glob("*.zip")) + list(d_path.glob("*.tgz")) + list(d_path.glob("*.tar.gz"))
+        for a in archives:
+            if a.resolve() not in seen_zips:
+                seen_zips.add(a.resolve())
+                all_archives.append(a)
 
-        for zip_path in d_path.glob("*.zip"):
-            # Avoid duplicates if DATA_DIR is inside PROJECT_ROOT (which it is)
-            # resolve() helps
-            abs_zip = zip_path.resolve()
-            if abs_zip in seen_zips:
-                continue
-            seen_zips.add(abs_zip)
+    if not all_archives:
+        return 0, set(), []
 
-            print(f"Found zip archive: {zip_path.name}")
+    def process_archive(archive_path):
+        """
+        Worker function to extract a single archive.
+        Returns (success_bool, detected_platform_string_or_None)
+        """
+        local_detected = set()
+        is_zip = archive_path.suffix == ".zip"
+        is_tar = archive_path.name.endswith(".tar.gz") or archive_path.name.endswith(".tgz")
 
+        try:
+            file_list = []
+
+            # Open Archive
+            if is_zip:
+                archive_obj = zipfile.ZipFile(archive_path, "r")
+                file_list = archive_obj.namelist()
+            elif is_tar:
+                archive_obj = tarfile.open(archive_path, "r:gz")
+                file_list = archive_obj.getnames()
+            else:
+                return False, None, None
+
+            # signatures
+            has_voice = any(f.startswith("Takeout/Voice/") for f in file_list)
+            has_chat = any(f.startswith("Takeout/Google Chat/") for f in file_list)
+            is_insta = any(f.startswith("your_instagram_activity") for f in file_list)
+            is_fb = any(f.startswith("your_facebook_activity") for f in file_list)
+
+            # Filter Check
+            if platform_filter != "all":
+                allowed = False
+                if platform_filter == "google_voice" and has_voice:
+                    allowed = True
+                if platform_filter == "google_chat" and has_chat:
+                    allowed = True
+                if platform_filter == "instagram" and is_insta:
+                    allowed = True
+                if platform_filter == "facebook" and is_fb:
+                    allowed = True
+
+                if not allowed:
+                    print(f"  Skipping {archive_path.name}: Filter mismatch.")
+                    if is_zip:
+                        archive_obj.close()
+                    elif is_tar:
+                        archive_obj.close()
+                    return False, None, None
+
+            # Extract
+            dest_dir = target_root
+            if is_insta:
+                dest_dir = target_root / "Instagram"
+            if is_fb:
+                dest_dir = target_root / "Facebook"
+
+            # Identification Logging
+            if has_voice or has_chat:
+                print(f"  [Thread] Extracting Google Takeout: {archive_path.name}")
+                if has_voice:
+                    local_detected.add("google_voice")
+                if has_chat:
+                    local_detected.add("google_chat")
+            elif is_insta:
+                print(f"  [Thread] Extracting Instagram: {archive_path.name}")
+                local_detected.add("instagram")
+            elif is_fb:
+                print(f"  [Thread] Extracting Facebook: {archive_path.name}")
+                local_detected.add("facebook")
+            else:
+                print(f"  Skipping {archive_path.name}: Unknown structure.")
+                if is_zip:
+                    archive_obj.close()
+                elif is_tar:
+                    archive_obj.close()
+                return False, None, None
+
+            # Prepare destination directory (Locked)
+            with extraction_lock:
+                if not dest_dir.exists():
+                    dest_dir.mkdir(parents=True, exist_ok=True)
+                elif dest_dir.is_file():
+                    print(f"  [Error] Cannot extract to {dest_dir}: file already exists with this name.")
+                    return False, None, None
+
+            # Perform Extraction (Unlocked for Parallelism)
+            members = archive_obj.namelist() if is_zip else archive_obj.getmembers()
+            total_members = len(members)
+            print(f"[ArchiveStarted]: {archive_path.name}|{total_members}")
+            for i, member in enumerate(members):
+                try:
+                    archive_obj.extract(member, dest_dir)
+                    if (i + 1) % 50 == 0 or (i + 1) == total_members:
+                        print(f"[ArchiveProgress]: {archive_path.name}|{i + 1}|{total_members}")
+                except Exception as e:
+                    print(f"  Warning: Failed to extract {member} from {archive_path.name}: {e}")
+
+            if is_zip:
+                archive_obj.close()
+            elif is_tar:
+                archive_obj.close()
+
+            print(f"[ArchiveExtracted]: {archive_path.name}")
+
+            # Post-Processing: Move archive to .processed
             try:
-                with zipfile.ZipFile(zip_path, "r") as zf:
-                    file_list = zf.namelist()
-                    is_processed = False
+                with extraction_lock:
+                    processed_dir = target_root / ".processed"
+                    os.makedirs(processed_dir, exist_ok=True)
 
-                    # Check for signatures
-                    # 1. Google Takeout (Voice/Chat)
-                    has_voice = any(f.startswith("Takeout/Voice/") for f in file_list)
-                    has_chat = any(f.startswith("Takeout/Google Chat/") for f in file_list)
+                    destination = processed_dir / archive_path.name
+                    if destination.exists():
+                        timestamp = int(time.time() * 1000)
+                        destination = processed_dir / f"{archive_path.stem}_{timestamp}{archive_path.suffix}"
 
-                    if has_voice or has_chat:
-                        # Respect platform filter: if user wants only google_voice, allow zips that include Voice;
-                        # if only google_chat, allow those with Chat; if all, take both.
-                        if platform_filter != "all":
-                            allowed = False
-                            if platform_filter == "google_voice" and has_voice:
-                                allowed = True
-                            if platform_filter == "google_chat" and has_chat:
-                                allowed = True
-                            if not allowed:
-                                print(f"  Skipping {zip_path.name}: does not match platform filter ({platform_filter}).")
-                                continue
+                    # Double check archive still exists (might have been moved by another thread if somehow duplicated)
+                    if not archive_path.exists():
+                        return True, local_detected, None
 
-                        dest_dir = target_root
-                        if has_voice:
-                            detected_platforms.add("google_voice")
-                        if has_chat:
-                            detected_platforms.add("google_chat")
-
-                        print(
-                            f"  Identified as Google Takeout (Voice={has_voice}, Chat={has_chat}). Extracting to {dest_dir} ..."
-                        )
-                        zf.extractall(dest_dir)
-
-                        # Flatten structure: Merge Takeout/* -> *
-                        # e.g. Takeout/Voice -> Voice
-                        if has_voice:
-                            src = dest_dir / "Takeout" / "Voice"
-                            dst = dest_dir / "Voice"
-                            if src.exists():
-                                merge_folders(src, dst)
-
-                        if has_chat:
-                            src = dest_dir / "Takeout" / "Google Chat"
-                            dst = dest_dir / "Google Chat"
-                            if src.exists():
-                                merge_folders(src, dst)
-
-                        # Takeout folder cleanup will be performed after all zip files are processed
-
-                        is_processed = True
-
-                    # 2. Instagram signature: your_instagram_activity
-                    elif any(f.startswith("your_instagram_activity") for f in file_list):
-                        if platform_filter not in ("all", "instagram"):
-                            print(f"  Skipping {zip_path.name}: does not match platform filter ({platform_filter}).")
-                            continue
-                        dest_dir = target_root / "Instagram"
-                        detected_platforms.add("instagram")
-                        print(f"  Identified as Instagram Export. Extracting to {dest_dir} ...")
-                        zf.extractall(dest_dir)
-                        is_processed = True
-
-                    # 3. Facebook signature: your_activity_across_facebook
-                    elif any(f.startswith("your_facebook_activity") for f in file_list):
-                        if platform_filter not in ("all", "facebook"):
-                            print(f"  Skipping {zip_path.name}: does not match platform filter ({platform_filter}).")
-                            continue
-                        dest_dir = target_root / "Facebook"
-                        detected_platforms.add("facebook")
-                        print(f"  Identified as Facebook Export. Extracting to {dest_dir} ...")
-                        zf.extractall(dest_dir)
-                        is_processed = True
-
-                    if is_processed:
-                        processed += 1
-                        print("  Extraction complete.")
+                    if delete_after:
+                        archive_path.unlink()
+                        print(f"  [Post] Deleted archive: {archive_path.name}")
+                        return True, local_detected, (archive_path, None)
                     else:
-                        print(f"  Skipping {zip_path.name}: Could not identify platform structure.")
-
+                        shutil.move(str(archive_path), str(destination))
+                        return True, local_detected, (archive_path, destination)
+                return True, local_detected, (archive_path, destination)
             except Exception as e:
-                print(f"  Error inspecting/extracting {zip_path.name}: {e}")
+                print(f"  Warning: Move/Delete failed for {archive_path.name}: {e}")
+                return True, local_detected, None
 
-    # Final cleanup: remove empty Takeout folder after all zips are processed
-    try:
-        takeout_root = target_root / "Takeout"
-        if takeout_root.exists() and not any(takeout_root.iterdir()):
+        except Exception as e:
+            print(f"  Error processing {archive_path.name}: {e}")
+            return False, None, None
+
+    # Run Parallel
+    # Limit workers to avoid disk thrashing, but beneficial for decompression
+    max_workers = min(4, len(all_archives))
+    print(f"Starting extraction of {len(all_archives)} archives...")
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = [executor.submit(process_archive, a) for a in all_archives]
+        for future in as_completed(futures):
+            success, platforms, move_info = future.result()
+            if success:
+                processed += 1
+                if platforms:
+                    detected_platforms.update(platforms)
+                if move_info:
+                    archive_moves.append(move_info)
+
+    # Post-Extraction Structural Cleanup (Sequential)
+    # Now that all zips are extracted, we can safely move the Takeout folders
+    # without fear of race conditions from other threads writing to them.
+
+    # Google Voice
+    if "google_voice" in detected_platforms:
+        src = target_root / "Takeout" / "Voice"
+        dst = target_root / "Voice"
+        if src.exists():
+            print("  Consolidating Google Voice data...")
+            merge_folders(src, dst)
+
+    # Google Chat
+    if "google_chat" in detected_platforms:
+        src = target_root / "Takeout" / "Google Chat"
+        dst = target_root / "Google Chat"
+        if src.exists():
+            print("  Consolidating Google Chat data...")
+            merge_folders(src, dst)
+
+    # Final cleanup: remove empty Takeout folder
+    takeout_root = target_root / "Takeout"
+    if takeout_root.exists() and not any(takeout_root.iterdir()):
+        try:
             takeout_root.rmdir()
-            print(f"Removed empty Takeout folder: {takeout_root}")
-    except Exception as e:
-        print(f"Could not remove Takeout folder: {e}")
+            print("Removed empty Takeout folder.")
+        except Exception:
+            pass
 
-    return processed, detected_platforms
+    return processed, detected_platforms, archive_moves
 
 
 def start_ingestion():
     parser = argparse.ArgumentParser(description="Ingest MessageHub data into SQLite.")
-    parser.add_argument("--source", type=str, help="Directory or Zip file to ingest (defaults to configured DATA_DIR)")
-    parser.add_argument("--db", type=str, help="Database file path (defaults to DATA_DIR/messagehub.db)")
-    parser.add_argument("--skip-unzip", action="store_true", help="Skip zip extraction step")
+    parser.add_argument(
+        "--source", type=str, help="Directory or Zip file to ingest (defaults to configured WORKSPACE_PATH)"
+    )
+    parser.add_argument("--db", type=str, help="Database file path (defaults to WORKSPACE_PATH/messagehub.db)")
     parser.add_argument(
         "--platform",
         choices=["all", "facebook", "instagram", "google_chat", "google_voice"],
         default="all",
         help="Target specific platform",
     )
+    parser.add_argument(
+        "--delete-archives",
+        action="store_true",
+        help="Delete archives after successful extraction (no .processed folder)",
+    )
     args = parser.parse_args()
 
     # Defaults
-    source_arg = args.source if args.source else str(DATA_DIR)
-    db_arg = args.db if args.db else str(DATA_DIR / DB_NAME)
+    source_arg = args.source if args.source else str(WORKSPACE_PATH)
+    db_arg = args.db if args.db else str(WORKSPACE_PATH / DB_NAME)
 
     db_path = Path(db_arg).resolve()
     init_db(db_path)
 
     source_path = Path(source_arg).resolve()
 
-    # 1. Zip Scanning & Extraction
+    # Zip Scanning & Extraction
     detected_platforms = set()
-    if not args.skip_unzip:
-        # Scan project root and data dir for zips
-        scan_locations = [PROJECT_ROOT, DATA_DIR]
 
-        # If source path is a specific directory not in default list, add it
-        if source_path.is_dir() and source_path not in scan_locations:
-            scan_locations.append(source_path)
+    # Scan project root and data dir for zips
+    scan_locations = [PROJECT_ROOT, WORKSPACE_PATH]
 
-        _, detected_platforms = extract_zips_found(scan_locations, DATA_DIR, platform_filter=args.platform)
-    else:
-        print("Skipping zip extraction.")
+    # If source path is a specific directory not in default list, add it
+    if source_path.is_dir() and source_path not in scan_locations:
+        scan_locations.append(source_path)
 
-    # 2. Ingestion
-    if source_path.is_file() and source_path.suffix == ".zip":
-        print("Zip extracted. Scanning full data directory to locate merged content...")
-        scan_directory(DATA_DIR, db_path, platform_filter=args.platform)
+    # Pre-count archives for progress UI
+    total_archives = 0
+    seen_zips_count = set()
+    for d in scan_locations:
+        d_path = Path(d)
+        if not d_path.exists():
+            continue
+        archives = list(d_path.glob("*.zip")) + list(d_path.glob("*.tgz")) + list(d_path.glob("*.tar.gz"))
+        for a in archives:
+            if a.resolve() not in seen_zips_count:
+                seen_zips_count.add(a.resolve())
+                total_archives += 1
 
-    elif source_path.is_dir():
-        # Scan the entire data dir (recursive) which now includes extracted zips
-        scan_directory(DATA_DIR, db_path, platform_filter=args.platform)
-    else:
-        print(f"Invalid source: {source_path}")
+    print(f"[TotalArchives]: {total_archives}")  # Signal for UI
 
-    # 3. Cleanup JSONs for non-Google platforms (only if we just extracted them, for safety)
-    # If the user skipped unzip, they might not want cleanup either, or maybe they do.
-    # For now let's assume cleanup is tied to extraction event or explicit platform
-    cleanup_targets = []
+    # Disk Space Check
+    if total_archives > 0:
+        total_archive_size = sum(a.stat().st_size for a in seen_zips_count)
+        # Requirement estimate: Extraction (~2x) + DB/Overhead (~0.5x)
+        required_bytes = total_archive_size * 2.5
 
-    # If we extracted specific platforms, clean them
-    if "facebook" in detected_platforms:
-        cleanup_targets.append("facebook")
-    if "instagram" in detected_platforms:
-        cleanup_targets.append("instagram")
+        try:
+            _, _, free_bytes = shutil.disk_usage(WORKSPACE_PATH)
+            if free_bytes < required_bytes:
+                req_gb = required_bytes / (1024**3)
+                free_gb = free_bytes / (1024**3)
+                print(
+                    f"[Error]: Insufficient disk space. Estimated requirement: {req_gb:.2f} GB, Free: {free_gb:.2f} GB"
+                )
+                sys.exit(1)
+        except Exception as e:
+            print(f"  Warning: Could not verify disk space: {e}")
 
-    # If using platform filter, maybe clean those? Best to stick to "cleanup whatever we just extracted"
-    # to avoid deleting files the user might be managing manually if skipping unzip.
+    processed_count, detected_platforms, archive_moves = extract_zips_found_with_opts(
+        scan_locations, WORKSPACE_PATH, platform_filter=args.platform, delete_after=args.delete_archives
+    )
 
-    if not args.skip_unzip:
+    try:
+        # Ingestion
+        if processed_count > 0:
+            print(
+                f"Archives processed ({processed_count}). Scanning workspace for {', '.join(detected_platforms)} content..."
+            )
+            scan_directory(WORKSPACE_PATH, db_path, platform_filter=args.platform, limit_platforms=detected_platforms)
+        elif source_path.is_file() and source_path.suffix == ".zip":
+            # Direct zip path support (treat as 'all' because we didn't use extract_zips_found_with_opts to get detected set)
+            print("Specified zip extracted. Scanning for content...")
+            scan_directory(WORKSPACE_PATH, db_path, platform_filter=args.platform)
+        elif source_path.is_dir() and any(seen_zips_count):
+            # If we had zips but processed_count was 0? (Shouldn't happen with our logic but being safe)
+            scan_directory(WORKSPACE_PATH, db_path, platform_filter=args.platform, limit_platforms=detected_platforms)
+        else:
+            # No archives found or selected - Skip scanning as data only enters thru archives
+            print("No new archives to process. Skipping workspace scan.")
+
+        # Cleanup JSONs for non-Google platforms
+        cleanup_targets = []
+
+        # If we extracted specific platforms, clean them
+        if "facebook" in detected_platforms:
+            cleanup_targets.append("facebook")
+        if "instagram" in detected_platforms:
+            cleanup_targets.append("instagram")
+
         print("\n--- Cleanup ---")
 
-        # 1. JSON Cleanup (Facebook/Insta)
+        # JSON Cleanup (Facebook/Insta)
         if cleanup_targets:
             print(f"Sweeping JSON messages for: {', '.join(cleanup_targets)}")
-            from utils import clean_json_messages
+            clean_json_messages(WORKSPACE_PATH, platforms=cleanup_targets)
 
-            clean_json_messages(DATA_DIR, platforms=cleanup_targets)
-
-        # 2. Google Voice Cleanup
+        # Google Voice Cleanup
         if "google_voice" in detected_platforms:
-            from utils import clean_google_voice_files
+            clean_google_voice_files(WORKSPACE_PATH)
 
-            clean_google_voice_files(DATA_DIR)
+    except Exception as e:
+        print(f"\n[Error]: Ingestion failed unexpectedly: {e}")
+        if archive_moves:
+            print(f"Rolling back {len(archive_moves)} archive moves...")
+            for original, processed in archive_moves:
+                if processed and processed.exists():
+                    try:
+                        shutil.move(str(processed), str(original))
+                        print(f"  Restored {original.name}")
+                    except Exception as re:
+                        print(f"  Failed to restore {original.name}: {re}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

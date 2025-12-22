@@ -2,7 +2,7 @@
   display: flex;
   align-items: stretch;
   border: 1px solid var(--border-color);
-  border-radius: 6px;
+  border-radius: var(--radius-1);
   overflow: hidden;
   transition: all 0.2s;
   background: var(--bg-primary, #ffffff);
@@ -14,22 +14,27 @@
   box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
 }
 
-.inputAdornment {
+.adornment {
   display: flex;
   align-items: center;
-  justify-content: center;
   background: var(--bg-secondary, #e9ecef);
-  padding: 0 12px;
-  border-right: 1px solid var(--border-color);
   color: var(--text-secondary, #6c757d);
-  font-size: 1.1em;
+  transition: all 0.2s;
+}
+
+.adornment.start {
+  border-right: 1px solid var(--border-color);
+}
+
+.adornment.end {
+  border-left: 1px solid var(--border-color);
 }
 
 .input {
   flex: 1;
   padding: 10px 12px;
   border: none;
-  border-radius: 0; 
+  border-radius: 0;
   background: transparent;
   color: var(--text-primary);
   font-family: inherit;

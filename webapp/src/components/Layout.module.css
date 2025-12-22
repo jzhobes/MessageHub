@@ -50,7 +50,7 @@
   border: none;
   cursor: pointer;
   padding: 6px 10px;
-  border-radius: 8px;
+  border-radius: var(--radius-1);
   text-decoration: none;
 }
 
@@ -98,7 +98,7 @@
   color: var(--text-secondary);
   font-size: 1.2rem;
   padding: 8px;
-  border-radius: 50%;
+  border-radius: var(--radius-circle);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -127,7 +127,7 @@
   align-items: center;
   background-color: var(--input-bg);
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: var(--radius-1);
   padding: 8px 16px;
   width: 100%;
   color: var(--text-secondary);
@@ -198,7 +198,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 50%;
+  border-radius: var(--radius-circle);
   transition: all 0.2s;
 }
 

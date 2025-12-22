@@ -1,20 +1,21 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { getDb, dbExists } from '@/lib/server/db';
-
+import db from '@/lib/server/db';
 import { PlatformMap } from '@/lib/shared/platforms';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
-    if (!dbExists()) {
+    if (!db.exists()) {
       const empty: Record<string, boolean> = {};
       Object.values(PlatformMap).forEach((label) => (empty[label] = false));
       return res.status(200).json({ initialized: false, platforms: empty });
     }
 
-    const db = getDb();
+    const _db = db.get();
 
     const hasThreads = (platform: string) => {
-      const result = db.prepare('SELECT count(*) as count FROM threads WHERE platform = ?').get(platform) as { count: number };
+      const result = _db.prepare('SELECT count(*) as count FROM threads WHERE platform = ?').get(platform) as {
+        count: number;
+      };
       return result?.count > 0;
     };
 

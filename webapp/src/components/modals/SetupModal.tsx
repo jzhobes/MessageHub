@@ -1,444 +1,437 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { FaFolder, FaTimes } from 'react-icons/fa';
-import TextInput from '@/components/TextInput';
-import styles from './SetupModal.module.css';
+import React, { useState, useEffect } from 'react';
+import { FaCog, FaFileImport, FaDatabase, FaCheckCircle } from 'react-icons/fa';
 
-interface StepProps {
-  styles: any;
-}
+import { useIngestion } from '@/hooks/useIngestion';
+import BaseModal from './BaseModal';
+import DataPathStep from './setup/DataPathStep';
+import ImportStep from './setup/ImportStep';
+import ScanStep from './setup/ScanStep';
 
-function WelcomeStep({ styles }: StepProps) {
-  return (
-    <div className={styles.welcomeContainer}>
-      <div className={styles.leftRail} />
-      <div className={styles.welcomeContent}>
-        <h2 className={styles.welcomeTitle}>Welcome to MessageHub</h2>
-        <p className={styles.welcomeText}>
-          Craft your authentic AI persona.
-          <br />
-          <br />
-          This wizard will help you forge your chat data into a personalized AI-ready dataset on your local machine.
-          <br />
-          <br />
-          Click Next to continue.
-        </p>
-      </div>
-    </div>
-  );
-}
-
-interface FolderStepProps extends StepProps {
-  dataPath: string;
-  setDataPath: (path: string) => void;
-  setShowCreatePrompt: (show: boolean) => void;
-  setValidationError: (error: string | null) => void;
-  validationError: string | null;
-  showCreatePrompt: boolean;
-  validateAndSavePath: (create?: boolean, confirmNotEmpty?: boolean) => void;
-  defaultPath?: string;
-}
-
-function FolderStep({ styles, dataPath, setDataPath, setShowCreatePrompt, setValidationError, validationError, showCreatePrompt, validateAndSavePath, defaultPath }: FolderStepProps) {
-  return (
-    <div>
-      <div className={styles.stepTitle}>Installation Folder</div>
-      <p style={{ color: 'var(--text-secondary)', marginBottom: 20 }}>Where would you like MessageHub to store its database and files?</p>
-      <div className={styles.inputGroup}>
-        <TextInput
-          value={dataPath}
-          onChange={(e) => {
-            setDataPath(e.target.value);
-            setShowCreatePrompt(false);
-            setValidationError(null);
-          }}
-          placeholder={defaultPath || '/path/to/data'}
-          adornment={<FaFolder />}
-        />
-      </div>
-
-      {validationError && (
-        <div style={{ color: showCreatePrompt ? '#d97706' : '#ef4444', marginTop: 10, display: 'flex', alignItems: 'flex-start', gap: 6, fontSize: '0.9em' }}>
-          <span>{showCreatePrompt ? '⚠️' : '⚠️'}</span>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <span>{validationError}</span>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-interface FilesStepProps extends StepProps {
-  files: File[];
-  handleFiles: (e: React.ChangeEvent<HTMLInputElement>) => void;
-}
-
-function FilesStep({ styles, files, handleFiles }: FilesStepProps) {
-  return (
-    <div>
-      <div className={styles.stepTitle}>Import Data</div>
-      <p style={{ color: 'var(--text-secondary)', marginBottom: 20 }}>
-        Select your export .zip files (Facebook, Instagram, Google Takeout).
-        <br />
-        You can also skip this and import later.
-      </p>
-
-      <label className={styles.secondaryButton} style={{ display: 'inline-block', marginBottom: 10 }}>
-        Choose Files...
-        <input type="file" multiple accept=".zip,.json" onChange={handleFiles} style={{ display: 'none' }} />
-      </label>
-
-      {files.length > 0 ? (
-        <div className={styles.fileList}>
-          {files.map((f, i) => (
-            <div key={i}>
-              📄 {f.name} ({(f.size / 1024 / 1024).toFixed(1)} MB)
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className={styles.fileList} style={{ fontStyle: 'italic' }}>
-          No files selected
-        </div>
-      )}
-    </div>
-  );
-}
-
-interface InstallStepProps extends StepProps {
-  statusText: string;
-  isComplete: boolean;
-  uploadProgress: number;
-  files: File[];
-  isInstalling: boolean;
-  showLogs: boolean;
-  setShowLogs: (show: boolean) => void;
-  logs: string[];
-  logsEndRef: React.RefObject<HTMLDivElement | null>;
-}
-
-function InstallStep({ styles, statusText, isComplete, uploadProgress, files, showLogs, setShowLogs, logs, logsEndRef }: InstallStepProps) {
-  return (
-    <div>
-      <div className={styles.stepTitle}>{statusText || 'Installing...'}</div>
-
-      {/* Progress Bar */}
-      <div className={styles.progressBar}>
-        {/* Simple indeterminant progress if processing, or upload progress */}
-        <div
-          className={styles.progressFill}
-          style={{
-            width: isComplete ? '100%' : uploadProgress > 0 && files.length > 0 ? `${uploadProgress}%` : '50%',
-            transition: 'width 0.5s',
-          }}
-        />
-      </div>
-
-      <div style={{ marginTop: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div style={{ fontSize: '0.9em', color: 'var(--text-secondary)' }}>{isComplete ? 'All operations completed successfully.' : 'Please wait while MessageHub configures your data...'}</div>
-        <button className={styles.secondaryButton} onClick={() => setShowLogs(!showLogs)}>
-          {showLogs ? 'Hide Details' : 'Show Details'}
-        </button>
-      </div>
-
-      {showLogs && (
-        <div className={styles.terminal} style={{ marginTop: 15, height: 250 }}>
-          {logs.map((l, i) => (
-            <div key={i}>{l}</div>
-          ))}
-          <div ref={logsEndRef} />
-        </div>
-      )}
-    </div>
-  );
-}
+import styles from '@/components/modals/SetupModal.module.css';
 
 interface SetupModalProps {
   isOpen: boolean;
   onClose: () => void;
   onCompleted: () => void;
-  initialStep?: 0 | 1 | 2;
+  initialStep?: number;
+  isFirstRun?: boolean;
 }
 
-export default function SetupModal({ isOpen, onClose, onCompleted, initialStep = 0 }: SetupModalProps) {
-  if (!isOpen) return null;
+export default function SetupModal({
+  isOpen,
+  onClose,
+  onCompleted,
+  initialStep = 0,
+  isFirstRun = false,
+}: SetupModalProps) {
+  const steps: ('path' | 'import' | 'scan')[] = isFirstRun ? ['path', 'import', 'scan'] : ['scan', 'import', 'path'];
 
-  const [step, setStep] = useState<0 | 1 | 2 | 3>(initialStep);
-  const [configLoading, setConfigLoading] = useState(true);
-  const [validationError, setValidationError] = useState<string | null>(null);
-  const [dataPath, setDataPath] = useState('');
+  const [activeTab, setActiveTab] = useState<'welcome' | 'path' | 'import' | 'scan'>(() => {
+    if (isFirstRun) {
+      return 'welcome';
+    }
+    if (initialStep === 1) {
+      return 'import';
+    }
+    if (initialStep === 2) {
+      return 'scan';
+    }
+    return 'path';
+  });
+  const [prevOpen, setPrevOpen] = useState(isOpen);
+
+  // Sync tab when modal re-opens (Adjusting state during rendering pattern)
+  if (isOpen && !prevOpen) {
+    setPrevOpen(true);
+    const stepTab = initialStep === 0 ? 'welcome' : initialStep === 1 ? 'import' : initialStep === 2 ? 'scan' : 'path';
+    setActiveTab(stepTab);
+  } else if (!isOpen && prevOpen) {
+    setPrevOpen(false);
+  }
+
+  // Configuration State
+  const [workspacePath, setWorkspacePath] = useState<string | null>(null);
+  const [pathError, setPathError] = useState<string | null>(null);
   const [resolvedPath, setResolvedPath] = useState<string | null>(null);
-  const [showCreatePrompt, setShowCreatePrompt] = useState(false);
+  const [remoteFiles, setRemoteFiles] = useState<string[]>([]);
+  const [transferMode, setTransferMode] = useState<'copy' | 'move'>('copy');
+  const [isExistingWorkspace, setIsExistingWorkspace] = useState(false);
+  const [hasExistingArchives, setHasExistingArchives] = useState(false);
 
-  // Step 2: Files
-  const [files, setFiles] = useState<File[]>([]);
-  const [uploadProgress, setUploadProgress] = useState(0);
+  const handleUpdateWorkspacePath = (p: string | null) => {
+    setWorkspacePath(p);
+    setPathError(null);
+  };
 
-  // Step 3: Install
-  const [statusText, setStatusText] = useState('');
-  const [isInstalling, setIsInstalling] = useState(false);
-  const [isComplete, setIsComplete] = useState(false);
-  const [logs, setLogs] = useState<string[]>([]);
-  const [showLogs, setShowLogs] = useState(false);
-  const logsEndRef = useRef<HTMLDivElement>(null);
+  // Ingestion Hook
+  const {
+    isInstalling,
+    isComplete,
+    logs,
+    status,
+    progress,
+    error,
+    activeTransfers,
+    runInstall: startIngestion,
+  } = useIngestion();
 
-  // Load initial config
+  // Side-effect: Load config on open
   useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
     (async () => {
       try {
-        const data = await (await fetch('/api/setup/config')).json();
-        setDataPath(data.resolved);
+        const response = await fetch('/api/setup/config');
+        const data = await response.json();
+        setWorkspacePath(data.workspacePath);
         setResolvedPath(data.resolved);
-      } catch (e) {
-        console.error('Failed to load config', e);
-      } finally {
-        setConfigLoading(false);
+      } catch (err) {
+        console.error('Failed to load config:', err);
       }
     })();
-  }, []);
-  // Auto-scroll logs
+  }, [isOpen]);
+
+  const isPathTab = activeTab === 'path';
+  const isScanTab = activeTab === 'scan';
+  const isFastFinish = isPathTab && isFirstRun && isExistingWorkspace;
+  const isFullyDone = isComplete || (isScanTab && remoteFiles.length === 0 && !hasExistingArchives);
+
+  // Background Finalization: Automatic finalization when first-run ingestion completes.
   useEffect(() => {
-    if (showLogs) {
-      logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (!isFirstRun || !isFullyDone || !isOpen) {
+      return;
     }
-  }, [logs, showLogs]);
 
-  // Auto-start install when entering step 3
-  useEffect(() => {
-    if (step === 3 && !isInstalling && !isComplete) {
-      runInstallSequence();
-    }
-  }, [step]);
+    (async () => {
+      try {
+        await fetch('/api/setup/finalize', { method: 'POST' });
+      } catch (e) {
+        console.error('Background finalization failed:', e);
+      }
+    })();
+  }, [isFullyDone, isFirstRun, isOpen]);
 
-  // Reset step if initialStep changes or modal opens
-  useEffect(() => {
-    if (isOpen) {
-      setStep(initialStep);
-    }
-  }, [isOpen, initialStep]);
-
-  const validateAndSavePath = async (create = false, confirmNotEmpty = false) => {
-    setConfigLoading(true);
-    setValidationError(null);
-
-    // Use user input, or fallback to the resolved path we loaded at start
-    const pathToSend = dataPath || resolvedPath;
-    const shouldCreate = true; // Always try to create if missing (auto-create)
-
+  const saveConfig = async () => {
     try {
-      const res = await fetch('/api/setup/config', {
+      setPathError(null);
+      const configRes = await fetch('/api/setup/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dataPath: pathToSend, create: shouldCreate }),
+        body: JSON.stringify({ workspacePath: workspacePath ?? resolvedPath, create: true }),
       });
-      const data = await res.json();
-
-      if (res.ok) {
+      const data = await configRes.json();
+      if (configRes.ok) {
+        setWorkspacePath(data.workspacePath);
         setResolvedPath(data.resolved);
 
-        if (data.exists) {
-          if (data.isEmpty || confirmNotEmpty) {
-            setStep(2);
-            setShowCreatePrompt(false);
-          } else {
-            // Exists but NOT empty
-            setValidationError('This folder is not empty. Existing files may be used or modified by MessageHub.');
-            setShowCreatePrompt(true);
+        // First-run configuration does not trigger immediate finalization or refresh.
+        if (isFirstRun) {
+          return;
+        }
+
+        // Settings mode: Finalize changes and reload when switching to an existing workspace.
+        try {
+          if (data.isExistingWorkspace) {
+            await fetch('/api/setup/finalize', { method: 'POST' });
           }
-        } else {
-          setValidationError(`Could not access or create folder: ${data.resolved}`);
+          window.location.reload();
+        } catch {
+          setPathError('Network error finalizing workspace change');
         }
       } else {
-        setValidationError(data.error || 'Unknown error');
+        setPathError(data.error || 'Failed to update workspace');
+        console.error('Error saving workspace path:', data.error);
       }
     } catch (e) {
-      setValidationError('Network error');
-    } finally {
-      setConfigLoading(false);
+      setPathError('Network error updating workspace');
+      console.error('Network error saving workspace path', e);
     }
   };
 
-  const handleFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      setFiles(Array.from(e.target.files));
-    }
+  const handleRunInstall = () => {
+    startIngestion(remoteFiles, transferMode);
   };
 
-  const runInstallSequence = async () => {
-    setIsInstalling(true);
+  const currentIndex = steps.indexOf(activeTab as 'path' | 'import' | 'scan');
 
-    // 1. Upload
-    if (files.length > 0) {
-      setStatusText('Uploading files...');
-      try {
-        await new Promise<void>((resolve, reject) => {
-          const formData = new FormData();
-          files.forEach((f) => formData.append('files', f));
-          const xhr = new XMLHttpRequest();
-          xhr.open('POST', '/api/setup/upload');
-          xhr.upload.onprogress = (event) => {
-            if (event.lengthComputable) {
-              setUploadProgress((event.loaded / event.total) * 100);
+  const handleNext = async () => {
+    if (isInstalling) {
+      return;
+    }
+
+    if (activeTab === 'welcome') {
+      setActiveTab('path');
+      return;
+    }
+
+    if (activeTab === 'path') {
+      await saveConfig();
+
+      if (isFirstRun) {
+        // Validation check for first run
+        if (!workspacePath && !resolvedPath) {
+          return;
+        }
+
+        // Smart Skip: If existing workspace detected, finalize and finish now
+        if (isExistingWorkspace) {
+          try {
+            const finalizeRes = await fetch('/api/setup/finalize', { method: 'POST' });
+            if (finalizeRes.ok) {
+              window.location.reload();
+              return;
             }
-          };
-          xhr.onload = () => {
-            if (xhr.status === 200) resolve();
-            else reject('Upload failed');
-          };
-          xhr.onerror = () => reject('Upload network error');
-          xhr.send(formData);
-        });
-      } catch (e) {
-        setStatusText('Upload Failed');
-        setIsInstalling(false);
-        return;
-      }
-    }
-
-    // 2. Ingest
-    setStatusText('Processing data...');
-    setLogs(['Starting ingestion...']);
-
-    try {
-      const response = await fetch('/api/setup/ingest', { method: 'POST' });
-      if (!response.body) throw new Error('No response body');
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n\n');
-        buffer = lines.pop() || '';
-
-        for (const block of lines) {
-          if (block.startsWith('data: ')) {
-            try {
-              const msg = JSON.parse(block.replace('data: ', ''));
-              if (msg.type === 'stdout' || msg.type === 'stderr') {
-                setLogs((prev) => [...prev.slice(-200), msg.payload]);
-              }
-              if (msg.type === 'done') {
-                setLogs((prev) => [...prev, '--- Complete ---']);
-                setIsComplete(true);
-                setIsInstalling(false);
-                setStatusText('Installation Complete');
-              }
-              if (msg.type === 'error') {
-                setLogs((prev) => [...prev, 'Error: ' + msg.payload]);
-                setStatusText('Error during processing');
-              }
-            } catch (e) {}
+          } catch (e) {
+            console.error('Failed to auto-finalize existing workspace:', e);
           }
         }
       }
-    } catch (e) {
-      setStatusText('Processing Failed');
-      setIsInstalling(false);
+      setActiveTab('import');
+      return;
+    }
+
+    if (activeTab === 'import') {
+      setActiveTab('scan');
+      return;
+    }
+
+    if (activeTab === 'scan') {
+      if (isComplete) {
+        onCompleted?.();
+        onClose();
+      }
+      return;
+    }
+
+    if (currentIndex < steps.length - 1) {
+      setActiveTab(steps[currentIndex + 1]);
     }
   };
 
-  const handleFinish = async () => {
-    setStatusText('Saving configuration...');
-    try {
-      await fetch('/api/setup/finalize', { method: 'POST' });
-      setTimeout(() => {
-        window.location.reload();
-      }, 500);
-    } catch (e) {
-      onCompleted();
+  const handleBack = () => {
+    if (currentIndex === 0) {
+      setActiveTab('welcome');
+    } else if (currentIndex > 0) {
+      setActiveTab(steps[currentIndex - 1]);
     }
+  };
+
+  const renderContent = () => {
+    switch (activeTab) {
+      case 'scan':
+        return (
+          <ScanStep
+            runInstall={handleRunInstall}
+            isInstalling={isInstalling}
+            isComplete={isComplete}
+            logs={logs}
+            progress={progress}
+            status={status}
+            error={error}
+            remoteFiles={remoteFiles}
+            onGoToImport={() => setActiveTab('import')}
+            onFinish={() => {
+              onCompleted?.();
+              onClose();
+            }}
+            onQueueUpdate={setHasExistingArchives}
+            isFirstRun={isFirstRun}
+            activeTransfers={activeTransfers}
+          />
+        );
+      case 'import':
+        return (
+          <ImportStep
+            isFirstRun={isFirstRun}
+            setRemoteFiles={(files: string[]) => setRemoteFiles(files)}
+            transferMode={transferMode}
+            setTransferMode={setTransferMode}
+            onConfirm={() => setActiveTab('scan')}
+          />
+        );
+      case 'path':
+        return (
+          <DataPathStep
+            dataPath={workspacePath}
+            resolvedPath={resolvedPath}
+            error={pathError}
+            isInstalling={isInstalling}
+            onChange={handleUpdateWorkspacePath}
+            onSave={saveConfig}
+            onExistingWorkspaceDetected={setIsExistingWorkspace}
+            isFirstRun={isFirstRun}
+          />
+        );
+      case 'welcome':
+      default:
+        return (
+          <div className={styles.welcomeContainer}>
+            <div className={styles.leftRail} />
+            <div className={styles.welcomeContent}>
+              <h1 className={styles.welcomeTitle}>Welcome to MessageHub</h1>
+              <p className={styles.welcomeText}>
+                Your personal message archive and indexer. Let&apos;s get started by setting up your workspace and
+                importing your chats to build your private index.
+              </p>
+              <button className={`${styles.button} ${styles.bigButton}`} onClick={handleNext}>
+                Get Started
+              </button>
+            </div>
+          </div>
+        );
+    }
+  };
+
+  const renderFooter = () => {
+    if (activeTab === 'welcome') {
+      return null;
+    }
+
+    // Primary Button Configuration
+    const getPrimaryButtonContent = () => {
+      if (isScanTab) {
+        if (isFullyDone) {
+          return (
+            <>
+              <FaCheckCircle /> Open MessageHub
+            </>
+          );
+        }
+        if (isInstalling) {
+          return 'Processing...';
+        }
+        return 'Start Processing';
+      }
+
+      if (activeTab === 'import' && remoteFiles.length === 0) {
+        return 'Skip';
+      }
+
+      if (isFastFinish) {
+        return 'Finish';
+      }
+      return 'Next';
+    };
+
+    const handlePrimaryAction = async () => {
+      if (isScanTab) {
+        if (isFullyDone) {
+          if (isFirstRun) {
+            // Finalize has already been called in the background useEffect,
+            // or we call it one last time to be safe and reload.
+            window.location.reload();
+            return;
+          }
+          onCompleted?.();
+          onClose();
+        } else {
+          handleRunInstall();
+        }
+      } else {
+        handleNext();
+      }
+    };
+
+    const isPrimaryDisabled = isScanTab ? isInstalling && !isComplete : isPathTab && !resolvedPath && !workspacePath;
+
+    return (
+      <div className={styles.wizardFooter}>
+        <button className={styles.secondaryButton} disabled={isInstalling || isComplete} onClick={handleBack}>
+          Back
+        </button>
+
+        <div className={styles.progressDots}>
+          {!isFastFinish &&
+            steps.map((step, idx) => (
+              <div key={step} className={`${styles.dot} ${idx === currentIndex ? styles.dotActive : ''}`} />
+            ))}
+        </div>
+
+        <button
+          key={isScanTab ? 'btn-scan' : 'btn-next'}
+          className={`${styles.button} ${isFullyDone ? styles.primaryButton : ''}`}
+          onClick={handlePrimaryAction}
+          disabled={isPrimaryDisabled}
+          style={isScanTab ? { minWidth: 160 } : undefined}
+        >
+          {getPrimaryButtonContent()}
+        </button>
+      </div>
+    );
   };
 
   return (
-    <div className={styles.overlay}>
-      <div className={styles.modal}>
-        {/* Header */}
-        <div className={styles.header}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1 }}>
-            <span style={{ fontSize: '1.2em' }}>💬</span>
-            <h2>MessageHub Setup</h2>
+    <BaseModal
+      isOpen={isOpen}
+      onClose={onClose}
+      maxWidth={900}
+      height="80vh"
+      dismissible={false}
+      className={styles.modal}
+      overlayClassName={styles.overlay}
+    >
+      <div className={styles.setupContainerFull}>
+        {isFirstRun ? (
+          <div className={styles.wizardLayout}>
+            <div
+              key={activeTab}
+              className={`${styles.wizardContent} ${activeTab === 'welcome' ? styles.wizardContentWelcome : ''}`}
+            >
+              {renderContent()}
+            </div>
+            {renderFooter()}
           </div>
-          <button onClick={onClose} className={styles.closeButton}>
-            <FaTimes />
-          </button>
-        </div>
+        ) : (
+          <div className={styles.setupContainer}>
+            {/* Sidebar */}
+            <div className={styles.sidebar}>
+              <div className={styles.sidebarTitle}>
+                <span className={styles.sidebarTitleEmoji}>⚙️</span> Setup
+              </div>
 
-        {/* Content */}
-        <div className={styles.content}>
-          <div key={step} className={styles.stepContent}>
-            {step === 0 && <WelcomeStep styles={styles} />}
-            {step === 1 && (
-              <FolderStep
-                styles={styles}
-                dataPath={dataPath}
-                setDataPath={setDataPath}
-                setShowCreatePrompt={setShowCreatePrompt}
-                setValidationError={setValidationError}
-                validationError={validationError}
-                showCreatePrompt={showCreatePrompt}
-                validateAndSavePath={validateAndSavePath}
-                defaultPath={resolvedPath || undefined}
-              />
-            )}
-            {step === 2 && <FilesStep styles={styles} files={files} handleFiles={handleFiles} />}
-            {step === 3 && (
-              <InstallStep
-                styles={styles}
-                statusText={statusText}
-                isComplete={isComplete}
-                uploadProgress={uploadProgress}
-                files={files}
-                isInstalling={isInstalling}
-                showLogs={showLogs}
-                setShowLogs={setShowLogs}
-                logs={logs}
-                logsEndRef={logsEndRef}
-              />
-            )}
+              {steps.map((step) => (
+                <div
+                  key={step}
+                  className={`${styles.sidebarItem} ${activeTab === step ? styles.sidebarActive : ''}`}
+                  onClick={() => setActiveTab(step)}
+                >
+                  <div className={styles.sidebarIconWrapper}>
+                    {step === 'scan' && <FaDatabase />}
+                    {step === 'import' && <FaFileImport />}
+                    {step === 'path' && <FaCog />}
+                  </div>
+                  <span style={{ textTransform: 'capitalize', flex: 1 }}>
+                    {step === 'scan' ? 'Overview' : step === 'path' ? 'Workspace' : step}
+                  </span>
+                  {step === 'scan' && remoteFiles.length > 0 && (
+                    <span className={styles.sidebarBadge}>{remoteFiles.length}</span>
+                  )}
+                </div>
+              ))}
+
+              <div className={styles.sidebarFooter}>
+                <button
+                  onClick={() => {
+                    if (isComplete) {
+                      onCompleted?.();
+                    }
+                    onClose();
+                  }}
+                  disabled={isInstalling}
+                  className={`${styles.secondaryButton} ${styles.sidebarCloseBtn}`}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+
+            {/* Main Content */}
+            <div className={styles.sidebarContent}>{renderContent()}</div>
           </div>
-        </div>
-
-        {/* Footer */}
-        <div className={styles.footer}>
-          <div style={{ flex: 1 }}>{step === 3 && !isComplete && <span style={{ fontSize: '0.9em', color: 'gray' }}>Installing...</span>}</div>
-          <div style={{ display: 'flex', gap: 10 }}>
-            {step > (initialStep && initialStep > 0 ? 1 : 0) && step < 3 && (
-              <button className={styles.secondaryButton} onClick={() => setStep((step - 1) as any)}>
-                {step === 2 ? 'Change Data Path' : '< Back'}
-              </button>
-            )}
-
-            {step === 0 && (
-              <button className={styles.button} onClick={() => setStep(1)}>
-                Next &gt;
-              </button>
-            )}
-
-            {step === 1 && (
-              <button className={styles.button} onClick={() => validateAndSavePath(false, showCreatePrompt)} disabled={configLoading}>
-                {showCreatePrompt ? 'Use Existing Folder' : 'Next >'}
-              </button>
-            )}
-
-            {step === 2 && (
-              <button className={styles.button} onClick={() => setStep(3)}>
-                {files.length > 0 ? 'Install' : 'Skip & Install'}
-              </button>
-            )}
-
-            {step === 3 && (
-              <button className={styles.button} onClick={handleFinish} disabled={!isComplete}>
-                Finish
-              </button>
-            )}
-          </div>
-        </div>
+        )}
       </div>
-    </div>
+    </BaseModal>
   );
 }

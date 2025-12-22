@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { promises as fs } from 'fs';
 import path from 'path';
-import { getDataDir } from '@/lib/shared/config';
+import appConfig from '@/lib/shared/appConfig';
 
 /**
  * API Handler to serve media files (images, videos) from the local data directory.
@@ -32,14 +32,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).send('Missing path');
   }
 
-  const baseDir = getDataDir();
+  const baseDir = appConfig.WORKSPACE_PATH;
   let relativePath = pathStr;
 
   // Platform-specific path adjustments
   if (platformStr === 'Facebook') {
-    relativePath = path.join('Facebook', pathStr.startsWith('your_facebook_activity') ? '' : 'your_facebook_activity', pathStr);
+    relativePath = path.join(
+      'Facebook',
+      pathStr.startsWith('your_facebook_activity') ? '' : 'your_facebook_activity',
+      pathStr,
+    );
   } else if (platformStr === 'Instagram') {
-    relativePath = path.join('Instagram', pathStr.startsWith('your_instagram_activity') ? '' : 'your_instagram_activity', pathStr);
+    relativePath = path.join(
+      'Instagram',
+      pathStr.startsWith('your_instagram_activity') ? '' : 'your_instagram_activity',
+      pathStr,
+    );
   } else if (platformStr === 'Google Chat') {
     // Google Chat paths are usually in Groups subdirectory
     relativePath = path.join('Google Chat/Groups', pathStr);

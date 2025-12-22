@@ -18,7 +18,6 @@ fi
 source venv/bin/activate
 
 echo "Installing dependencies from scripts/requirements.txt..."
-pip install --upgrade pip
 pip install -r scripts/requirements.txt
 
 echo ""

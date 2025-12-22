@@ -13,12 +13,21 @@
   animation: fadeIn 0.15s ease-out;
 }
 
+.modalOverlayClosing {
+  animation: fadeOut 0.2s ease-in forwards;
+}
+
+.modalContentClosing {
+  transform: scale(0.98);
+  opacity: 0;
+}
+
 .modalContent {
   background-color: var(--bg-card);
   width: 800px; /* Wide, like Command Palette */
   max-width: 90vw;
   height: 80vh;
-  border-radius: 12px;
+  border-radius: var(--radius-2);
   display: flex;
   flex-direction: column;
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
@@ -59,12 +68,9 @@
   flex: 1;
 }
 
-/* Old wrapper and input styles removed */
-
 .searchIcon {
-  color: #888;
   font-size: 0.95rem;
-  flex-shrink: 0;
+  margin: 0 12px;
 }
 
 .filterSelect {
@@ -72,7 +78,7 @@
   color: var(--text-primary);
   border: 1px solid var(--border-color);
   padding: 6px 12px;
-  border-radius: 6px;
+  border-radius: var(--radius-1);
   cursor: pointer;
   outline: none;
   font-size: 0.9rem;
@@ -83,7 +89,7 @@
   border: 1px solid var(--border-color);
   color: var(--text-secondary);
   padding: 5px 12px;
-  border-radius: 6px;
+  border-radius: var(--radius-1);
   cursor: pointer;
   font-size: 0.85rem;
   transition: all 0.2s;
@@ -209,8 +215,18 @@
     transform: scale(0.98);
   }
   to {
+    transform: scale(1);
+  }
+}
+
+@keyframes fadeOut {
+  from {
     opacity: 1;
     transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.98);
   }
 }
 .highlight {
@@ -220,29 +236,54 @@
   border-radius: 2px;
 }
 
-.statsRow {
+.statsSection {
+  display: flex;
+  flex-direction: column;
+}
+
+.statsHeader {
+  display: flex;
+  align-items: center;
+  padding: 8px 4px 8px 0;
+  cursor: pointer;
+  user-select: none;
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-weight: 500;
+  gap: 6px;
+  transition: color 0.2s;
+  width: fit-content;
+}
+
+.statsHeader:hover {
+  color: var(--text-primary);
+}
+
+.statsContent {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  padding: 0 16px 12px;
-  font-size: 13px;
-  border-bottom: 1px solid var(--border-color);
-  align-items: center;
+  overflow: hidden;
+  max-height: 0;
+  opacity: 0;
+  transform: translateY(-5px);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.statsLabel {
-  color: var(--text-secondary);
-  font-weight: 500;
-  margin-right: 4px;
+.statsContentExpanded {
+  max-height: 500px; /* Large enough to fit content */
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .statItem {
   background: var(--input-bg);
   color: var(--text-primary);
   padding: 2px 8px;
-  border-radius: 12px;
+  border-radius: var(--radius-2);
   border: 1px solid var(--border-color);
   white-space: nowrap;
+  font-size: 12px;
 }
 
 .footerLoading {

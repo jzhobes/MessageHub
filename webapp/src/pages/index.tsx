@@ -1,18 +1,17 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { FaArrowLeft, FaBars, FaCog, FaSearch } from 'react-icons/fa';
 import { FiMoon, FiSun } from 'react-icons/fi';
-
 import SearchModal from '@/components/modals/SearchModal';
 import SetupModal from '@/components/modals/SetupModal';
 import { useTheme } from '@/hooks/useTheme';
+import { Message, Thread } from '@/lib/shared/types';
 import ChatWindow from '@/sections/ChatWindow';
 import Sidebar from '@/sections/Sidebar';
 import ThreadList from '@/sections/ThreadList';
-import { Message, Thread } from '@/lib/shared/types';
-
 import styles from '@/components/Layout.module.css';
+import { useApp } from '@/context/AppContext';
 
 // Convert raw DB platform identifiers to UI display names
 function mapPlatform(raw: string): string {
@@ -51,12 +50,7 @@ export default function Home() {
   const [isMobile, setIsMobile] = useState(false);
   const [highlightToken, setHighlightToken] = useState(0);
   // Availability & Router State
-  const [availability, setAvailability] = useState<Record<string, boolean>>({
-    Facebook: true,
-    Instagram: true,
-    'Google Chat': true,
-    'Google Voice': true,
-  });
+  const { isInitialized, availability } = useApp();
   const [isRouterReady, setIsRouterReady] = useState(false);
 
   // Pagination State
@@ -123,7 +117,9 @@ export default function Home() {
       }
 
       try {
-        const res = await fetch(`/api/messages?threadId=${encodeURIComponent(threadId)}&page=${pageNum}&platform=${encodeURIComponent(activePlatform)}`);
+        const res = await fetch(
+          `/api/messages?threadId=${encodeURIComponent(threadId)}&page=${pageNum}&platform=${encodeURIComponent(activePlatform)}`,
+        );
 
         // Drop responses for superseded requests
         if (latestRequestRef.current !== requestId) {
@@ -265,32 +261,18 @@ export default function Home() {
   }, [router.isReady]);
 
   // 2. Initialize Backend Status
-  const [isInitialized, setIsInitialized] = useState(false);
-
   useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch('/api/status');
-        const response = await res.json();
+    if (isInitialized === false) {
+      setShowSetup(true);
+    }
 
-        setIsInitialized(response.initialized);
-
-        // If not initialized (no DB file), show setup
-        if (!response.initialized) {
-          setShowSetup(true);
-        }
-
-        const data = response.platforms;
-        setAvailability(data);
-        const safePlatform = resolvePlatform(activePlatform, data);
-        if (safePlatform !== activePlatform) {
-          setActivePlatform(safePlatform);
-        }
-      } catch (e) {
-        console.error('Failed to fetch status', e);
+    if (availability) {
+      const safePlatform = resolvePlatform(activePlatform, availability);
+      if (safePlatform !== activePlatform) {
+        setActivePlatform(safePlatform);
       }
-    })();
-  }, [activePlatform, resolvePlatform]);
+    }
+  }, [activePlatform, resolvePlatform, isInitialized, availability]);
 
   // 3. Responsive Check
   useEffect(() => {
@@ -387,7 +369,11 @@ export default function Home() {
         if (threadIdParam !== activeThread?.id) {
           const target = threads.find((t) => t.id === threadIdParam);
           if (target) {
-            setActiveThread(target);
+            // TODO: Commonize backend's Thread type with ThreadRow?
+            setActiveThread({
+              ...target,
+              platform: safePlatform,
+            });
           }
         }
       } else if (activeThread) {
@@ -427,7 +413,13 @@ export default function Home() {
 
   return (
     <div className={styles.container} data-theme={theme}>
-      <SetupModal isOpen={showSetup} onClose={() => setShowSetup(false)} onCompleted={() => window.location.reload()} initialStep={isInitialized ? 2 : 0} />
+      <SetupModal
+        isOpen={showSetup}
+        onClose={() => setShowSetup(false)}
+        onCompleted={() => window.location.reload()}
+        initialStep={isInitialized ? 2 : 0}
+        isFirstRun={isInitialized === false}
+      />
       <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} onNavigate={handleSearchNavigate} />
 
       {/* Global Header */}
@@ -466,17 +458,29 @@ export default function Home() {
         </div>
 
         <div className={styles.searchSection}>
-          <div className={`${styles.searchTrigger} ${isMobile ? styles.headerIconBtn : ''}`} onClick={() => setIsSearchOpen(true)}>
+          <div
+            className={`${styles.searchTrigger} ${isMobile ? styles.headerIconBtn : ''}`}
+            onClick={() => setIsSearchOpen(true)}
+          >
             <FaSearch className={styles.searchTriggerIcon} size={20} />
             <span>Search messages...</span>
           </div>
         </div>
 
         <div className={styles.themeToggleWrapper}>
-          <button className={`${styles.iconButton} ${styles.headerIconBtn}`} onClick={() => setShowSetup(true)} title="Setup" style={{ marginRight: 8 }}>
+          <button
+            className={`${styles.iconButton} ${styles.headerIconBtn}`}
+            onClick={() => setShowSetup(true)}
+            title="Setup"
+            style={{ marginRight: 8 }}
+          >
             <FaCog size={20} />
           </button>
-          <button className={`${styles.iconButton} ${styles.headerIconBtn}`} onClick={toggleTheme} title={theme === 'light' ? 'Switch to Dark Mode' : 'Switch to Light Mode'}>
+          <button
+            className={`${styles.iconButton} ${styles.headerIconBtn}`}
+            onClick={toggleTheme}
+            title={theme === 'light' ? 'Switch to Dark Mode' : 'Switch to Light Mode'}
+          >
             {!mounted || theme === 'light' ? <FiMoon size={20} /> : <FiSun size={20} />}
           </button>
         </div>
@@ -490,13 +494,24 @@ export default function Home() {
             display: isSidebarVisible ? 'block' : 'none',
           }}
         >
-          <Sidebar activePlatform={activePlatform} onPlatformSelect={handlePlatformSelect} availability={availability} collapsed={collapsed} />
+          <Sidebar
+            activePlatform={activePlatform}
+            onPlatformSelect={handlePlatformSelect}
+            availability={availability}
+            collapsed={collapsed}
+          />
         </div>
 
         <div className={styles.workspace}>
           {showThreadList && (
             <div className={styles.threadListWrapper} style={{ width: isMobile ? '100%' : '350px' }}>
-              <ThreadList activePlatform={activePlatform} threads={threads || []} activeThread={activeThread} loading={threads === null} onThreadSelect={handleThreadSelect} />
+              <ThreadList
+                activePlatform={activePlatform}
+                threads={threads || []}
+                activeThread={activeThread}
+                loading={threads === null}
+                onThreadSelect={handleThreadSelect}
+              />
             </div>
           )}
 
@@ -511,10 +526,9 @@ export default function Home() {
                 pageRange={pageRange}
                 onStartReached={handleLoadOld}
                 onEndReached={handleLoadNew}
-                activePlatform={activePlatform}
                 targetMessageId={targetMessageId}
                 highlightToken={highlightToken}
-                initializing={!!router.query.threadId && !activeThread}
+                initializing={!!router.query.threadId && !activeThread && availability[activePlatform]}
               />
             </div>
           )}

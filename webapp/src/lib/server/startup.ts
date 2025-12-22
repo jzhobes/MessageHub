@@ -1,13 +1,16 @@
-import fs from 'fs';
 import { execSync } from 'child_process';
+import fs from 'fs';
+import './env'; // Ensure env is loaded securely at boot
+
+import appConfig from '@/lib/shared/appConfig';
+
 import { getInstagramHeaders } from './instagram';
-import { getDataDir } from '@/lib/shared/config';
 
 export async function runStartupChecks() {
   console.log('🔍 [Instrumentation] Running Startup Checks...');
 
   // 1. Check Data Directory
-  const dataDir = getDataDir();
+  const dataDir = appConfig.WORKSPACE_PATH;
 
   if (fs.existsSync(dataDir)) {
     console.log(`✅ [Instrumentation] Data Directory Found: ${dataDir}`);
@@ -19,7 +22,9 @@ export async function runStartupChecks() {
     if (wslMatch) {
       const driveLetter = wslMatch[1];
       const mountPoint = `/mnt/${driveLetter}`;
-      console.log(`🔄 [Instrumentation] Detected missing WSL mount. Attempting to mount drive ${driveLetter.toUpperCase()}: ...`);
+      console.log(
+        `🔄 [Instrumentation] Detected missing WSL mount. Attempting to mount drive ${driveLetter.toUpperCase()}: ...`,
+      );
       console.log(`🔑 [Instrumentation] You may be prompted for your sudo password.`);
 
       try {

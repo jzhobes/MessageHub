@@ -1,3 +1,4 @@
+import React from 'react';
 import Link from 'next/link';
 import { FaFacebook, FaInstagram, FaPhone, FaRobot } from 'react-icons/fa';
 import { SiGooglechat } from 'react-icons/si';
@@ -55,7 +56,12 @@ export default function Sidebar({ activePlatform, onPlatformSelect, availability
       </div>
 
       <div className={styles.navItem}>
-        <Link href="/studio" className={styles.sidebarButton} style={{ textDecoration: 'none', color: 'inherit' }} title="DataForge AI">
+        <Link
+          href="/studio"
+          className={styles.sidebarButton}
+          style={{ textDecoration: 'none', color: 'inherit' }}
+          title="DataForge AI"
+        >
           <span className={styles.sidebarIconWrapper}>
             <FaRobot color="#666" size={20} />
           </span>

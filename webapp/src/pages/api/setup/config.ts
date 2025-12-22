@@ -1,75 +1,95 @@
-import type { NextApiRequest, NextApiResponse } from 'next';
 import fs from 'fs';
-import path from 'path';
-import { setRuntimeDataPath } from '@/lib/shared/config';
+import type { NextApiRequest, NextApiResponse } from 'next';
+
+import appConfig from '@/lib/shared/appConfig';
+import db from '@/lib/server/db';
+import fileSystem from '@/lib/server/fileSystem';
+import { persistWorkspacePath } from '@/lib/server/env';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  // Determine Project Root (parent of webapp if running inside webapp)
-  const currentDir = process.cwd();
-  const projectRoot = path.basename(currentDir) === 'webapp' ? path.resolve(currentDir, '..') : currentDir;
-
   if (req.method === 'GET') {
-    // 1204: Just use what's currently configured in process.env or fallback
-    // We assume setRuntimeDataPath updates process.env.DATA_PATH
-    const currentPath = process.env.DATA_PATH || 'data';
+    const currentPath = process.env.WORKSPACE_PATH || 'data';
 
-    // Now resolve it to check existence
-    const resolved = path.isAbsolute(currentPath) ? currentPath : path.resolve(projectRoot, currentPath);
-
-    let exists = false;
     try {
-      await fs.promises.access(resolved);
-      exists = true;
-    } catch {}
+      const resolved = fileSystem.resolveSafePath('workspace', currentPath);
+      let exists = false;
+      try {
+        await fs.promises.access(resolved);
+        exists = true;
+      } catch {}
 
-    return res.status(200).json({ dataPath: currentPath, exists, resolved });
+      return res.status(200).json({ workspacePath: currentPath, exists, resolved });
+    } catch {
+      return res.status(403).json({ error: 'Current workspace path is outside allowed boundaries' });
+    }
   }
 
   if (req.method === 'POST') {
-    const { dataPath, create } = req.body;
-    if (!dataPath || typeof dataPath !== 'string') {
+    const { workspacePath, create } = req.body;
+    if (!workspacePath || typeof workspacePath !== 'string') {
       return res.status(400).json({ error: 'Invalid path' });
     }
 
-    const resolved = path.isAbsolute(dataPath) ? dataPath : path.resolve(projectRoot, dataPath);
-    let exists = false;
+    let resolved: string;
     try {
-      await fs.promises.access(resolved);
-      exists = true;
-    } catch {}
-
-    // Check emptiness if it exists
-    let isEmpty = true;
-    if (exists) {
-      try {
-        const files = await fs.promises.readdir(resolved);
-        // filter out system files if needed, but for now strict empty
-        if (files.filter((f) => f !== '.DS_Store' && f !== 'thumbs.db').length > 0) {
-          isEmpty = false;
-        }
-      } catch (e) {
-        // If we can't read it (permission?), treat as not empty or error?
-        // simple fallback
-      }
+      resolved = fileSystem.resolveSafePath('workspace', workspacePath);
+    } catch {
+      return res
+        .status(403)
+        .json({ error: 'Permission denied: This location is outside the allowed workspace boundary.' });
     }
 
+    const meta = await fileSystem.getPathMetadata(resolved);
+
+    // 1. Nested workspace check
+    if (meta.isNested) {
+      return res.status(403).json({ error: 'This location is inside another workspace.' });
+    }
+
+    // 2. Active path check (redundant but safe)
+    // if (meta.isActive) ... normally we just let them "re-apply" the same path.
+
+    // 3. Writability check
+    if (meta.exists && !meta.isWritable) {
+      return res.status(403).json({ error: 'Permission denied: Cannot write to this folder.' });
+    }
+
+    const { exists, isEmpty } = meta;
+    let finalExists = exists;
+    let finalEmpty = isEmpty;
+
     // Handle Creation if not exists
-    if (!exists && create) {
+    if (!finalExists && create) {
       try {
         await fs.promises.mkdir(resolved, { recursive: true });
-        exists = true;
-        isEmpty = true;
-      } catch (e: any) {
-        return res.status(500).json({ error: `Failed to create folder: ${e.message}. Check permissions.` });
+        finalExists = true;
+        finalEmpty = true;
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        console.error('CRITICAL: Failed to create workspace directory:', e);
+        return res.status(500).json({ error: `Failed to create folder: ${message}. Check permissions.` });
       }
     }
 
     // Update runtime config only if valid (exists)
-    if (exists) {
-      setRuntimeDataPath(dataPath);
+    if (finalExists) {
+      // Close active connection before changing path to prevent zombie instances
+      db.close();
+      appConfig.WORKSPACE_PATH = workspacePath;
+      try {
+        await persistWorkspacePath(workspacePath);
+      } catch (e) {
+        console.error('Failed to persist workspace path to .env:', e);
+      }
     }
 
-    return res.status(200).json({ dataPath, exists, resolved, isEmpty });
+    return res.status(200).json({
+      workspacePath,
+      exists: finalExists,
+      resolved,
+      isEmpty: finalEmpty,
+      isExistingWorkspace: meta.isExistingWorkspace,
+    });
   }
 
   res.setHeader('Allow', ['GET', 'POST']);

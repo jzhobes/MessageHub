@@ -1,31 +1,18 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { getDb, dbExists } from '@/lib/server/db';
-
-/**
- * API Handler to list message threads for a specific platform.
- * Reads from the pre-generated index JSON files.
- *
- * @param req - Next.js API request containing 'platform' query parameter.
- * @param res - Next.js API response
- */
+import db from '@/lib/server/db';
 import { getMyNames } from '@/lib/server/identity';
 
 /**
  * API Handler to list message threads for a specific platform.
- * Reads from the pre-generated index JSON files.
- *
- * @param req - Next.js API request containing 'platform' query parameter.
- * @param res - Next.js API response
+ * Reads from the SQLite database.
  */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { platform } = req.query;
   const platformStr = Array.isArray(platform) ? platform[0] : platform;
 
-  if (!dbExists()) {
+  if (!db.exists()) {
     return res.status(200).json([]);
   }
-
-  const db = getDb();
 
   // Retrieve 'My Names' for title filtering
   const myNames = await getMyNames();
@@ -57,7 +44,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       msg_count: number;
     }
 
-    const rows = db.prepare(query).all(...params) as ThreadRow[];
+    const dbInstance = db.get();
+    const rows = dbInstance.prepare(query).all(...params) as ThreadRow[];
     const PAGE_SIZE = 100;
 
     const threads = rows.map((row) => {
@@ -79,9 +67,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         id: row.id,
         title: title || 'Untitled',
         participants,
-        timestamp: row.last_activity_ms || 0,
-        snippet: row.snippet || '',
-        pageCount: Math.ceil((row.msg_count || 0) / PAGE_SIZE),
+        timestamp: row.last_activity_ms ?? 0,
+        snippet: row.snippet ?? '',
+        pageCount: Math.ceil((row.msg_count ?? 0) / PAGE_SIZE),
       };
     });
 

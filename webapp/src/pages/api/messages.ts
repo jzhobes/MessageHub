@@ -1,8 +1,8 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { promises as fs } from 'fs';
 import path from 'path';
-import { getDataDir } from '@/lib/shared/config';
-import { getDb } from '@/lib/server/db';
+import appConfig from '@/lib/shared/appConfig';
+import db from '@/lib/server/db';
 
 import { MediaItem, Message } from '@/lib/shared/types';
 
@@ -48,18 +48,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   // Identify "Me"
   // TODO: cache this or move to a proper identity service
   const myNamesSet = new Set<string>(['Me']);
-  const dataDir = getDataDir();
+  const dataDir = appConfig.WORKSPACE_PATH;
 
   // Dynamically find Google Chat user info
   let googleChatUserPath = '';
   const gcUsersDir = path.join(dataDir, 'Google Chat/Users');
   try {
-    if (
-      await fs
-        .stat(gcUsersDir)
-        .then(() => true)
-        .catch(() => false)
-    ) {
+    const stats = await fs.stat(gcUsersDir);
+    if (stats.isDirectory()) {
       const folders = await fs.readdir(gcUsersDir);
       for (const folder of folders) {
         if (folder.startsWith('User ')) {
@@ -108,9 +104,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
   const myNames = Array.from(myNamesSet);
 
-  // Query DB
-  const db = getDb();
-
   try {
     interface MessageRow {
       id: number;
@@ -125,6 +118,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const rows = db
+      .get()
       .prepare(
         `
         SELECT * FROM messages 
@@ -208,7 +202,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // However, if the message looks like a Link Preview (Text + 1 Photo), we keep them together
       // so the frontend can deduplicate the image.
       const hasLink = row.content && /(https?:\/\/[^\s]+)/.test(row.content);
-      const isLikelyPreview = hasText && hasMedia && hasLink && photos.length === 1 && videos.length === 0 && gifs.length === 0 && stickers.length === 0;
+      const isLikelyPreview =
+        hasText &&
+        hasMedia &&
+        hasLink &&
+        photos.length === 1 &&
+        videos.length === 0 &&
+        gifs.length === 0 &&
+        stickers.length === 0;
       const shouldSplit = hasMedia && hasText && !isLikelyPreview;
 
       if (shouldSplit) {

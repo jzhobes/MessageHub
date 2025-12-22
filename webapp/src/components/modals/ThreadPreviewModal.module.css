@@ -13,6 +13,14 @@
   animation: fadeIn 0.2s ease-out;
 }
 
+.modalOverlayClosing {
+  animation: fadeOut 0.2s ease-in forwards;
+}
+
+.modalContentClosing {
+  animation: slideDown 0.2s ease-in forwards;
+}
+
 .modalContent {
   width: 800px;
   max-width: 90vw;
@@ -121,5 +129,25 @@
   to {
     transform: translateY(0);
     opacity: 1;
+  }
+}
+
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes slideDown {
+  from {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateY(10px);
+    opacity: 0;
   }
 }
