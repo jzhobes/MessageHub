@@ -1,0 +1,17 @@
+# Handle line endings automatically
+* text=auto
+
+# Force shell scripts to always use LF (so they never break in WSL/Linux/Mac)
+*.sh text eol=lf
+
+# Force batch files to always use CRLF (required for Windows CMD)
+*.bat text eol=crlf
+
+# Ensure common text files are handled correctly
+*.py text
+*.ts text
+*.tsx text
+*.json text
+*.md text
+*.css text
+*.html text
