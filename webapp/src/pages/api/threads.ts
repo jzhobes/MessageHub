@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import db from '@/lib/server/db';
 import { getMyNames } from '@/lib/server/identity';
+import { getPlatformDbValue } from '@/lib/shared/platforms';
 
 /**
  * API Handler to list message threads for a specific platform.
@@ -8,11 +9,13 @@ import { getMyNames } from '@/lib/server/identity';
  */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { platform } = req.query;
-  const platformStr = Array.isArray(platform) ? platform[0] : platform;
 
   if (!db.exists()) {
     return res.status(200).json([]);
   }
+
+  const platformInputs = platform ? (Array.isArray(platform) ? platform : [platform]) : [];
+  const validDbPlatforms = platformInputs.map(getPlatformDbValue).filter(Boolean);
 
   // Retrieve 'My Names' for title filtering
   const myNames = await getMyNames();
@@ -24,10 +27,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   `;
   const params: string[] = [];
 
-  if (platformStr) {
-    query += ' WHERE platform = ?';
-    // Normalize: "Google Chat" -> "google_chat", "Facebook" -> "facebook"
-    params.push(platformStr.toLowerCase().replace(' ', '_'));
+  if (validDbPlatforms.length > 0) {
+    query += ` WHERE platform IN (${validDbPlatforms.map(() => '?').join(',')})`;
+    params.push(...validDbPlatforms);
   }
 
   query += ' ORDER BY last_activity_ms DESC';
@@ -65,6 +67,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       return {
         id: row.id,
+        platform: row.platform,
         title: title || 'Untitled',
         participants,
         timestamp: row.last_activity_ms ?? 0,

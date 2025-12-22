@@ -1,0 +1,124 @@
+.emailRowContainer {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.emailRow {
+  display: flex;
+  align-items: flex-end;
+  padding-bottom: 2px;
+  width: 100%;
+}
+
+.justifyRight {
+  justify-content: flex-end;
+}
+
+.justifyLeft {
+  justify-content: flex-start;
+}
+
+.avatarArea {
+  width: 32px;
+  height: 32px;
+  margin-right: 8px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.profileImage {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-circle);
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+}
+
+.emailContentStack {
+  display: flex;
+  flex-direction: column;
+  max-width: 85%;
+  position: relative;
+  z-index: 1;
+}
+
+.alignRight {
+  align-items: flex-end;
+}
+
+.alignLeft {
+  align-items: flex-start;
+}
+
+.senderNameOutside {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+  margin-left: 4px;
+  font-weight: 500;
+}
+
+.emailBubble {
+  padding: 16px 20px;
+  line-height: 1.6;
+  position: relative;
+  font-size: 1rem;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  border-radius: var(--radius-2);
+}
+
+.receivedBubble {
+  background-color: var(--bg-card);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+}
+
+.sentBubble {
+  background-color: var(--bubble-sent-bg);
+  color: var(--bubble-sent-text);
+}
+
+.emailBody {
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+/* Email-specific internal styling */
+.emailBody :global(p) {
+  margin-bottom: 1em;
+}
+
+.emailBody :global(p:last-child) {
+  margin-bottom: 0;
+}
+
+.emailBody :global(a) {
+  color: inherit;
+  text-decoration: underline;
+  opacity: 0.85;
+}
+
+.emailBody :global(img) {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 12px 0;
+  border-radius: var(--radius-1);
+}
+
+.emailBody :global(blockquote) {
+  border-left: 2px solid var(--border-color);
+  margin: 12px 0;
+  padding-left: 16px;
+  opacity: 0.8;
+}

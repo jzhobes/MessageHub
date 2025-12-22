@@ -12,6 +12,7 @@ interface DropdownProps {
 
 export function Dropdown({ trigger, children, width, open, onOpenChange, align = 'left' }: DropdownProps) {
   const [internalOpen, setInternalOpen] = useState(false);
+  const [maxHeight, setMaxHeight] = useState('400px');
   const isControlled = open !== undefined;
   const isOpen = isControlled ? open : internalOpen;
 
@@ -32,6 +33,14 @@ export function Dropdown({ trigger, children, width, open, onOpenChange, align =
     onOpenChange?.(false);
   }, [isControlled, onOpenChange]);
 
+  const updateMaxHeight = useCallback(() => {
+    if (containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      const availableHeight = window.innerHeight - rect.bottom - 20;
+      setMaxHeight(`${Math.max(100, availableHeight)}px`);
+    }
+  }, []);
+
   // Close on click outside
   useEffect(() => {
     if (!isOpen) {
@@ -47,6 +56,14 @@ export function Dropdown({ trigger, children, width, open, onOpenChange, align =
     return () => document.removeEventListener('mousedown', handleClick);
   }, [isOpen, close]);
 
+  useEffect(() => {
+    if (isOpen) {
+      updateMaxHeight();
+      window.addEventListener('resize', updateMaxHeight);
+      return () => window.removeEventListener('resize', updateMaxHeight);
+    }
+  }, [isOpen, updateMaxHeight]);
+
   return (
     <div ref={containerRef} style={{ position: 'relative' }}>
       <div onClick={toggle} style={{ display: 'inline-block' }}>
@@ -60,6 +77,7 @@ export function Dropdown({ trigger, children, width, open, onOpenChange, align =
             width: width || 160,
             right: align === 'right' ? 0 : 'auto',
             left: align === 'left' ? 0 : 'auto',
+            maxHeight,
           }}
         >
           {/* Inject close handler into children if they are standard divs? 

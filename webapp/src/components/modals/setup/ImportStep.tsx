@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FaCopy, FaShare, FaArrowRight, FaDatabase } from 'react-icons/fa';
+import { FaCopy, FaShare, FaDatabase } from 'react-icons/fa';
 
 import FileExplorer, { formatBytes } from '@/components/FileExplorer';
 import { FaTriangleExclamation } from 'react-icons/fa6';

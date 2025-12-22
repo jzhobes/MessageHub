@@ -1,11 +1,16 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { FaSearch, FaSpinner, FaChevronDown, FaChevronUp } from 'react-icons/fa';
 import { Virtuoso } from 'react-virtuoso';
+
 import TextInput from '@/components/TextInput';
+import { Dropdown, DropdownItem, DropdownDivider } from '@/components/Dropdown';
+import SearchResultItem from './SearchResultItem';
+import BaseModal, { ModalHeader } from './BaseModal';
+
 import { useForm } from '@/hooks/useForm';
 import { Thread } from '@/lib/shared/types';
-import BaseModal, { ModalHeader } from './BaseModal';
-import SearchResultItem from './SearchResultItem';
+import { PlatformMap } from '@/lib/shared/platforms';
+
 import styles from './SearchModal.module.css';
 
 interface SearchModalProps {
@@ -24,14 +29,16 @@ interface SearchResult {
   thread_title: string;
 }
 
+const PLATFORM_ORDER = ['facebook', 'instagram', 'google_chat', 'google_voice', 'google_mail'];
+
 const initialConfig = {
   query: '',
-  filterPlatform: 'all',
-  filterThread: 'all',
+  filterPlatforms: [] as string[],
+  filterThreads: [] as string[],
 };
 
 export default function SearchModal({ isOpen, onClose, onNavigate }: SearchModalProps) {
-  // State hooks
+  // 1. State hooks
   const { values: config, setField, resetForm } = useForm(initialConfig);
   const [availableThreads, setAvailableThreads] = useState<Thread[]>([]);
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -41,17 +48,18 @@ export default function SearchModal({ isOpen, onClose, onNavigate }: SearchModal
   const [loading, setLoading] = useState(false); // Initial load
   const [appending, setAppending] = useState(false); // Load more
   const [isSendersExpanded, setIsSendersExpanded] = useState(true);
-
+  const [platformDropdownOpen, setPlatformDropdownOpen] = useState(false);
+  const [threadDropdownOpen, setThreadDropdownOpen] = useState(false);
   const [facets, setFacets] = useState<{
     platforms: Record<string, number>;
     senders: Record<string, number>;
   } | null>(null);
 
-  // Ref hooks
+  // 2. Ref hooks
   const abortControllerRef = useRef<AbortController | null>(null);
   const isOpenRef = useRef<boolean>(isOpen);
 
-  // Search fetcher
+  // 3. Memoized Search fetcher
   const fetchResults = useCallback(
     async (pageNum: number, searchQuery: string) => {
       abortControllerRef.current?.abort();
@@ -61,12 +69,12 @@ export default function SearchModal({ isOpen, onClose, onNavigate }: SearchModal
         q: searchQuery,
         page: pageNum.toString(),
       });
-      if (config.filterPlatform !== 'all') {
-        params.append('platform', config.filterPlatform);
-      }
-      if (config.filterThread !== 'all') {
-        params.append('threadId', config.filterThread);
-      }
+      config.filterPlatforms.forEach((p) => {
+        params.append('platform', p);
+      });
+      config.filterThreads.forEach((t) => {
+        params.append('threadId', t);
+      });
       try {
         const res = await fetch(`/api/search?${params}`, { signal: controller.signal });
         if (!res.ok) {
@@ -85,19 +93,21 @@ export default function SearchModal({ isOpen, onClose, onNavigate }: SearchModal
         throw e;
       }
     },
-    [config.filterPlatform, config.filterThread],
+    [config.filterPlatforms, config.filterThreads],
   ); // Dependencies for fetchResults
 
   // Fetch threads when platform filter changes
   useEffect(() => {
-    if (config.filterPlatform === 'all') {
+    if (config.filterPlatforms.length === 0) {
       setAvailableThreads([]);
       return;
     }
     let ignore = false;
     const fetchThreads = async () => {
       try {
-        const res = await fetch(`/api/threads?platform=${encodeURIComponent(config.filterPlatform)}`);
+        const params = new URLSearchParams();
+        config.filterPlatforms.forEach((p) => params.append('platform', p));
+        const res = await fetch(`/api/threads?${params.toString()}`);
         if (res.ok) {
           const data = await res.json();
           if (!ignore) {
@@ -112,7 +122,7 @@ export default function SearchModal({ isOpen, onClose, onNavigate }: SearchModal
     return () => {
       ignore = true;
     };
-  }, [config.filterPlatform]);
+  }, [config.filterPlatforms]);
 
   // Debounce effect for Query/Filters
   useEffect(() => {
@@ -148,7 +158,7 @@ export default function SearchModal({ isOpen, onClose, onNavigate }: SearchModal
       clearTimeout(timer);
       abortControllerRef.current?.abort();
     };
-  }, [config.query, config.filterPlatform, config.filterThread, fetchResults]);
+  }, [config.query, config.filterPlatforms, config.filterThreads, fetchResults]);
 
   // Sync isOpen prop to ref
   useEffect(() => {
@@ -160,6 +170,21 @@ export default function SearchModal({ isOpen, onClose, onNavigate }: SearchModal
     resetForm();
     setResults([]);
     setAvailableThreads([]);
+  };
+
+  const togglePlatform = (p: string) => {
+    const next = config.filterPlatforms.includes(p)
+      ? config.filterPlatforms.filter((x) => x !== p)
+      : [...config.filterPlatforms, p];
+    setField('filterPlatforms', next);
+    setField('filterThreads', []);
+  };
+
+  const toggleThread = (t: string) => {
+    const next = config.filterThreads.includes(t)
+      ? config.filterThreads.filter((x) => x !== t)
+      : [...config.filterThreads, t];
+    setField('filterThreads', next);
   };
 
   const handleEndReached = useCallback(() => {
@@ -223,42 +248,78 @@ export default function SearchModal({ isOpen, onClose, onNavigate }: SearchModal
           =any, <b>?</b>=1 char.
         </div>
         <div className={styles.filtersRow}>
-          <select
-            className={styles.filterSelect}
-            value={config.filterPlatform}
-            onChange={(e) => {
-              setField('filterPlatform', e.target.value);
-              setField('filterThread', 'all'); // Reset thread filter on platform change
-            }}
+          <Dropdown
+            open={platformDropdownOpen}
+            onOpenChange={setPlatformDropdownOpen}
+            width={220}
+            trigger={
+              <button className={styles.dropdownTrigger}>
+                <span>Platforms {config.filterPlatforms.length > 0 ? `(${config.filterPlatforms.length})` : ''}</span>
+                <FaChevronDown size={10} />
+              </button>
+            }
           >
-            <option value="all">All Platforms {facets && `(${totalCount})`}</option>
-            <option value="Facebook">
-              Facebook {facets?.platforms?.['Facebook'] ? `(${facets.platforms['Facebook']})` : ''}
-            </option>
-            <option value="Instagram">
-              Instagram {facets?.platforms?.['Instagram'] ? `(${facets.platforms['Instagram']})` : ''}
-            </option>
-            <option value="Google Chat">
-              Google Chat {facets?.platforms?.['Google Chat'] ? `(${facets.platforms['Google Chat']})` : ''}
-            </option>
-            <option value="Google Voice">
-              Google Voice {facets?.platforms?.['Google Voice'] ? `(${facets.platforms['Google Voice']})` : ''}
-            </option>
-          </select>
+            <DropdownItem onClick={() => setField('filterPlatforms', [])}>
+              <input
+                type="checkbox"
+                checked={config.filterPlatforms.length === 0}
+                readOnly
+                className={styles.dropdownCheckbox}
+              />
+              All Platforms {facets && `(${totalCount})`}
+            </DropdownItem>
+            <DropdownDivider />
+            {PLATFORM_ORDER.map((dbKey) => {
+              const label = PlatformMap[dbKey];
+              if (!label) {
+                return null;
+              }
 
-          <select
-            className={styles.filterSelect}
-            value={config.filterThread}
-            onChange={(e) => setField('filterThread', e.target.value)}
-            disabled={availableThreads.length === 0}
+              const count = facets?.platforms?.[dbKey] || 0;
+              const isSelected = config.filterPlatforms.includes(label);
+
+              return (
+                <DropdownItem key={dbKey} onClick={() => togglePlatform(label)}>
+                  <input type="checkbox" checked={isSelected} readOnly className={styles.dropdownCheckbox} />
+                  {label} {count > 0 && <span className={styles.facetCount}>({count})</span>}
+                </DropdownItem>
+              );
+            })}
+          </Dropdown>
+
+          <Dropdown
+            open={threadDropdownOpen}
+            onOpenChange={setThreadDropdownOpen}
+            width={280}
+            trigger={
+              <button className={styles.dropdownTrigger} disabled={availableThreads.length === 0}>
+                <span>Threads {config.filterThreads.length > 0 ? `(${config.filterThreads.length})` : ''}</span>
+                <FaChevronDown size={10} />
+              </button>
+            }
           >
-            <option value="all">All Threads</option>
+            <DropdownItem onClick={() => setField('filterThreads', [])}>
+              <input
+                type="checkbox"
+                checked={config.filterThreads.length === 0}
+                readOnly
+                className={styles.dropdownCheckbox}
+              />
+              All Threads
+            </DropdownItem>
+            <DropdownDivider />
             {availableThreads.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.title.length > 20 ? t.title.substring(0, 20) + '...' : t.title}
-              </option>
+              <DropdownItem key={t.id} onClick={() => toggleThread(t.id)}>
+                <input
+                  type="checkbox"
+                  checked={config.filterThreads.includes(t.id)}
+                  readOnly
+                  className={styles.dropdownCheckbox}
+                />
+                {t.title.length > 30 ? t.title.substring(0, 30) + '...' : t.title}
+              </DropdownItem>
             ))}
-          </select>
+          </Dropdown>
 
           <button className={styles.resetButton} onClick={handleReset}>
             Reset
@@ -295,7 +356,7 @@ export default function SearchModal({ isOpen, onClose, onNavigate }: SearchModal
           </div>
         )}
         {!loading && results.length === 0 && config.query && <div className={styles.empty}>No matches found.</div>}
-        {!!results.length && (
+        {!loading && !!results.length && (
           <Virtuoso
             style={{ height: '100%' }}
             data={results}

@@ -24,12 +24,14 @@ function mapPlatform(raw: string): string {
       return 'Facebook';
     case 'instagram':
       return 'Instagram';
+    case 'google_mail':
+      return 'Gmail';
     default:
       return raw.replace(/[_-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
   }
 }
 
-const platformPreference = ['Facebook', 'Instagram', 'Google Chat', 'Google Voice'];
+const platformPreference = ['Facebook', 'Instagram', 'Google Chat', 'Gmail', 'Google Voice'];
 
 export default function Home() {
   const router = useRouter();

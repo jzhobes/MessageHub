@@ -1,37 +1,9 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { promises as fs } from 'fs';
 import path from 'path';
-import appConfig from '@/lib/shared/appConfig';
 import db from '@/lib/server/db';
 
 import { MediaItem, Message } from '@/lib/shared/types';
-
-/** Facebook Profile Information structure */
-interface FacebookProfile {
-  profile_v2?: {
-    name?: {
-      full_name?: string;
-    };
-  };
-}
-
-/** Instagram Profile Information structure */
-interface InstagramProfile {
-  profile_user?: {
-    string_map_data?: {
-      Name?: {
-        value?: string;
-      };
-    };
-  }[];
-}
-
-/** Google Chat User Information structure */
-interface GoogleChatUserInfo {
-  user?: {
-    name?: string;
-  };
-}
+import { getMyNames } from '@/lib/server/identity';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { threadId, page = '1' } = req.query;
@@ -46,63 +18,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const offset = (pageNum - 1) * PAGE_SIZE;
 
   // Identify "Me"
-  // TODO: cache this or move to a proper identity service
-  const myNamesSet = new Set<string>(['Me']);
-  const dataDir = appConfig.WORKSPACE_PATH;
-
-  // Dynamically find Google Chat user info
-  let googleChatUserPath = '';
-  const gcUsersDir = path.join(dataDir, 'Google Chat/Users');
-  try {
-    const stats = await fs.stat(gcUsersDir);
-    if (stats.isDirectory()) {
-      const folders = await fs.readdir(gcUsersDir);
-      for (const folder of folders) {
-        if (folder.startsWith('User ')) {
-          const candidate = path.join(gcUsersDir, folder, 'user_info.json');
-          try {
-            await fs.access(candidate);
-            googleChatUserPath = candidate;
-            break;
-          } catch {
-            // continue
-          }
-        }
-      }
-    }
-  } catch (e) {
-    console.warn('[Messages] Failed to search Google Chat users directory', e);
-  }
-
-  const profileSources = [
-    {
-      path: path.join(dataDir, 'Facebook/personal_information/profile_information/profile_information.json'),
-      extract: (data: FacebookProfile) => data?.profile_v2?.name?.full_name,
-    },
-    {
-      path: path.join(dataDir, 'Instagram/personal_information/personal_information/personal_information.json'),
-      extract: (data: InstagramProfile) => data?.profile_user?.[0]?.string_map_data?.Name?.value,
-    },
-    {
-      path: googleChatUserPath,
-      extract: (data: GoogleChatUserInfo) => data?.user?.name,
-    },
-  ];
-
-  for (const source of profileSources) {
-    if (!source.path) {
-      continue;
-    }
-    try {
-      const fileContent = await fs.readFile(source.path, 'utf8');
-      const fileData = JSON.parse(fileContent);
-      const foundName = source.extract(fileData);
-      if (foundName) {
-        myNamesSet.add(foundName);
-      }
-    } catch {}
-  }
-  const myNames = Array.from(myNamesSet);
+  const myNames = await getMyNames();
 
   try {
     interface MessageRow {

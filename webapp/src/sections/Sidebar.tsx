@@ -1,7 +1,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { FaFacebook, FaInstagram, FaPhone, FaRobot } from 'react-icons/fa';
-import { SiGooglechat } from 'react-icons/si';
+import { SiGooglechat, SiGmail } from 'react-icons/si';
 import styles from './Sidebar.module.css';
 
 interface SidebarProps {
@@ -17,6 +17,7 @@ export default function Sidebar({ activePlatform, onPlatformSelect, availability
     { name: 'Instagram', icon: <FaInstagram color={availability['Instagram'] ? '#E4405F' : '#666'} size={18} /> },
     { name: 'Google Chat', icon: <SiGooglechat color={availability['Google Chat'] ? '#00AC47' : '#666'} size={18} /> },
     { name: 'Google Voice', icon: <FaPhone color={availability['Google Voice'] ? '#34A853' : '#666'} size={18} /> },
+    { name: 'Gmail', icon: <SiGmail color={availability['Gmail'] ? '#EA4335' : '#666'} size={18} /> },
   ];
 
   return (

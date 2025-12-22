@@ -303,6 +303,8 @@
   color: var(--text-primary);
   animation: dropdownIn 0.15s ease-out;
   transform-origin: top left;
+  max-height: 400px;
+  overflow-y: auto;
 }
 
 @keyframes dropdownIn {

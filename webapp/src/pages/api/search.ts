@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import db from '@/lib/server/db';
 import { PlatformMap, ReversePlatformMap } from '@/lib/shared/platforms';
 import { getMyNames } from '@/lib/server/identity';
+import { parseSearchQuery } from '@/lib/shared/search';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { q, page = '1', platform, threadId } = req.query;
@@ -24,141 +25,148 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       sender_name: string;
       timestamp_ms: number;
       content: string;
+      search_snippet?: string;
     }
-
-    let baseSql = `
-        FROM messages m
-        JOIN threads t ON m.thread_id = t.id
-    `;
 
     // Tokenize query
     const tokens = parseSearchQuery(queryStr);
 
-    const whereConditions: string[] = [];
-    const params: (string | number)[] = [];
+    // Build matching logic
+    const { matchTokens, likeConditions, likeParams } = tokens.reduce(
+      (acc, token) => {
+        const { clean, isStartOfWord, sqlPattern } = token;
 
-    // Build LIKE conditions for each token (Implicit AND)
-    tokens.forEach((token) => {
-      let isStartOfWord = false;
-      let actualToken = token;
+        // Broad FTS filter
+        // Split by wildcards and add each part as a separate match token to avoid phrase match issues.
+        // We filter out parts shorter than 3 characters because FTS5 trigram doesn't support them efficiently/reliably for substrings.
+        const ftsParts = clean.split(/[*?^]/).filter((p) => p.trim().length >= 3);
+        ftsParts.forEach((part) => {
+          acc.matchTokens.push(`"${part.replace(/"/g, '""')}"`);
+        });
 
-      if (actualToken.startsWith('^')) {
-        isStartOfWord = true;
-        actualToken = actualToken.slice(1);
-      }
-
-      // 1. Sanitize: Escape existing SQL wildcards/escape chars in the token
-      let sanitized = actualToken.replace(/[%_\\]/g, '\\$&');
-
-      // 2. Transform: Convert Glob wildcards to SQL wildcards
-      sanitized = sanitized.replace(/\*/g, '%').replace(/\?/g, '_');
-
-      if (isStartOfWord) {
-        // Check for: Start of string OR Space before OR Newline before
-        // We group these with OR, and push to whereConditions
-        // Since we need to parameterize multiple values, we can't just push one param.
-        // But the query structure assumes sequential params.
-        // We'll push the SQL string and push 3 params.
-        whereConditions.push(
-          `(m.content LIKE ? ESCAPE '\\' OR m.content LIKE ? ESCAPE '\\' OR m.content LIKE ? ESCAPE '\\')`,
-        );
-        params.push(`${sanitized}%`); // Start of msg
-        params.push(`% ${sanitized}%`); // After space
-        params.push(`%\n${sanitized}%`); // After newline
-      } else {
-        whereConditions.push("m.content LIKE ? ESCAPE '\\'");
-        params.push(`%${sanitized}%`);
-      }
-    });
-
-    baseSql += ' WHERE ' + whereConditions.join(' AND ');
-
-    if (platform) {
-      const inputs = Array.isArray(platform) ? platform : [platform];
-      const validDbValues: string[] = [];
-
-      for (const raw of inputs) {
-        const dbValue = ReversePlatformMap[raw] || (PlatformMap[raw] ? raw : null);
-        if (dbValue) {
-          validDbValues.push(dbValue);
+        if (isStartOfWord) {
+          acc.likeConditions.push(
+            `(m.content LIKE ? ESCAPE '\\' OR m.content LIKE ? ESCAPE '\\' OR m.content LIKE ? ESCAPE '\\')`,
+          );
+          acc.likeParams.push(`${sqlPattern}%`, `% ${sqlPattern}%`, `%\n${sqlPattern}%`);
+        } else {
+          acc.likeConditions.push(`m.content LIKE ? ESCAPE '\\'`);
+          acc.likeParams.push(`%${sqlPattern}%`);
         }
+        return acc;
+      },
+      { matchTokens: [] as string[], likeConditions: [] as string[], likeParams: [] as (string | number)[] },
+    );
+
+    const ftsMatch = matchTokens.join(' AND ');
+
+    // platform filter
+    const platformInputs = platform ? (Array.isArray(platform) ? platform : [platform]) : [];
+    const validDbPlatforms = platformInputs.reduce((acc, raw) => {
+      const dbValue = ReversePlatformMap[raw] || (PlatformMap[raw] ? raw : null);
+      if (dbValue) {
+        acc.push(dbValue);
       }
+      return acc;
+    }, [] as string[]);
 
-      if (validDbValues.length === 0) {
-        return res.status(400).json({ error: `No valid platforms provided: ${inputs.join(', ')}` });
-      }
-
-      // Create placeholders for IN clause: ?,?,?
-      const placeholders = validDbValues.map(() => '?').join(',');
-      baseSql += ` AND t.platform IN (${placeholders})`;
-      params.push(...validDbValues);
-    }
-
-    if (threadId) {
-      baseSql += ' AND m.thread_id = ?';
-      params.push(Array.isArray(threadId) ? threadId[0] : threadId);
-    }
+    const threadInputs = threadId ? (Array.isArray(threadId) ? threadId : [threadId]) : [];
+    const validThreadIds = threadInputs.filter(Boolean);
 
     const dbInstance = db.get();
 
-    // Get total count
-    const countSql = `SELECT count(*) as total ${baseSql}`;
-    const countResult = dbInstance.prepare(countSql).get(...params) as { total: number };
+    // Construct combined where clause
+    const whereConditions = [
+      ftsMatch ? 'f.content MATCH ?' : '',
+      ...likeConditions,
+      validDbPlatforms.length > 0 ? `t.platform IN (${validDbPlatforms.map(() => '?').join(',')})` : '',
+      validThreadIds.length > 0 ? `m.thread_id IN (${validThreadIds.map(() => '?').join(',')})` : '',
+    ].filter(Boolean);
+
+    const filteredBase = `
+      FROM ${ftsMatch ? 'messages_fts f CROSS JOIN messages m ON f.rowid = m.id' : 'messages m'}
+      JOIN threads t ON m.thread_id = t.id
+      ${whereConditions.length > 0 ? 'WHERE ' + whereConditions.join(' AND ') : ''}
+    `;
+
+    const finalParams = [...(ftsMatch ? [ftsMatch] : []), ...likeParams, ...validDbPlatforms, ...validThreadIds];
+
+    // 1. Get total count
+    const countResult = dbInstance.prepare(`SELECT count(*) as total ${filteredBase}`).get(...finalParams) as {
+      total: number;
+    };
     const total = countResult ? countResult.total : 0;
 
-    // Facets - platform breakdown
-    const platformSql = `SELECT t.platform, count(*) as count ${baseSql} GROUP BY t.platform`;
-    const platformRows = dbInstance.prepare(platformSql).all(...params) as { platform: string; count: number }[];
-    const platforms: Record<string, number> = {};
-    platformRows.forEach((r) => {
-      platforms[r.platform] = r.count;
-    });
+    // 2. Facets - platform
+    const platformRows = dbInstance
+      .prepare(`SELECT t.platform, count(*) as count ${filteredBase} GROUP BY t.platform`)
+      .all(...finalParams) as { platform: string; count: number }[];
+    const platforms = platformRows.reduce(
+      (acc, r) => {
+        acc[r.platform] = r.count;
+        return acc;
+      },
+      {} as Record<string, number>,
+    );
 
-    // Facets - sender breakdown (top 20)
-    const senderSql = `SELECT m.sender_name, count(*) as count ${baseSql} GROUP BY m.sender_name ORDER BY count DESC LIMIT 20`;
-    const senderRows = dbInstance.prepare(senderSql).all(...params) as { sender_name: string; count: number }[];
+    // 3. Facets - sender
+    const senderRows = dbInstance
+      .prepare(
+        `SELECT m.sender_name, count(*) as count ${filteredBase} GROUP BY m.sender_name ORDER BY count DESC LIMIT 20`,
+      )
+      .all(...finalParams) as { sender_name: string; count: number }[];
 
-    // Normalize personal names
+    // 4. Data Results
+    const selectClause = `SELECT m.*, t.platform, t.title as thread_title${
+      ftsMatch ? ", snippet(messages_fts, 0, '', '', '...', 25) as search_snippet" : ''
+    }`;
+
+    const dataSql = `${selectClause} ${filteredBase} ORDER BY m.timestamp_ms DESC LIMIT ? OFFSET ?`;
+    const dataRows = dbInstance.prepare(dataSql).all(...finalParams, PAGE_SIZE, offset) as SearchRow[];
+
+    // Process Senders (Me vs Others)
     const myNames = await getMyNames();
     const myNamesSet = new Set(myNames.map((n) => n.toLowerCase()));
-
-    // Pick the longest name as display name (e.g. "John Doe" > "Me")
-    const meDisplayName = [...myNames].sort((a, b) => b.length - a.length)[0];
+    const meDisplayName = [...myNames].sort((a, b) => b.length - a.length)[0] || 'Me';
 
     const senders: Record<string, number> = {};
     let meCount = 0;
-
     senderRows.forEach((r) => {
       const name = r.sender_name || 'Unknown';
       if (myNamesSet.has(name.toLowerCase())) {
         meCount += r.count;
       } else {
-        // Accumulate normally
         senders[name] = (senders[name] || 0) + r.count;
       }
     });
-
     if (meCount > 0) {
       senders[meDisplayName] = meCount;
     }
-
-    // Re-sort senders by count (descending) as consolidation may have disrupted the SQL order
     const sortedSenders = Object.fromEntries(Object.entries(senders).sort((a, b) => b[1] - a[1]));
 
-    // Get data
-    const dataSql = `SELECT m.*, t.platform, t.title as thread_title ${baseSql} ORDER BY m.timestamp_ms DESC LIMIT ? OFFSET ?`;
-    const dataRows = dbInstance.prepare(dataSql).all(...params, PAGE_SIZE, offset) as SearchRow[];
+    const results = dataRows.map((row) => {
+      let snippet = row.search_snippet || row.content;
+      // If it looks like HTML (common for Gmail), strip tags for the snippet
+      if (row.platform === 'google_mail' || snippet.includes('<')) {
+        snippet = snippet
+          .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+          .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+          .replace(/<[^>]+>/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+      }
 
-    const results = dataRows.map((row) => ({
-      message_id: row.id,
-      thread_id: row.thread_id,
-      thread_title: row.thread_title,
-      platform: row.platform,
-      sender_name: row.sender_name,
-      timestamp: row.timestamp_ms,
-      content: row.content,
-      snippet: row.content,
-    }));
+      return {
+        message_id: row.id,
+        thread_id: row.thread_id,
+        thread_title: row.thread_title,
+        platform: row.platform,
+        sender_name: row.sender_name,
+        timestamp: row.timestamp_ms,
+        content: row.content,
+        snippet,
+      };
+    });
 
     return res.status(200).json({
       data: results,
@@ -172,24 +180,4 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.error('Error searching:', e);
     return res.status(500).json({ error: 'Failed to search' });
   }
-}
-
-function parseSearchQuery(queryStr: string): string[] {
-  const tokens: string[] = [];
-  const quoteRegex = /"([^"]+)"|(\S+)/g;
-  let match;
-  while ((match = quoteRegex.exec(queryStr)) !== null) {
-    if (match[1]) {
-      // Quoted phrase: strict match of the phrase
-      tokens.push(match[1]);
-    } else {
-      // Regular word
-      tokens.push(match[2]);
-    }
-  }
-
-  if (tokens.length === 0) {
-    tokens.push(queryStr);
-  }
-  return tokens;
 }

@@ -26,6 +26,10 @@ interface GoogleChatUserInfo {
   };
 }
 
+interface GmailForwardingInfo {
+  addresses?: string[];
+}
+
 /**
  * Discovers potential names for the current user ("Me")
  * by scanning profile JSON files in the data directory.
@@ -73,6 +77,10 @@ export async function getMyNames(): Promise<string[]> {
       path: googleChatUserPath,
       extract: (data: GoogleChatUserInfo) => data?.user?.name,
     },
+    {
+      path: path.join(dataDir, 'Mail/User Settings/Forwarding Addresses.json'),
+      extract: (data: GmailForwardingInfo) => data?.addresses,
+    },
   ];
 
   for (const source of profileSources) {
@@ -82,9 +90,13 @@ export async function getMyNames(): Promise<string[]> {
     try {
       const fileContent = await fs.readFile(source.path, 'utf8');
       const fileData = JSON.parse(fileContent);
-      const foundName = source.extract(fileData);
-      if (foundName) {
-        myNamesSet.add(foundName);
+      const foundValue = source.extract(fileData);
+      if (foundValue) {
+        if (Array.isArray(foundValue)) {
+          foundValue.forEach((v) => myNamesSet.add(v));
+        } else {
+          myNamesSet.add(foundValue);
+        }
       }
     } catch {}
   }

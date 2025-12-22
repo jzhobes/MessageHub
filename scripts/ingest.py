@@ -13,6 +13,7 @@ import zipfile
 from parsers.facebook import ingest_facebook_entry, ingest_instagram_entry
 from parsers.google_chat import ingest_google_chat_thread
 from parsers.google_voice import scan_google_voice
+from parsers.google_mail import ingest_google_mail_mbox
 from utils import (
     WORKSPACE_PATH,
     PROJECT_ROOT,
@@ -52,9 +53,33 @@ CREATE TABLE IF NOT EXISTS messages (
     UNIQUE(thread_id, sender_name, timestamp_ms, content)
 );
 
+-- Virtual Table for Full-Text Search
+-- Using external content to keep DB size manageable
+CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
+    content,
+    content='messages',
+    content_rowid='id',
+    tokenize='trigram'
+);
+
+-- Triggers to keep FTS index in sync
+CREATE TRIGGER IF NOT EXISTS messages_ai AFTER INSERT ON messages BEGIN
+    INSERT INTO messages_fts(rowid, content) VALUES (new.id, new.content);
+END;
+
+CREATE TRIGGER IF NOT EXISTS messages_ad AFTER DELETE ON messages BEGIN
+    INSERT INTO messages_fts(messages_fts, rowid, content) VALUES('delete', old.id, old.content);
+END;
+
+CREATE TRIGGER IF NOT EXISTS messages_au AFTER UPDATE ON messages BEGIN
+    INSERT INTO messages_fts(messages_fts, rowid, content) VALUES('delete', old.id, old.content);
+    INSERT INTO messages_fts(rowid, content) VALUES (new.id, new.content);
+END;
+
 CREATE INDEX IF NOT EXISTS idx_messages_thread_id ON messages(thread_id);
+CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON messages(timestamp_ms);
 CREATE INDEX IF NOT EXISTS idx_messages_sender_name ON messages(sender_name);
-CREATE INDEX IF NOT EXISTS idx_messages_content ON messages(content);
+CREATE INDEX IF NOT EXISTS idx_threads_platform ON threads(platform);
 """
 
 
@@ -108,6 +133,17 @@ def scan_directory(scan_path, db_path, platform_filter="all", limit_platforms=No
                 # but we can count it as 1 major task.
                 files_to_process.append((999, p, "google_voice"))  # 999 as placeholder priority
                 break
+
+    # Count MBOX files for Google Mail
+    process_mail = platform_filter == "all" or platform_filter == "google_mail"
+    if process_mail:
+        possible_mail_roots = [scan_path / "Mail", scan_path / "Takeout/Mail", scan_path]
+        for p in possible_mail_roots:
+            mboxes = list(p.glob("*.mbox"))
+            for mbox in mboxes:
+                if limit_platforms is not None and "google_mail" not in limit_platforms:
+                    continue
+                files_to_process.append((10, mbox, "google_mail"))
 
     # Count Standard Chat Files
     for root, dirs, files in os.walk(scan_path):
@@ -174,6 +210,9 @@ def scan_directory(scan_path, db_path, platform_filter="all", limit_platforms=No
         elif platform_type == "instagram":
             print(f"[Ingesting]: Instagram - {p_root.name}")
             count, skipped = ingest_instagram_entry(cursor, p_root)
+        elif platform_type == "google_mail":
+            print(f"[Ingesting]: Google Mail - {p_root.name}")
+            count, skipped = ingest_google_mail_mbox(cursor, p_root)
 
         if count > 0 or skipped > 0:
             total_threads += 1
@@ -255,6 +294,7 @@ def extract_zips_found_with_opts(search_dirs, target_root, platform_filter="all"
             # signatures
             has_voice = any(f.startswith("Takeout/Voice/") for f in file_list)
             has_chat = any(f.startswith("Takeout/Google Chat/") for f in file_list)
+            has_mail = any(f.startswith("Takeout/Mail/") for f in file_list)
             is_insta = any(f.startswith("your_instagram_activity") for f in file_list)
             is_fb = any(f.startswith("your_facebook_activity") for f in file_list)
 
@@ -264,6 +304,8 @@ def extract_zips_found_with_opts(search_dirs, target_root, platform_filter="all"
                 if platform_filter == "google_voice" and has_voice:
                     allowed = True
                 if platform_filter == "google_chat" and has_chat:
+                    allowed = True
+                if platform_filter == "google_mail" and has_mail:
                     allowed = True
                 if platform_filter == "instagram" and is_insta:
                     allowed = True
@@ -286,12 +328,14 @@ def extract_zips_found_with_opts(search_dirs, target_root, platform_filter="all"
                 dest_dir = target_root / "Facebook"
 
             # Identification Logging
-            if has_voice or has_chat:
+            if has_voice or has_chat or has_mail:
                 print(f"  [Thread] Extracting Google Takeout: {archive_path.name}")
                 if has_voice:
                     local_detected.add("google_voice")
                 if has_chat:
                     local_detected.add("google_chat")
+                if has_mail:
+                    local_detected.add("google_mail")
             elif is_insta:
                 print(f"  [Thread] Extracting Instagram: {archive_path.name}")
                 local_detected.add("instagram")
@@ -400,6 +444,14 @@ def extract_zips_found_with_opts(search_dirs, target_root, platform_filter="all"
             print("  Consolidating Google Chat data...")
             merge_folders(src, dst)
 
+    # Google Mail
+    if "google_mail" in detected_platforms:
+        src = target_root / "Takeout" / "Mail"
+        dst = target_root / "Mail"
+        if src.exists():
+            print("  Consolidating Google Mail data...")
+            merge_folders(src, dst)
+
     # Final cleanup: remove empty Takeout folder
     takeout_root = target_root / "Takeout"
     if takeout_root.exists() and not any(takeout_root.iterdir()):
@@ -420,7 +472,7 @@ def start_ingestion():
     parser.add_argument("--db", type=str, help="Database file path (defaults to WORKSPACE_PATH/messagehub.db)")
     parser.add_argument(
         "--platform",
-        choices=["all", "facebook", "instagram", "google_chat", "google_voice"],
+        choices=["all", "facebook", "instagram", "google_chat", "google_voice", "google_mail"],
         default="all",
         help="Target specific platform",
     )
@@ -502,8 +554,9 @@ def start_ingestion():
             # If we had zips but processed_count was 0? (Shouldn't happen with our logic but being safe)
             scan_directory(WORKSPACE_PATH, db_path, platform_filter=args.platform, limit_platforms=detected_platforms)
         else:
-            # No archives found or selected - Skip scanning as data only enters thru archives
-            print("No new archives to process. Skipping workspace scan.")
+            # If a source was explicitly provided but no archives found, we should still scan it
+            print(f"No new archives found. Scanning {source_arg} for existing content...")
+            scan_directory(source_path, db_path, platform_filter=args.platform)
 
         # Cleanup JSONs for non-Google platforms
         cleanup_targets = []

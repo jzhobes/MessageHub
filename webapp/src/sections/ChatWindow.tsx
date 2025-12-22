@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import { FaSpinner } from 'react-icons/fa';
 import { IndexLocationWithAlign, Virtuoso, VirtuosoHandle } from 'react-virtuoso';
 import MessageItem from '@/components/MessageItem';
+import EmailItem from '@/components/EmailItem';
 import { Message, QuotedMessageMetadata, Thread } from '@/lib/shared/types';
 import styles from './ChatWindow.module.css';
 
@@ -369,23 +370,36 @@ export default function ChatWindow({
               isBottom || !!msg?.reactions?.length ? styles.lastMessage : null,
             ].filter(Boolean);
 
+            const isEmail = activeThread?.platform === 'Gmail';
+
             return (
               <div
                 className={classNames.join(' ')}
                 style={{ paddingBottom: isBottom ? 16 : 4, paddingLeft: 20, paddingRight: 20 }}
               >
                 {showTimestamp && <div className={styles.timestampLabel}>{timestampStr}</div>}
-                <MessageItem
-                  key={msgId}
-                  msg={msg}
-                  isMyMsg={isMyMsg}
-                  isTarget={isTarget}
-                  highlightToken={highlightKey}
-                  showAvatar={showAvatar}
-                  showName={showName}
-                  activePlatform={activeThread?.platform ?? ''}
-                  onQuoteClick={() => handleQuoteClick(msg.quoted_message_metadata)}
-                />
+                {isEmail ? (
+                  <EmailItem
+                    key={msgId}
+                    msg={msg}
+                    isMyMsg={isMyMsg}
+                    showAvatar={showAvatar}
+                    showName={showName}
+                    activePlatform={activeThread?.platform ?? ''}
+                  />
+                ) : (
+                  <MessageItem
+                    key={msgId}
+                    msg={msg}
+                    isMyMsg={isMyMsg}
+                    isTarget={isTarget}
+                    highlightToken={highlightKey}
+                    showAvatar={showAvatar}
+                    showName={showName}
+                    activePlatform={activeThread?.platform ?? ''}
+                    onQuoteClick={() => handleQuoteClick(msg.quoted_message_metadata)}
+                  />
+                )}
               </div>
             );
           }}
