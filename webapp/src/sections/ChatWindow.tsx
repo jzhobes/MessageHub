@@ -385,7 +385,6 @@ export default function ChatWindow({
                     isMyMsg={isMyMsg}
                     showAvatar={showAvatar}
                     showName={showName}
-                    activePlatform={activeThread?.platform ?? ''}
                   />
                 ) : (
                   <MessageItem
