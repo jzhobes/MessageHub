@@ -1,15 +1,27 @@
-.DS_Store
-
-# data directory
-data*/
-
-# env files (can opt-in for committing if needed)
+# env files
 .env*
 
-.ruff_cache/
-
-# preview cache
-preview_cache.json
-
-# virtual environment
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
 venv/
+.ruff_cache/
+.pytest_cache/
+
+# Node
+node_modules/
+.next/
+out/
+build/
+dist/
+
+# System / IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Data directory
+data*/

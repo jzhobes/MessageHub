@@ -46,7 +46,17 @@ MessageHub/
 
 - **Node.js 18+** (for the web application)
 - **Python 3.10+** (for the ingestion engine)
+  - *Note for Linux/Ubuntu users:* Run `sudo apt install python3-venv` to enable virtual environment creation.
+- **Node Native Build Tools**: On Linux, you may need `build-essential` to compile the `better-sqlite3` database driver.
 - **Virtual Environment**: Managed automatically (created at `./venv` on first run).
+
+### Troubleshooting
+
+- **"Module did not self-register" Error**: This happens if you change your Node.js version or upgrade your OS. Fix it by running:
+  ```bash
+  cd webapp && npm rebuild better-sqlite3
+  ```
+- **SQLite "trigram" error**: Ensure your system SQLite is 3.34+ (Ubuntu 22.04+). If you are on an older system, the app will attempt to use `pysqlite3-binary` automatically if installed in the venv.
 
 #### Exporting Data
 
