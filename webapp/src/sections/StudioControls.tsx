@@ -58,28 +58,16 @@ export function StudioControls({
 
   return (
     <div className={styles.paneControls}>
-      <div style={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '5px', width: '100%' }}>
         <Dropdown
           open={menuOpen}
           onOpenChange={setMenuOpen}
           trigger={
-            <div
-              style={{
-                position: 'relative',
-                display: 'flex',
-                alignItems: 'center',
-                background: 'var(--bg-primary)',
-                border: '1px solid var(--border-color)',
-                borderRadius: 6,
-                padding: '4px 8px',
-                marginRight: 12,
-                cursor: 'pointer',
-              }}
-            >
+            <button className={styles.checkboxDropdown}>
               <input
                 type="checkbox"
                 className={styles.checkbox}
-                style={{ margin: 0, marginRight: 8, cursor: 'pointer' }}
+                style={{ margin: 0, cursor: 'pointer' }}
                 checked={visibleThreads.length > 0 && visibleThreads.every((t) => selectedIds.has(t.id))}
                 ref={(el) => {
                   const count = visibleThreads.filter((t) => selectedIds.has(t.id)).length;
@@ -92,18 +80,10 @@ export function StudioControls({
                 }}
                 onClick={(e) => e.stopPropagation()}
               />
-              <div
-                style={{
-                  display: 'flex',
-                  paddingLeft: 4,
-                  borderLeft: '1px solid var(--border-color)',
-                  height: 14,
-                  alignItems: 'center',
-                }}
-              >
+              <div className={styles.caretWrapper}>
                 <FaCaretDown size={12} color="var(--text-secondary)" />
               </div>
-            </div>
+            </button>
           }
         >
           <DropdownItem
@@ -130,20 +110,7 @@ export function StudioControls({
             open={filterOpen}
             onOpenChange={setFilterOpen}
             trigger={
-              <button
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  background: 'var(--bg-primary)',
-                  border: '1px solid var(--border-color)',
-                  padding: '4px 12px',
-                  borderRadius: 6,
-                  color: 'var(--text-primary)',
-                  cursor: 'pointer',
-                  fontSize: '13px',
-                }}
-              >
+              <button className={styles.platformDropdown}>
                 <span>Platforms</span>
                 <FaCaretDown size={12} />
               </button>
@@ -173,9 +140,7 @@ export function StudioControls({
           </Dropdown>
         </div>
 
-        <span style={{ fontSize: '13px', color: 'var(--text-secondary)', marginLeft: 'auto' }}>
-          {selectedIds.size} selected
-        </span>
+        <span className={styles.resultsCount}>{selectedIds.size} selected</span>
       </div>
     </div>
   );

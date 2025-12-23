@@ -42,23 +42,24 @@
   flex-direction: column;
   gap: 12px;
   background: var(--bg-chat-header);
+  position: relative;
+  z-index: 100;
 }
 
 .searchTopRow {
   display: flex;
   width: 100%;
   align-items: center;
-  gap: 12px;
 }
 
-.filtersRow {
+.searchMetaRow {
   display: flex;
   align-items: center;
-  gap: 12px;
+  justify-content: space-between;
+  padding: 0 4px;
 }
 
 .resultsCount {
-  margin-left: auto;
   font-size: 0.85rem;
   color: var(--text-secondary);
   font-weight: 500;
@@ -70,7 +71,8 @@
 
 .searchIcon {
   font-size: 0.95rem;
-  margin: 0 12px;
+  margin: 0 4px 0 16px;
+  color: var(--text-secondary);
 }
 
 .filterSelect {
@@ -84,21 +86,62 @@
   font-size: 0.9rem;
 }
 
-.resetButton {
-  background: none;
-  border: 1px solid var(--border-color);
-  color: var(--text-secondary);
-  padding: 5px 12px;
-  border-radius: var(--radius-1);
-  cursor: pointer;
-  font-size: 0.85rem;
-  transition: all 0.2s;
+.inputSuffix {
+  display: flex;
+  align-items: stretch; /* Stretch children to full height */
+  height: 100%;
+  border-radius: inherit;
 }
 
-.resetButton:hover {
-  background: #444;
-  color: #fff;
-  border-color: #666;
+.dropdownWrapper {
+  display: flex !important;
+  height: 100%;
+}
+
+.suffixDropdown {
+  composes: btn-reset from global;
+  padding: 0 16px; /* Increased padding to match Reset */
+  height: 100%;
+  border-left: 1px solid var(--border-color);
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  gap: 8px;
+  background: var(--bg-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.suffixDropdown:not(:disabled):hover {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.suffixDropdown:disabled {
+  opacity: 0.4;
+  cursor: default; /* Regular cursor for disabled threads as requested */
+}
+
+.suffixReset {
+  composes: btn-reset from global;
+  padding: 0 16px;
+  height: 100%;
+  border-left: 1px solid var(--border-color);
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+  cursor: pointer;
+  /* Sync with container radius */
+  border-top-right-radius: inherit;
+  border-bottom-right-radius: inherit;
+}
+
+.suffixReset:disabled {
+  cursor: default;
+}
+
+.suffixReset:hover {
+  background: var(--bg-primary);
+  color: var(--text-primary);
 }
 
 .closeButton {
@@ -319,7 +362,7 @@
 
 .dropdownTrigger:disabled {
   opacity: 0.5;
-  cursor: not-allowed;
+  cursor: default;
 }
 
 .dropdownCheckbox {

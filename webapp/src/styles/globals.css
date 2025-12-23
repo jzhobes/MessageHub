@@ -122,3 +122,80 @@ body {
     transform: rotate(360deg);
   }
 }
+
+/* --- Baseline Interactive Elements --- */
+
+/* Reset for button elements to behave like clean boxes */
+.btn-reset {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-align: inherit;
+  display: flex;
+  align-items: center;
+  transition: all 0.2s ease;
+}
+
+.btn-reset:disabled {
+  cursor: default;
+}
+
+/* Standard Premium Button */
+.btn {
+  composes: btn-reset;
+  padding: 8px 16px;
+  border-radius: var(--radius-1);
+  font-weight: 600;
+  white-space: nowrap;
+  justify-content: center;
+}
+
+.btn-primary {
+  composes: btn;
+  background: var(--bubble-sent-bg);
+  color: white;
+}
+
+.btn-primary:not(:disabled):hover {
+  filter: brightness(1.1);
+}
+
+.btn-primary:not(:disabled):active {
+  filter: brightness(0.9);
+}
+
+.btn-primary:disabled {
+  opacity: 0.6;
+}
+
+.btn-secondary {
+  composes: btn;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+}
+
+.btn-secondary:not(:disabled):hover {
+  background: var(--bg-primary);
+  border-color: var(--bubble-sent-bg);
+}
+
+.btn-secondary:disabled {
+  opacity: 0.5;
+}
+
+/* Ghost / Action Button (used in nav, bars, etc) */
+.btn-ghost {
+  composes: btn-reset;
+  padding: 8px;
+  border-radius: var(--radius-1);
+}
+
+.btn-ghost:not(:disabled):hover {
+  background: var(--bg-sidebar-hover);
+}

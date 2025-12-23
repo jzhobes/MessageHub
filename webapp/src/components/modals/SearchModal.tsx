@@ -241,89 +241,97 @@ export default function SearchModal({ isOpen, onClose, onNavigate }: SearchModal
             onChange={(e) => setField('query', e.target.value)}
             adornment={<FaSearch className={styles.searchIcon} />}
             className={styles.searchTextInput}
+            suffix={
+              <div className={styles.inputSuffix}>
+                <Dropdown
+                  open={platformDropdownOpen}
+                  onOpenChange={setPlatformDropdownOpen}
+                  width={220}
+                  className={styles.dropdownWrapper}
+                  trigger={
+                    <button className={styles.suffixDropdown}>
+                      <span>
+                        Platforms {config.filterPlatforms.length > 0 ? `(${config.filterPlatforms.length})` : ''}
+                      </span>
+                      <FaChevronDown size={10} />
+                    </button>
+                  }
+                >
+                  <DropdownItem onClick={() => setField('filterPlatforms', [])}>
+                    <input
+                      type="checkbox"
+                      checked={config.filterPlatforms.length === 0}
+                      readOnly
+                      className={styles.dropdownCheckbox}
+                    />
+                    All Platforms {facets && `(${totalCount})`}
+                  </DropdownItem>
+                  <DropdownDivider />
+                  {PLATFORM_ORDER.map((dbKey) => {
+                    const label = PlatformMap[dbKey];
+                    if (!label) {
+                      return null;
+                    }
+
+                    const count = facets?.platforms?.[dbKey] || 0;
+                    const isSelected = config.filterPlatforms.includes(label);
+
+                    return (
+                      <DropdownItem key={dbKey} onClick={() => togglePlatform(label)}>
+                        <input type="checkbox" checked={isSelected} readOnly className={styles.dropdownCheckbox} />
+                        {label} {count > 0 && <span className={styles.facetCount}>({count})</span>}
+                      </DropdownItem>
+                    );
+                  })}
+                </Dropdown>
+
+                <Dropdown
+                  open={threadDropdownOpen}
+                  onOpenChange={setThreadDropdownOpen}
+                  width={280}
+                  className={styles.dropdownWrapper}
+                  trigger={
+                    <button className={styles.suffixDropdown} disabled={availableThreads.length === 0}>
+                      <span>Threads {config.filterThreads.length > 0 ? `(${config.filterThreads.length})` : ''}</span>
+                      <FaChevronDown size={10} />
+                    </button>
+                  }
+                >
+                  <DropdownItem onClick={() => setField('filterThreads', [])}>
+                    <input
+                      type="checkbox"
+                      checked={config.filterThreads.length === 0}
+                      readOnly
+                      className={styles.dropdownCheckbox}
+                    />
+                    All Threads
+                  </DropdownItem>
+                  <DropdownDivider />
+                  {availableThreads.map((t) => (
+                    <DropdownItem key={t.id} onClick={() => toggleThread(t.id)}>
+                      <input
+                        type="checkbox"
+                        checked={config.filterThreads.includes(t.id)}
+                        readOnly
+                        className={styles.dropdownCheckbox}
+                      />
+                      {t.title.length > 30 ? t.title.substring(0, 30) + '...' : t.title}
+                    </DropdownItem>
+                  ))}
+                </Dropdown>
+
+                <button className={styles.suffixReset} onClick={handleReset}>
+                  Reset
+                </button>
+              </div>
+            }
           />
         </div>
-        <div className={styles.searchHelp}>
-          Supports: <b>Two words</b>, <b>&ldquo;Exact phrase&rdquo;</b>. <b>^start</b> matches start of word. <b>*</b>
-          =any, <b>?</b>=1 char.
-        </div>
-        <div className={styles.filtersRow}>
-          <Dropdown
-            open={platformDropdownOpen}
-            onOpenChange={setPlatformDropdownOpen}
-            width={220}
-            trigger={
-              <button className={styles.dropdownTrigger}>
-                <span>Platforms {config.filterPlatforms.length > 0 ? `(${config.filterPlatforms.length})` : ''}</span>
-                <FaChevronDown size={10} />
-              </button>
-            }
-          >
-            <DropdownItem onClick={() => setField('filterPlatforms', [])}>
-              <input
-                type="checkbox"
-                checked={config.filterPlatforms.length === 0}
-                readOnly
-                className={styles.dropdownCheckbox}
-              />
-              All Platforms {facets && `(${totalCount})`}
-            </DropdownItem>
-            <DropdownDivider />
-            {PLATFORM_ORDER.map((dbKey) => {
-              const label = PlatformMap[dbKey];
-              if (!label) {
-                return null;
-              }
-
-              const count = facets?.platforms?.[dbKey] || 0;
-              const isSelected = config.filterPlatforms.includes(label);
-
-              return (
-                <DropdownItem key={dbKey} onClick={() => togglePlatform(label)}>
-                  <input type="checkbox" checked={isSelected} readOnly className={styles.dropdownCheckbox} />
-                  {label} {count > 0 && <span className={styles.facetCount}>({count})</span>}
-                </DropdownItem>
-              );
-            })}
-          </Dropdown>
-
-          <Dropdown
-            open={threadDropdownOpen}
-            onOpenChange={setThreadDropdownOpen}
-            width={280}
-            trigger={
-              <button className={styles.dropdownTrigger} disabled={availableThreads.length === 0}>
-                <span>Threads {config.filterThreads.length > 0 ? `(${config.filterThreads.length})` : ''}</span>
-                <FaChevronDown size={10} />
-              </button>
-            }
-          >
-            <DropdownItem onClick={() => setField('filterThreads', [])}>
-              <input
-                type="checkbox"
-                checked={config.filterThreads.length === 0}
-                readOnly
-                className={styles.dropdownCheckbox}
-              />
-              All Threads
-            </DropdownItem>
-            <DropdownDivider />
-            {availableThreads.map((t) => (
-              <DropdownItem key={t.id} onClick={() => toggleThread(t.id)}>
-                <input
-                  type="checkbox"
-                  checked={config.filterThreads.includes(t.id)}
-                  readOnly
-                  className={styles.dropdownCheckbox}
-                />
-                {t.title.length > 30 ? t.title.substring(0, 30) + '...' : t.title}
-              </DropdownItem>
-            ))}
-          </Dropdown>
-
-          <button className={styles.resetButton} onClick={handleReset}>
-            Reset
-          </button>
+        <div className={styles.searchMetaRow}>
+          <div className={styles.searchHelp}>
+            Supports: <b>Two words</b>, <b>&ldquo;Exact phrase&rdquo;</b>. <b>^start</b> matches start of word. <b>*</b>
+            =any, <b>?</b>=1 char.
+          </div>
           {!loading && config.query && totalCount > 0 && (
             <span className={styles.resultsCount}>
               {results.length < totalCount
@@ -333,7 +341,7 @@ export default function SearchModal({ isOpen, onClose, onNavigate }: SearchModal
           )}
         </div>
         {facets && Object.keys(facets.senders).length > 0 && (
-          <div className={styles.statsSection} style={{ padding: '0 16px' }}>
+          <div className={styles.statsSection}>
             <div className={styles.statsHeader} onClick={() => setIsSendersExpanded(!isSendersExpanded)}>
               {isSendersExpanded ? <FaChevronUp size={10} /> : <FaChevronDown size={10} />}
               Top Senders

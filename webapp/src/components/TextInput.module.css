@@ -3,10 +3,10 @@
   align-items: stretch;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-1);
-  overflow: hidden;
   transition: all 0.2s;
   background: var(--bg-primary, #ffffff);
   width: 100%;
+  position: relative; /* Base for dropdowns if needed */
 }
 
 .inputWrapper:focus-within {
@@ -24,10 +24,14 @@
 
 .adornment.start {
   border-right: 1px solid var(--border-color);
+  border-top-left-radius: inherit;
+  border-bottom-left-radius: inherit;
 }
 
 .adornment.end {
   border-left: 1px solid var(--border-color);
+  border-top-right-radius: inherit;
+  border-bottom-right-radius: inherit;
 }
 
 .input {

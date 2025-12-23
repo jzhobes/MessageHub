@@ -54,23 +54,17 @@
 }
 
 .closeButton {
+  composes: btn-reset from global;
   position: absolute;
   top: 15px;
   right: 15px;
-  background: none;
-  border: none;
   color: var(--text-secondary);
-  font-size: 1.2rem;
-  cursor: pointer;
-  padding: 0;
   border-radius: var(--radius-circle);
   width: 36px;
   height: 36px;
-  display: flex;
-  align-items: center;
   justify-content: center;
-  transition: all 0.2s;
   z-index: 100;
+  cursor: pointer;
 }
 
 .closeButton:not(:disabled):hover {
@@ -79,7 +73,6 @@
 }
 
 .closeButton:disabled {
-  cursor: default;
   opacity: 0.5;
 }
 
@@ -149,60 +142,31 @@
 }
 
 .button {
-  padding: 8px 16px;
-  border-radius: var(--radius-1);
-  border: none;
-  background: var(--bubble-sent-bg);
-  color: white;
-  font-weight: 600;
+  composes: btn-primary from global;
+  padding: 8px 16px; /* Ensure padding stays if global reset wins */
   cursor: pointer;
-  transition: filter 0.2s;
-  white-space: nowrap;
-}
-
-.button:not(:disabled):hover {
-  filter: brightness(1.1);
-}
-
-.button:not(:disabled):active {
-  filter: brightness(0.9);
+  border-radius: var(--radius-1);
 }
 
 .button:disabled {
-  opacity: 0.6;
   cursor: default;
 }
 
 .secondaryButton {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  color: var(--text-primary);
-  cursor: pointer;
+  composes: btn-secondary from global;
   padding: 8px 16px;
+  cursor: pointer;
   border-radius: var(--radius-1);
-  transition: all 0.2s;
-  white-space: nowrap;
-}
-
-.secondaryButton:not(:disabled):hover {
-  background: var(--bg-primary);
-  border-color: var(--bubble-sent-bg);
 }
 
 .secondaryButton:disabled {
-  opacity: 0.5;
   cursor: default;
 }
 
 .textLink {
-  background: none;
-  border: none;
+  composes: btn-reset from global;
   color: var(--bubble-sent-bg);
-  cursor: pointer;
-  padding: 0;
-  font-size: inherit;
   font-weight: 500;
-  text-decoration: none;
 }
 
 .textLink:hover {
@@ -380,20 +344,29 @@
 }
 
 .sidebarItem {
+  composes: btn-reset from global;
   padding: 12px 24px;
-  cursor: pointer;
   color: var(--text-secondary);
   font-weight: 500;
-  transition: all 0.2s;
-  display: flex;
-  align-items: center;
   gap: 10px;
   border-left: 3px solid transparent;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
 }
 
-.sidebarItem:hover {
+.sidebarItem:disabled {
+  cursor: default;
+}
+
+.sidebarItem:not(:disabled):hover {
   background: var(--bg-primary);
   color: var(--text-primary);
+}
+
+.sidebarItem:disabled {
+  opacity: 0.5;
+  pointer-events: none;
 }
 
 .sidebarActive {
@@ -478,13 +451,18 @@
 }
 
 .explorerActionBtn {
-  height: 100%;
-  border-radius: 0 !important;
+  height: 100.5%; /* Slight overlap to hide adornment border-left */
+  margin: -1px; /* Absorb container border */
+  border-top-left-radius: 0 !important;
+  border-bottom-left-radius: 0 !important;
+  border-top-right-radius: inherit !important;
+  border-bottom-right-radius: inherit !important;
   padding: 0 16px !important;
   display: flex !important;
   align-items: center;
   gap: 8px;
   font-size: 0.9rem !important;
+  border: none !important;
 }
 
 .workspaceExplorerFooter {
@@ -701,17 +679,24 @@
 }
 
 .sidebarCloseBtn {
+  composes: btn-secondary from global;
   width: 100%;
   justify-content: center;
+  padding: 8px 16px;
   background: var(--bg-primary);
   border: 1px solid var(--border-color);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  cursor: pointer;
+  border-radius: var(--radius-1);
+}
+
+.sidebarCloseBtn:disabled {
+  cursor: default;
 }
 
 .sidebarCloseBtn:not(:disabled):hover {
   background: var(--bg-primary) !important;
   border-color: var(--bubble-sent-bg) !important;
-  color: var(--bubble-sent-bg) !important;
 }
 
 .spacingBottom20 {

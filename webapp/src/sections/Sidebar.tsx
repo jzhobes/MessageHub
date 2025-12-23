@@ -25,30 +25,16 @@ export default function Sidebar({ activePlatform, onPlatformSelect, availability
       {platforms.map((p) => {
         const isAvailable = availability[p.name];
         return (
-          <div
+          <button
             key={p.name}
-            className={`${styles.navItem} ${activePlatform === p.name ? styles.navItemActive : ''} ${!isAvailable ? styles.navItemDisabled : ''}`}
-            role="button"
-            tabIndex={0}
-            onClick={() => isAvailable && onPlatformSelect(p.name)}
-            onKeyDown={(e) => {
-              if (isAvailable && (e.key === 'Enter' || e.key === ' ')) {
-                onPlatformSelect(p.name);
-              }
-            }}
-            style={{
-              cursor: isAvailable ? 'pointer' : 'not-allowed',
-              opacity: isAvailable ? 1 : 0.5,
-              display: 'flex',
-              alignItems: 'center',
-              width: '100%',
-            }}
+            className={`${styles.navItem} ${activePlatform === p.name ? styles.navItemActive : ''}`}
+            onClick={() => onPlatformSelect(p.name)}
+            disabled={!isAvailable}
+            title={collapsed ? p.name : ''}
           >
-            <span className={styles.sidebarButton} title={collapsed ? p.name : ''}>
-              <span className={styles.sidebarIconWrapper}>{p.icon}</span>
-              <span className={styles.sidebarLabel}>{p.name}</span>
-            </span>
-          </div>
+            <span className={styles.sidebarIconWrapper}>{p.icon}</span>
+            <span className={styles.sidebarLabel}>{p.name}</span>
+          </button>
         );
       })}
 

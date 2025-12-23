@@ -8,9 +8,10 @@ interface DropdownProps {
   open?: boolean; // Controlled mode
   onOpenChange?: (open: boolean) => void;
   align?: 'left' | 'right';
+  className?: string;
 }
 
-export function Dropdown({ trigger, children, width, open, onOpenChange, align = 'left' }: DropdownProps) {
+export function Dropdown({ trigger, children, width, open, onOpenChange, align = 'left', className }: DropdownProps) {
   const [internalOpen, setInternalOpen] = useState(false);
   const [maxHeight, setMaxHeight] = useState('400px');
   const isControlled = open !== undefined;
@@ -65,8 +66,8 @@ export function Dropdown({ trigger, children, width, open, onOpenChange, align =
   }, [isOpen, updateMaxHeight]);
 
   return (
-    <div ref={containerRef} style={{ position: 'relative' }}>
-      <div onClick={toggle} style={{ display: 'inline-block' }}>
+    <div ref={containerRef} className={className} style={{ position: 'relative' }}>
+      <div onClick={toggle} style={{ display: 'flex', height: '100%', cursor: 'inherit' }}>
         {trigger}
       </div>
 

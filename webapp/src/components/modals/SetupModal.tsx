@@ -17,6 +17,12 @@ interface SetupModalProps {
   isFirstRun?: boolean;
 }
 
+const TAB_MAP: Record<number, 'path' | 'import' | 'scan'> = {
+  1: 'import',
+  2: 'scan',
+  3: 'path',
+};
+
 export default function SetupModal({
   isOpen,
   onClose,
@@ -26,25 +32,15 @@ export default function SetupModal({
 }: SetupModalProps) {
   const steps: ('path' | 'import' | 'scan')[] = isFirstRun ? ['path', 'import', 'scan'] : ['scan', 'import', 'path'];
 
-  const [activeTab, setActiveTab] = useState<'welcome' | 'path' | 'import' | 'scan'>(() => {
-    if (isFirstRun) {
-      return 'welcome';
-    }
-    if (initialStep === 1) {
-      return 'import';
-    }
-    if (initialStep === 2) {
-      return 'scan';
-    }
-    return 'path';
-  });
+  const [activeTab, setActiveTab] = useState<'welcome' | 'path' | 'import' | 'scan'>(
+    () => TAB_MAP[initialStep] || (isFirstRun ? 'welcome' : 'path'),
+  );
   const [prevOpen, setPrevOpen] = useState(isOpen);
 
   // Sync tab when modal re-opens (Adjusting state during rendering pattern)
   if (isOpen && !prevOpen) {
     setPrevOpen(true);
-    const stepTab = initialStep === 0 ? 'welcome' : initialStep === 1 ? 'import' : initialStep === 2 ? 'scan' : 'path';
-    setActiveTab(stepTab);
+    setActiveTab(TAB_MAP[initialStep] || (isFirstRun ? 'welcome' : 'path'));
   } else if (!isOpen && prevOpen) {
     setPrevOpen(false);
   }
@@ -384,15 +380,6 @@ export default function SetupModal({
             <FaTimes />
           </button>
         )}
-        <button
-          className={styles.closeButton}
-          onClick={onClose}
-          disabled={isInstalling}
-          title="Close"
-          aria-label="Close"
-        >
-          <FaTimes />
-        </button>
         {isFirstRun ? (
           <div className={styles.wizardLayout}>
             <div
@@ -412,10 +399,11 @@ export default function SetupModal({
               </div>
 
               {steps.map((step) => (
-                <div
+                <button
                   key={step}
                   className={`${styles.sidebarItem} ${activeTab === step ? styles.sidebarActive : ''}`}
                   onClick={() => setActiveTab(step)}
+                  disabled={isInstalling}
                 >
                   <div className={styles.sidebarIconWrapper}>
                     {step === 'scan' && <FaDatabase />}
@@ -428,7 +416,7 @@ export default function SetupModal({
                   {step === 'scan' && remoteFiles.length > 0 && (
                     <span className={styles.sidebarBadge}>{remoteFiles.length}</span>
                   )}
-                </div>
+                </button>
               ))}
 
               <div className={styles.sidebarFooter}>

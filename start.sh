@@ -14,9 +14,27 @@ if [ ! -d "node_modules" ]; then
   npm install
 fi
 
-if [ ! -f ".next/BUILD_ID" ]; then
+# 3. Smart Build: Only build if source files have changed or build is missing
+BUILD_ID=".next/BUILD_ID"
+BUILD_NEEDED=false
+
+if [ ! -f "$BUILD_ID" ]; then
+  BUILD_NEEDED=true
+else
+  # Find any file in webapp (excluding node_modules and .next) newer than BUILD_ID
+  # We focus on src, public, and config files.
+  NEWER_FILES=$(find src public package.json tsconfig.json next.config.ts -type f -newer "$BUILD_ID" 2>/dev/null | head -n 1)
+  if [ -n "$NEWER_FILES" ]; then
+    echo "==> Changes detected (e.g., $NEWER_FILES). Rebuilding..."
+    BUILD_NEEDED=true
+  fi
+fi
+
+if [ "$BUILD_NEEDED" = true ]; then
   echo "==> Performing production build..."
   npm run build
+else
+  echo "==> Build is up-to-date. Skipping..."
 fi
 
 echo ""

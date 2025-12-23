@@ -20,17 +20,20 @@
 }
 
 .navItem {
+  composes: btn-reset from global;
   padding: 0 15px;
   height: 48px;
   margin-bottom: 5px;
   border-radius: var(--radius-2);
-  cursor: pointer;
-  transition: all 0.2s;
   font-weight: 500;
-  display: flex;
-  align-items: center;
   color: var(--text-sidebar);
   flex-shrink: 0;
+  width: 100%;
+  cursor: pointer;
+}
+
+.navItem:disabled {
+  cursor: default;
 }
 
 .sidebarCollapsed .navItem {
@@ -54,7 +57,7 @@
     visibility 0.1s;
 }
 
-.navItem:hover {
+.navItem:not(:disabled):hover {
   background-color: var(--bg-sidebar-hover);
   color: var(--text-sidebar);
 }
@@ -64,9 +67,8 @@
   color: var(--text-sidebar-active);
 }
 
-.navItemDisabled {
+.navItem:disabled {
   opacity: 0.5;
-  cursor: default;
   pointer-events: none;
 }
 
