@@ -379,13 +379,7 @@ export default function ChatWindow({
               >
                 {showTimestamp && <div className={styles.timestampLabel}>{timestampStr}</div>}
                 {isEmail ? (
-                  <EmailItem
-                    key={msgId}
-                    msg={msg}
-                    isMyMsg={isMyMsg}
-                    showAvatar={showAvatar}
-                    showName={showName}
-                  />
+                  <EmailItem key={msgId} msg={msg} isMyMsg={isMyMsg} showAvatar={showAvatar} showName={showName} />
                 ) : (
                   <MessageItem
                     key={msgId}
