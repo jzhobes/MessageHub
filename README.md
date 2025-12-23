@@ -6,11 +6,11 @@ It also features **DataForge AI**, a built-in studio for curating high-quality d
 
 ## Features
 
--   **Integrated Setup Wizard:** Automatically configure your workspace, import archives, and build your database with zero command-line interaction.
--   **Unified Dashboard:** Toggle between Facebook Messenger, Instagram DMs, Google Chat, Google Voice, and Gmail histories.
--   **Global Search:** Search all archives with support for **glob-like syntax** in queries and **selection filtering**. Click any result to **jump** to that message in its original context.
--   **Smart Ingestion:** Automatically handles duplicate messages across overlapping exports and supports incremental updates.
--   **DataForge AI Studio:** Select specific threads, filter system noise, and generate formatted JSONL datasets for OpenAI fine-tuning.
+- **Integrated Setup Wizard:** Automatically configure your workspace, import archives, and build your database with zero command-line interaction.
+- **Unified Dashboard:** Toggle between Facebook Messenger, Instagram DMs, Google Chat, Google Voice, and Gmail histories.
+- **Global Search:** Search all archives with support for **glob-like syntax** in queries and **selection filtering**. Click any result to **jump** to that message in its original context.
+- **Smart Ingestion:** Automatically handles duplicate messages across overlapping exports and supports incremental updates.
+- **DataForge AI Studio:** Select specific threads, filter system noise, and generate formatted JSONL datasets for OpenAI fine-tuning.
 
 ---
 
@@ -24,7 +24,8 @@ Run the start script to automatically initialize the environment, build the appl
 ./start.sh
 ```
 
-*Note: The first run includes an automated production build; subsequent starts are significantly faster.*
+- **To Stop**: Press `Ctrl+C` in your terminal to shut down the server.
+- _Note: The first run includes an automated production build; subsequent starts are significantly faster._
 
 ---
 
@@ -33,37 +34,41 @@ Run the start script to automatically initialize the environment, build the appl
 ### 1. Requirements & Troubleshooting
 
 Before running the start script, ensure you have:
--   **Node.js 20+**
--   **Python 3.10+**
--   **Supported Environments**: Mac, Linux, and **WSL**. (Native Windows CMD/PowerShell is not supported).
+
+- **Node.js 20+**
+- **Python 3.10+**
+- **Supported Environments**: Mac, Linux, and **WSL**. (Native Windows CMD/PowerShell is not supported).
 
 #### Troubleshooting
--   **Linux/WSL users**: If the script fails to create a virtual environment, run: `sudo apt install python3-venv`.
--   **"Module did not self-register"**: If you change Node versions or upgrade your OS, run: `cd webapp && npm rebuild better-sqlite3`.
--   **SQLite "trigram" error**: Ensure your system SQLite is 3.34+ (Ubuntu 22.04+).
+
+- **Linux/WSL users**: If the script fails to create a virtual environment, run: `sudo apt install python3-venv`.
+- **"Module did not self-register"**: If you change Node versions or upgrade your OS, run: `cd webapp && npm rebuild better-sqlite3`.
+- **SQLite "trigram" error**: Ensure your system SQLite is 3.34+ (Ubuntu 22.04+).
 
 ### 2. Exporting Your Data
 
 #### Facebook
+
 1.  Go to [**Accounts Center** > **Export your information**](https://accountscenter.facebook.com/info_and_permissions/dyi).
 2.  **Create export** > **Facebook** > **Export to device**.
 3.  **Customize information**: Select **Messages** and **Profile information** (Required for "You" detection).
 4.  **Format**: **JSON**.
 
 #### Instagram
+
 1.  Go to [**Accounts Center** > **Export your information**](https://accountscenter.facebook.com/info_and_permissions/dyi).
 2.  **Create export** > **Instagram** > **Export to device**.
 3.  **Customize information**: Select **Messages** and **Personal information**.
 4.  **Format**: **JSON**.
 
 #### Google (Chat, Voice, Gmail)
+
 1.  Go to [Google Takeout](https://takeout.google.com/).
 2.  Select **Google Chat**, **Voice**, and **Mail**.
 3.  For **Mail**: Ensure the **"Sent"** folder is included.
 4.  **Format**: Both **.zip** and **.tgz** are supported.
 
-> [!TIP]
-> **Incremental Exports**: MessageHub automatically handles duplicate messages, so it is safe to import overlapping date ranges.
+> [!TIP] > **Incremental Exports**: MessageHub automatically handles duplicate messages, so it is safe to import overlapping date ranges.
 
 ### 3. Setup Wizard Flow
 
@@ -89,18 +94,23 @@ Create **"Virtual You"** datasets for training AI models.
 ## 🔧 Maintenance & Advanced Usage
 
 ### Maintenance Scripts (from `webapp/`)
--   `npm run validate`: Runs linting (with auto-fix), formatting, type-checking, and tests.
--   `npm run clean`: Deletes the `.next` production build to force a fresh build.
--   `npm run clean:all`: Factory reset. Deletes build, `venv`, and `data_samples`.
+
+- `npm run validate`: Runs linting (with auto-fix), formatting, type-checking, and tests.
+- `npm run clean`: Deletes the `.next` production build to force a fresh build.
+- `npm run clean:all`: Factory reset. Deletes build, `venv`, and `data_samples`.
 
 ### Manual Ingestion (CLI)
+
 Ensure `WORKSPACE_PATH` is set in your `.env`, then run:
+
 ```bash
 ./venv/bin/python3 scripts/ingest.py
 ```
 
 ### Development & Testing
+
 Build a sample workspace using the **"Golden Archives"**:
+
 ```bash
 ./build_samples.sh
 ```
@@ -110,6 +120,7 @@ Build a sample workspace using the **"Golden Archives"**:
 ## 📝 Technical Overview
 
 ### Project Structure
+
 ```
 MessageHub/
 ├── data/                  # Default workspace location
@@ -119,12 +130,15 @@ MessageHub/
 ```
 
 ### Technical Details
--   **Interface:** Next.js, React, Vanilla CSS.
--   **Database:** SQLite with **FTS5 Trigram** indexing for sub-second global search.
--   **Ingestion:** Python 3.10+ (multithreaded).
+
+- **Interface:** Next.js, React, Vanilla CSS.
+- **Database:** SQLite with **FTS5 Trigram** indexing for sub-second global search.
+- **Ingestion:** Python 3.10+ (multithreaded).
 
 ### Configuration (.env)
+
 Managed automatically by the **Setup Wizard**.
+
 ```bash
 WORKSPACE_PATH="/path/to/your/data"
 ROOT_IMPORT_PATH="/Users/yourname"

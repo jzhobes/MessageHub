@@ -1,26 +1,29 @@
 #!/bin/bash
-# Unix (Mac/Linux) Setup Script
+# MessageHub Setup Script (Mac/Linux)
+set -e
+trap "exit" INT
 
-set -e  # Exit on error
+# Get the directory where this script is located
+PROJECT_ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
-echo "==> Setting up MessageHub environment..."
+echo "==> Setting up MessageHub environment in $PROJECT_ROOT..."
 
 # 1. Create venv if it doesn't exist
-if [ ! -d "venv" ]; then
+if [ ! -d "$PROJECT_ROOT/venv" ]; then
     echo "Creating virtual environment 'venv'..."
-    python3 -m venv venv
+    python3 -m venv "$PROJECT_ROOT/venv"
 else
     echo "Found existing virtual environment."
 fi
 
 # 2. Activate and install requirements
 # Note: This activates it only for this script execution
-source venv/bin/activate
+source "$PROJECT_ROOT/venv/bin/activate"
 
-echo "Installing dependencies from scripts/requirements.txt..."
-pip install -r scripts/requirements.txt
+echo "Installing dependencies from $PROJECT_ROOT/scripts/requirements.txt..."
+pip install -r "$PROJECT_ROOT/scripts/requirements.txt"
 
 echo ""
 echo "✅ Setup Complete!"
-echo "To execute scripts, use: ./venv/bin/python scripts/ingest.py"
-echo "Or activate your shell with: source venv/bin/activate"
+echo "To execute scripts, use: $PROJECT_ROOT/venv/bin/python $PROJECT_ROOT/scripts/ingest.py"
+echo "Or activate your shell with: source $PROJECT_ROOT/venv/bin/activate"
