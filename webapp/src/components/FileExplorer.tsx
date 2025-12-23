@@ -209,13 +209,22 @@ export default function FileExplorer({
     getId: (item: FileItem) => item.path,
   });
 
+  // Track what we are currently fetching or have just fetched
+  const lastCallRef = useRef<{ path: string; mode: string } | null>(null);
+
   // Fetch directory
   useEffect(() => {
+    // If we just fetched this path/mode combination, don't do it again
+    if (lastCallRef.current?.path === debouncedPath && lastCallRef.current?.mode === mode) {
+      return;
+    }
+
     const controller = new AbortController();
 
     async function load() {
       setLoading(true);
       setError(null);
+      lastCallRef.current = { path: debouncedPath, mode };
 
       try {
         const params = new URLSearchParams();
@@ -236,10 +245,18 @@ export default function FileExplorer({
         }
 
         const data = await res.json();
+
+        if (controller.signal.aborted) {
+          return;
+        }
+
+        // If we requested an empty path and got back a default, sync our state without re-triggering
         if (!debouncedPath) {
           setCurrentPath(data.path);
           setDebouncedPath(data.path);
+          lastCallRef.current = { path: data.path, mode }; // Important: prevent re-fetch loop
         }
+
         setParentPath(data.parent);
         setItems(data.items);
         setMetadata(data.meta);
@@ -251,11 +268,9 @@ export default function FileExplorer({
         onSelectionChangeRef.current?.([], 0);
       } catch (e) {
         if (e instanceof Error && e.name === 'AbortError') {
-          // Ignore abort errors
           return;
         }
         setError({ message: e instanceof Error ? e.message : String(e) });
-        // Clear metadata on true error
         const meta = {
           exists: false,
           isWritable: false,

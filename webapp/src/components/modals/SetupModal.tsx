@@ -373,6 +373,17 @@ export default function SetupModal({
       overlayClassName={styles.overlay}
     >
       <div className={styles.setupContainerFull}>
+        {!isFirstRun && (
+          <button
+            className={styles.closeButton}
+            onClick={onClose}
+            disabled={isInstalling}
+            title="Close"
+            aria-label="Close"
+          >
+            <FaTimes />
+          </button>
+        )}
         <button
           className={styles.closeButton}
           onClick={onClose}

@@ -84,6 +84,7 @@
 
 .content {
   flex: 1;
+  min-height: 0; /* Critical: allows flex child to be constrained by parent height */
   overflow: visible;
   display: flex;
   flex-direction: column;
