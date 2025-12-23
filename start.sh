@@ -23,5 +23,31 @@ else
 fi
 
 # 3. Start the application
-echo "==> Starting MessageHub development server..."
-npm run dev
+echo "==> Preparing MessageHub application..."
+
+if [ ! -f ".next/BUILD_ID" ]; then
+    echo "==> Production build not found (or only dev cache exists). Building now..."
+    npm run build
+fi
+
+echo ""
+echo "----------------------------------------------------------------"
+echo "🚀 MessageHub is launching (Production Mode)!"
+echo "📍 Open your browser at: http://localhost:3000"
+echo "----------------------------------------------------------------"
+echo ""
+
+# Attempt to open the browser automatically
+if grep -qi microsoft /proc/version; then
+    # WSL
+    explorer.exe "http://localhost:3000" > /dev/null 2>&1 || true
+elif [[ "$OSTYPE" == "darwin"* ]]; then
+    # Mac
+    open "http://localhost:3000" > /dev/null 2>&1 || true
+elif command -v xdg-open > /dev/null; then
+    # Linux
+    xdg-open "http://localhost:3000" > /dev/null 2>&1 || true
+fi
+
+# Run the production server
+npm run start

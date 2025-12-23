@@ -12,7 +12,9 @@
     "validate": "npm run lint -- --fix && npm run format && npm run type-check && npm run test",
     "pretest": "cd .. && ./build_samples.sh",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "clean": "rm -rf .next",
+    "clean:all": "npm run clean && cd .. && rm -rf venv data_samples"
   },
   "dependencies": {
     "@types/jszip": "^3.4.0",

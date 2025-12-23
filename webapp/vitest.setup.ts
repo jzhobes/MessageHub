@@ -12,11 +12,9 @@ if (!fs.existsSync(dbPath)) {
   console.log('⚠️ Sample database not found. Building it now...');
   try {
     const projectRoot = path.resolve(__dirname, '..');
-    const isWin = process.platform === 'win32';
 
     // 2. Run build samples
-    const buildScript = isWin ? 'build_samples.bat' : './build_samples.sh';
-    execSync(buildScript, {
+    execSync('./build_samples.sh', {
       cwd: projectRoot,
       stdio: 'inherit',
     });

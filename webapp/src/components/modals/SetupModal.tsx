@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FaCog, FaFileImport, FaDatabase, FaCheckCircle } from 'react-icons/fa';
+import { FaCog, FaFileImport, FaDatabase, FaCheckCircle, FaTimes } from 'react-icons/fa';
 
 import { useIngestion } from '@/hooks/useIngestion';
 import BaseModal from './BaseModal';
@@ -373,6 +373,15 @@ export default function SetupModal({
       overlayClassName={styles.overlay}
     >
       <div className={styles.setupContainerFull}>
+        <button
+          className={styles.closeButton}
+          onClick={onClose}
+          disabled={isInstalling}
+          title="Close"
+          aria-label="Close"
+        >
+          <FaTimes />
+        </button>
         {isFirstRun ? (
           <div className={styles.wizardLayout}>
             <div

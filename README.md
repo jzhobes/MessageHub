@@ -6,212 +6,128 @@ It also features **DataForge AI**, a built-in studio for curating high-quality d
 
 ## Features
 
-- **Integrated Setup Wizard:** Automatically configure your workspace, import archives, and build your database with zero command-line interaction.
-- **Unified Dashboard:** Toggle between Facebook Messenger, Instagram DMs, Google Chat, Google Voice, and Gmail histories.
-- **Global Search:** Search all archives with support for **glob-like syntax** in queries and **selection filtering**. Click any result to **jump** to that message in its original context.
-- **Smart Ingestion:** Automatically handles duplicate messages across overlapping exports and supports incremental updates.
-- **DataForge AI Studio:** Select specific threads, filter system noise, and generate formatted JSONL datasets for OpenAI fine-tuning.
-
-## Project Structure
-
-```
-MessageHub/
-├── data/                  # Default workspace location
-│   ├── Facebook/
-│   ├── Instagram/
-│   ├── Google Chat/
-│   ├── Google Voice/
-│   ├── Google Mail/       # MBOX archives and extracted attachments
-│   └── messagehub.db      # SQLite database (FTS5 indexed) containing all message data
-├── scripts/               # Python processing scripts
-│   ├── parsers/           # Platform-specific parsers (FB, IG, GChat, GVoice, GMail)
-│   ├── ingest.py          # Main script: Zip extraction + DB Ingestion
-│   └── utils.py           # Shared logic
-├── webapp/                # Next.js frontend application
-│   ├── src/
-│   │   ├── components/    # Reusable UI atoms
-│   │   ├── sections/      # Major page layout blocks
-│   │   ├── pages/         # Next.js pages, API routes, and page-level CSS modules
-│   │   ├── styles/        # Global/Shared CSS
-│   │   ├── lib/           # Shared logic and server-side utilities
-│   │   └── types/         # Shared TypeScript interfaces
-└── README.md              # This file
-```
-
-## Setup & Usage
-
-### 1. Data Export & Prerequisites
-
-**Prerequisites:**
-
-- **Node.js 18+** (for the web application)
-- **Python 3.10+** (for the ingestion engine)
-  - *Note for Linux/Ubuntu users:* Run `sudo apt install python3-venv` to enable virtual environment creation.
-- **Node Native Build Tools**: On Linux, you may need `build-essential` to compile the `better-sqlite3` database driver.
-- **Virtual Environment**: Managed automatically (created at `./venv` on first run).
-
-### Troubleshooting
-
-- **"Module did not self-register" Error**: This happens if you change your Node.js version or upgrade your OS. Fix it by running:
-  ```bash
-  cd webapp && npm rebuild better-sqlite3
-  ```
-- **SQLite "trigram" error**: Ensure your system SQLite is 3.34+ (Ubuntu 22.04+). If you are on an older system, the app will attempt to use `pysqlite3-binary` automatically if installed in the venv.
-
-#### Exporting Data
-
-**Facebook:**
-
-1. Go to [**Accounts Center** > **Your information and permissions** > **Export your information**](https://accountscenter.facebook.com/info_and_permissions/dyi).
-2. **Create export** > **Facebook** > **Export to device**
-3. **Customize information**:
-   - **Your Facebook activity** > **Messages**
-   - **Personal information** > **Profile information** (Required for "You" detection)
-4. **Format** > **JSON**
-5. **Start export**
-
-> [!TIP] > **Incremental Exports & Safe Imports**: Meta allows you to export a **custom date range**. Since MessageHub automatically handles **duplicate messages**, you can import newer date ranges without worrying about overlapping data or double-counting messages in your database.
-
-> [!TIP] > **Media quality** (Higher vs. Lower) is a personal preference for your viewing experience. It has **no impact** on the DataForge AI Studio or LLM data training, as the studio only processes text and reaction metadata.
-
-**Instagram:**
-
-1. Go to [**Accounts Center** > **Your information and permissions** > **Export your information**](https://accountscenter.facebook.com/info_and_permissions/dyi).
-2. **Create export** > **Instagram** > **Export to device**
-3. **Customize information**:
-   - **Your Instagram activity** > **Messages**
-   - **Personal information** > **Personal information**
-4. **Format** > **JSON**
-5. **Start export**
-
-**Google:**
-
-1. Go to [Google Takeout](https://takeout.google.com/).
-2. Select **Google Chat**, **Voice**, and **Mail** as desired.
-3. For **Mail**:
-   - **Crucial for DataForge AI:** Make sure the **"Sent"** folder is included, as this contains your authentic writing voice for LLM training.
-4. Click **Next Step**.
-5. Select your preferred file type (**both .zip and .tgz are supported**) and change the file size to 4 GB or larger to minimize split archives.
-6. Click **Create export**.
+-   **Integrated Setup Wizard:** Automatically configure your workspace, import archives, and build your database with zero command-line interaction.
+-   **Unified Dashboard:** Toggle between Facebook Messenger, Instagram DMs, Google Chat, Google Voice, and Gmail histories.
+-   **Global Search:** Search all archives with support for **glob-like syntax** in queries and **selection filtering**. Click any result to **jump** to that message in its original context.
+-   **Smart Ingestion:** Automatically handles duplicate messages across overlapping exports and supports incremental updates.
+-   **DataForge AI Studio:** Select specific threads, filter system noise, and generate formatted JSONL datasets for OpenAI fine-tuning.
 
 ---
 
-### 2. Configuration (.env)
+## 🚀 Quick Start (Run & Setup)
 
-You don't need to create this file manually. The **Setup Wizard** will automatically initialize a `.env` file in the project root during your first run. It stores your workspace location and security boundaries:
+Run the start script to automatically initialize the environment, build the application, and launch the **Setup Wizard**.
 
-```bash
-# Path to your active data directory
-WORKSPACE_PATH="/path/to/your/data"
-
-# Security boundaries for the file explorer (auto-set to your home directory)
-ROOT_IMPORT_PATH="/Users/yourname"
-ROOT_WORKSPACE_PATH="/Users/yourname"
-
-# Optional: Instagram Auth for unauthenticated link previews
-INSTAGRAM_AUTH={"sessionid":"<sessionid>","csrftoken":"<csrftoken>"}
-```
-
-#### (Optional) Getting Instagram Auth
-
-To enable rich link previews for Instagram links (bypassing login walls):
-
-1. Log in to [Instagram](https://instagram.com).
-2. Open Developer Tools (F12) -> Network Tab.
-3. Refresh and find a request to `instagram.com`.
-4. Copy the `Cookie` header values for `sessionid` and `csrftoken`.
-
----
-
----
-
-### 3. Quick Start (Run & Setup)
-
-MessageHub comes with a unified start script that handles Python environment setup, all necessary dependency installations, and launching the application.
-
-**Mac / Linux:**
+**Mac / Linux / WSL** (Windows requires WSL):
 
 ```bash
 ./start.sh
 ```
 
-**Windows:**
-
-```batch
-start.bat
-```
-
-1.  **Automated Environment**: The script will create a `./venv` and run `npm install` automatically on the first run.
-2.  **App Ready**: Once the server starts, open [http://localhost:3000](http://localhost:3000).
-3.  **Setup Wizard**: You will be greeted by the **Setup Wizard** to configure your workspace and import your data.
+*Note: The first run includes an automated production build; subsequent starts are significantly faster.*
 
 ---
 
-### 4. Setup Wizard Flow
+## 🛠 Setup & Workflow
+
+### 1. Requirements & Troubleshooting
+
+Before running the start script, ensure you have:
+-   **Node.js 20+**
+-   **Python 3.10+**
+-   **Supported Environments**: Mac, Linux, and **WSL**. (Native Windows CMD/PowerShell is not supported).
+
+#### Troubleshooting
+-   **Linux/WSL users**: If the script fails to create a virtual environment, run: `sudo apt install python3-venv`.
+-   **"Module did not self-register"**: If you change Node versions or upgrade your OS, run: `cd webapp && npm rebuild better-sqlite3`.
+-   **SQLite "trigram" error**: Ensure your system SQLite is 3.34+ (Ubuntu 22.04+).
+
+### 2. Exporting Your Data
+
+#### Facebook
+1.  Go to [**Accounts Center** > **Export your information**](https://accountscenter.facebook.com/info_and_permissions/dyi).
+2.  **Create export** > **Facebook** > **Export to device**.
+3.  **Customize information**: Select **Messages** and **Profile information** (Required for "You" detection).
+4.  **Format**: **JSON**.
+
+#### Instagram
+1.  Go to [**Accounts Center** > **Export your information**](https://accountscenter.facebook.com/info_and_permissions/dyi).
+2.  **Create export** > **Instagram** > **Export to device**.
+3.  **Customize information**: Select **Messages** and **Personal information**.
+4.  **Format**: **JSON**.
+
+#### Google (Chat, Voice, Gmail)
+1.  Go to [Google Takeout](https://takeout.google.com/).
+2.  Select **Google Chat**, **Voice**, and **Mail**.
+3.  For **Mail**: Ensure the **"Sent"** folder is included.
+4.  **Format**: Both **.zip** and **.tgz** are supported.
+
+> [!TIP]
+> **Incremental Exports**: MessageHub automatically handles duplicate messages, so it is safe to import overlapping date ranges.
+
+### 3. Setup Wizard Flow
 
 1.  **Welcome**: Click **"Get Started"** on the splash screen.
-2.  **Workspace**: Select any folder on your machine where you want your database and settings to live.
-3.  **Import**: Select your exported `.zip` / `.tar.gz` files using the in-app file explorer to stage them for ingestion.
-4.  **Confirm & Process**: Click **"Confirm"** then **"Start Processing"**. MessageHub handles extraction, merging, and indexing automatically.
+2.  **Workspace**: Select the folder where your database and settings will live.
+3.  **Import**: Select your exported `.zip` / `.tar.gz` files using the in-app file explorer to stage them.
+4.  **Confirm & Process**: MessageHub handles extraction, merging, and indexing automatically.
 5.  **Review**: Once complete, enter your dashboard to search and browse your messages.
 
-> [!NOTE]
-> It is safe to re-import the same files or overlapping archives. MessageHub uses a unique constraint to ensure each message is only stored once.
-
 ---
 
-### 5. DataForge AI (Fine-Tuning Studio)
+## 🤖 DataForge AI (Fine-Tuning Studio)
 
-MessageHub includes a tool to create **"Virtual You"** datasets for training AI models.
+Create **"Virtual You"** datasets for training AI models.
 
 1.  Click the **Robot Icon (🤖)** in the top header.
-2.  **Filter & Select**: Choose threads that represent your best writing (high quality, recent).
-3.  **Configure**:
-    - **Identity**: Enter your name(s) so the AI knows who "Assistant" is.
-    - **Cleanup**: Auto-remove system messages ("You missed a call") and PII (emails/phones).
-    - **Reactions**: Convert reactions (👍) into text replies (`[Reacted "👍"]`) for better context.
-4.  **Generate**: The server will process thousands of messages in the background and produce a `.zip` containing optimized `.jsonl` files ready for upload to OpenAI.
+2.  **Filter & Select**: Choose threads that represent your best writing.
+3.  **Configure**: Set your Identity (names), Cleanup rules, and Reaction handing.
+4.  **Generate**: The server produces a `.zip` containing optimized `.jsonl` files ready for OpenAI fine-tuning.
 
 ---
 
-### 6. Manual Ingestion (CLI)
+## 🔧 Maintenance & Advanced Usage
 
-If you prefer to run ingestion headlessly via CLI, you can still access the underlying pipeline:
+### Maintenance Scripts (from `webapp/`)
+-   `npm run validate`: Runs linting (with auto-fix), formatting, type-checking, and tests.
+-   `npm run clean`: Deletes the `.next` production build to force a fresh build.
+-   `npm run clean:all`: Factory reset. Deletes build, `venv`, and `data_samples`.
 
-1.  **Configure environment**: Assign `WORKSPACE_PATH` in your `.env`.
-2.  **Move Archives**: Place your `.zip` / `.tar.gz` files in the workspace directory.
-3.  **Run Ingest**: (Defaults to scanning your workspace if no source is provided)
+### Manual Ingestion (CLI)
+Ensure `WORKSPACE_PATH` is set in your `.env`, then run:
+```bash
+./venv/bin/python3 scripts/ingest.py
+```
 
-    ```bash
-    # Mac / Linux
-    ./venv/bin/python3 scripts/ingest.py
+### Development & Testing
+Build a sample workspace using the **"Golden Archives"**:
+```bash
+./build_samples.sh
+```
 
-    # Windows
-    venv\Scripts\python scripts\ingest.py
-    ```
+---
 
-## Technical Details
+## 📝 Technical Overview
 
-- **Interface:** Next.js, React, Tailwind CSS (optional)
-- **Database:** SQLite with **FTS5 Trigram** indexing for sub-second global search
-- **Ingestion:** Python 3.10+ (multithreaded)
+### Project Structure
+```
+MessageHub/
+├── data/                  # Default workspace location
+├── scripts/               # Python processing scripts (Parsers & Ingestion)
+├── webapp/                # Next.js frontend application
+└── README.md
+```
 
-## Development & Testing
+### Technical Details
+-   **Interface:** Next.js, React, Vanilla CSS.
+-   **Database:** SQLite with **FTS5 Trigram** indexing for sub-second global search.
+-   **Ingestion:** Python 3.10+ (multithreaded).
 
-MessageHub includes a set of **"Golden Archives"** for local testing without using your private data.
-
-1.  **Golden Archives**: Located in `samples/`, these are tiny, anonymized examples of each supported platform's data format.
-2.  **Build Sample Workspace**: Run the following to create a `data_samples/` directory and populate it with a test database:
-
-    ```bash
-    # Mac/Linux
-    ./build_samples.sh
-
-    # Windows
-    build_samples.bat
-    ```
-
-3.  **Run with Samples**: You can temporarily point the app at this workspace in your `.env`:
-    ```bash
-    WORKSPACE_PATH="/path/to/MessageHub/data_samples"
-    ```
+### Configuration (.env)
+Managed automatically by the **Setup Wizard**.
+```bash
+WORKSPACE_PATH="/path/to/your/data"
+ROOT_IMPORT_PATH="/Users/yourname"
+ROOT_WORKSPACE_PATH="/Users/yourname"
+INSTAGRAM_AUTH={"sessionid":"...","csrftoken":"..."}
+```

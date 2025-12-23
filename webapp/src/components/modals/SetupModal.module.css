@@ -54,6 +54,9 @@
 }
 
 .closeButton {
+  position: absolute;
+  top: 15px;
+  right: 15px;
   background: none;
   border: none;
   color: var(--text-secondary);
@@ -66,9 +69,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  transition:
-    background 0.2s,
-    color 0.2s;
+  transition: all 0.2s;
+  z-index: 100;
 }
 
 .closeButton:not(:disabled):hover {
@@ -356,6 +358,7 @@
   height: 100%;
   display: flex;
   flex-direction: column;
+  position: relative; /* For absolute close button */
 }
 
 .setupContainer {
@@ -696,6 +699,15 @@
 .sidebarCloseBtn {
   width: 100%;
   justify-content: center;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.sidebarCloseBtn:hover {
+  background: var(--bg-primary) !important;
+  border-color: var(--bubble-sent-bg) !important;
+  color: var(--bubble-sent-bg) !important;
 }
 
 .spacingBottom20 {
