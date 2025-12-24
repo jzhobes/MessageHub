@@ -1,4 +1,4 @@
-import React, { ReactNode } from 'react';
+import React, { ReactNode, forwardRef } from 'react';
 import styles from './TextInput.module.css';
 
 interface TextInputProps extends React.InputHTMLAttributes<HTMLInputElement> {
@@ -6,7 +6,7 @@ interface TextInputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   suffix?: ReactNode; // Suffix adornment for actions/icons at the end
 }
 
-export const TextInput = React.forwardRef<HTMLInputElement, TextInputProps>(
+export const TextInput = forwardRef<HTMLInputElement, TextInputProps>(
   ({ adornment, suffix, className, ...props }, ref) => {
     return (
       <div className={`${styles.inputWrapper} ${className || ''}`}>

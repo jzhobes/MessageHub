@@ -122,7 +122,7 @@ def clean_json_messages(directory, platforms=None):
     deleted_count = 0
     reclaimed_bytes = 0
 
-    print(f"Cleaning JSON message files in {directory} (Targets: {', '.join(platforms)})...")
+    print(f"Cleaning JSON message and profile files in {directory} (Targets: {', '.join(platforms)})...")
 
     # Walk directory
     for root, dirs, files in os.walk(directory):
@@ -147,9 +147,18 @@ def clean_json_messages(directory, platforms=None):
             if not is_target:
                 continue
 
+        # Files to target for deletion
+        targets = {
+            "messages.json",
+            "profile_information.json",
+            "personal_information.json",
+            "user_info.json",
+        }
+
         for f in files:
             # Match standard Facebook/Instagram/Google patterns
-            if f == "messages.json" or (f.startswith("message_") and f.endswith(".json")):
+            is_message_json = f.startswith("message_") and f.endswith(".json")
+            if f in targets or is_message_json:
                 file_path = root_path / f
                 try:
                     size = file_path.stat().st_size
@@ -165,8 +174,7 @@ def clean_json_messages(directory, platforms=None):
 
 def clean_google_voice_files(data_dir=WORKSPACE_PATH):
     """
-    Deletes processed Google Voice HTML files to save space.
-    Target: Voice/Calls/*.html
+    Deletes processed Google Voice files (HTML and VCF) to save space.
     """
     voice_root = Path(data_dir) / "Voice"
     # Also check nested Takeout
@@ -178,11 +186,11 @@ def clean_google_voice_files(data_dir=WORKSPACE_PATH):
         else:
             return  # No Google Voice data found
 
-    print("Cleaning up Google Voice HTML files...")
+    print("Cleaning up Google Voice source files...")
     deleted_count = 0
     reclaimed_bytes = 0
 
-    # Folders to clean
+    # 1. Clean HTML files in specific folders
     targets = ["Calls", "Spam", "Trash", "Archive"]
 
     for t in targets:
@@ -198,6 +206,17 @@ def clean_google_voice_files(data_dir=WORKSPACE_PATH):
                 reclaimed_bytes += size
             except Exception as e:
                 print(f"Error deleting {f}: {e}")
+
+    # 2. Clean Phones.vcf
+    vcf = voice_root / "Phones.vcf"
+    if vcf.exists():
+        try:
+            size = vcf.stat().st_size
+            vcf.unlink()
+            deleted_count += 1
+            reclaimed_bytes += size
+        except Exception as e:
+            print(f"Error deleting {vcf}: {e}")
 
     mb = reclaimed_bytes / (1024 * 1024)
     print(f"Google Voice Cleanup Complete. Deleted {deleted_count} files ({mb:.2f} MB).")

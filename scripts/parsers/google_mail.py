@@ -1,9 +1,10 @@
-import mailbox
 import json
+import mailbox
 import re
-from pathlib import Path
-from email.utils import parsedate_to_datetime, parseaddr, getaddresses
 from email.header import decode_header
+from email.utils import getaddresses, parseaddr, parsedate_to_datetime
+from pathlib import Path
+
 from bs4 import BeautifulSoup
 from utils import fix_text
 
@@ -265,8 +266,12 @@ def map_cid_to_local(html, media):
     return html
 
 
-def ingest_google_mail_mbox(cursor, mbox_path):
-    """Ingests a Google Takeout MBOX file into the database."""
+def ingest_google_mail_mbox(cursor, mbox_path, identity_stats):
+    """
+    Ingests a Google Takeout MBOX file into the database.
+    Updates identity_stats (email -> { 'names': set(), 'count': int }) in-place.
+    Returns: (msg_total, skipped_total)
+    """
     mbox_file = Path(mbox_path)
     if not mbox_file.exists():
         return 0, 0
@@ -281,6 +286,21 @@ def ingest_google_mail_mbox(cursor, mbox_path):
 
     for i, message in enumerate(mbox):
         try:
+            # 0. Collect 'To' stats for identity discovery
+            to_header = str(message.get("to", ""))
+            if to_header:
+                addr_list = getaddresses([to_header])
+                for name, addr in addr_list:
+                    if not addr:
+                        continue
+                    addr = addr.lower().strip()
+                    if addr not in identity_stats:
+                        identity_stats[addr] = {"names": set(), "count": 0}
+                    identity_stats[addr]["count"] += 1
+                    if name:
+                        decoded_name = fix_text(decode_mime_header(name))
+                        if decoded_name:
+                            identity_stats[addr]["names"].add(decoded_name)
             # 1. Identity
             gm_thrid = message.get("X-GM-THRID")
             if not gm_thrid:
@@ -445,3 +465,20 @@ def ingest_google_mail_mbox(cursor, mbox_path):
         )
 
     return msg_total, skipped_total
+
+
+def discover_google_mail_identity(gmail_identity_stats):
+    """
+    Determines the most likely owner of the Gmail account based on 'To' field counts.
+    Returns: (best_email, names, count) or None
+    """
+    if not gmail_identity_stats:
+        return None
+
+    # Sort by message count descending
+    sorted_emails = sorted(gmail_identity_stats.items(), key=lambda x: x[1]["count"], reverse=True)
+    if not sorted_emails:
+        return None
+
+    best_email, data = sorted_emails[0]
+    return best_email, list(data["names"]), data["count"]

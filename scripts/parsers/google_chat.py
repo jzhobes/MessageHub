@@ -1,6 +1,8 @@
 import json
 import re
+import sys
 from pathlib import Path
+
 from utils import fix_text, parse_iso_time
 
 
@@ -192,3 +194,21 @@ def ingest_google_chat_thread(cursor, thread_dir):
         )
 
     return msg_count, skipped_count
+
+
+def discover_google_chat_identity(scan_path):
+    """Scans for Google Chat profile information files to discover user identity."""
+    root = Path(scan_path) / "Google Chat/Users"
+    if root.exists():
+        try:
+            for user_dir in root.glob("User *"):
+                info_file = user_dir / "user_info.json"
+                if info_file.exists():
+                    with info_file.open("r", encoding="utf-8") as f:
+                        data = json.load(f)
+                        name = data.get("user", {}).get("name")
+                        if name:
+                            return name
+        except Exception as e:
+            print(f"  [Error] Failed to parse Google Chat identity info: {e}", file=sys.stderr)
+    return None

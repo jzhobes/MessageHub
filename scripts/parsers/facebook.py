@@ -1,6 +1,7 @@
 import json
-
+import sys
 from pathlib import Path
+
 from utils import fix_text
 
 
@@ -149,3 +150,35 @@ def ingest_facebook_instagram_thread(cursor, thread_dir, platform, thread_id_ove
         )
 
     return msg_count, skipped_count
+
+
+def discover_facebook_identity(scan_path):
+    """Scans for Facebook profile information files to discover user identity."""
+    p = Path(scan_path) / "Facebook/profile_information/profile_information.json"
+    if p.exists():
+        try:
+            with p.open("r", encoding="utf-8") as f:
+                data = json.load(f)
+                name = data.get("profile_v2", {}).get("name", {}).get("full_name")
+                if name:
+                    return name
+        except Exception as e:
+            print(f"  [Error] Failed to parse Facebook identity file {p}: {e}", file=sys.stderr)
+    return None
+
+
+def discover_instagram_identity(scan_path):
+    """Scans for Instagram profile information files to discover user identity."""
+    p = Path(scan_path) / "Instagram/personal_information/personal_information/personal_information.json"
+    if p.exists():
+        try:
+            with p.open("r", encoding="utf-8") as f:
+                data = json.load(f)
+                profile_user = data.get("profile_user", [])
+                if profile_user:
+                    name = profile_user[0].get("string_map_data", {}).get("Name", {}).get("value")
+                    if name:
+                        return name
+        except Exception as e:
+            print(f"  [Error] Failed to parse Instagram identity file {p}: {e}", file=sys.stderr)
+    return None

@@ -1,6 +1,7 @@
 import { promises as fs } from 'fs';
 import path from 'path';
 import appConfig from '@/lib/shared/appConfig';
+import db from './db';
 
 interface FacebookProfile {
   profile_v2?: {
@@ -26,16 +27,35 @@ interface GoogleChatUserInfo {
   };
 }
 
-interface GmailForwardingInfo {
-  addresses?: string[];
-}
-
 /**
  * Discovers potential names for the current user ("Me")
- * by scanning profile JSON files in the data directory.
+ * by checking the database first, then falling back to scanning profile files.
  */
 export async function getMyNames(): Promise<string[]> {
   const myNamesSet = new Set<string>(['Me']);
+
+  // 1. Try reading from the identities table in the database
+  try {
+    if (db.exists()) {
+      const conn = db.get();
+      // Check if the table exists first (it might not if setup hasn't run)
+      const tableCheck = conn.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='identities'").get();
+      if (tableCheck) {
+        const rows = conn
+          .prepare("SELECT id_value FROM identities WHERE is_me = 1 AND id_type IN ('name', 'email')")
+          .all() as { id_value: string }[];
+        rows.forEach((r) => myNamesSet.add(r.id_value));
+
+        if (myNamesSet.size > 1) {
+          return Array.from(myNamesSet);
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('[Identity] Could not read identities from DB, falling back to discovery:', e);
+  }
+
+  // 2. Fallback Discovery Logic (Scanning JSON Files)
   const dataDir = appConfig.WORKSPACE_PATH;
 
   // Dynamically find Google Chat user info
@@ -57,7 +77,7 @@ export async function getMyNames(): Promise<string[]> {
       }
     }
   } catch {
-    // Directory missing or inaccessible, skip Google Chat discovery
+    // Directory missing or inaccessible
   }
 
   const profileSources = [
@@ -76,10 +96,6 @@ export async function getMyNames(): Promise<string[]> {
     {
       path: googleChatUserPath,
       extract: (data: GoogleChatUserInfo) => data?.user?.name,
-    },
-    {
-      path: path.join(dataDir, 'Mail/User Settings/Forwarding Addresses.json'),
-      extract: (data: GmailForwardingInfo) => data?.addresses,
     },
   ];
 
@@ -101,7 +117,7 @@ export async function getMyNames(): Promise<string[]> {
     } catch {}
   }
 
-  // Fallback if configured via ENV (optional future proofing)
+  // Optional ENV fallback
   if (process.env.MY_NAME) {
     myNamesSet.add(process.env.MY_NAME);
   }

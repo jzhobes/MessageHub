@@ -1,5 +1,6 @@
 import json
 import re
+from pathlib import Path
 from bs4 import BeautifulSoup
 from utils import fix_text, parse_iso_time
 
@@ -209,16 +210,16 @@ def ingest_google_voice_thread(cursor, thread_data):
     return msg_count, skipped_count
 
 
-def scan_google_voice(cursor, voice_root):
+def ingest_google_voice(cursor, voice_root):
     """
-    Scans the Google Voice directory structure.
+    Scans the Google Voice directory structure and ingests messages.
     Virtualizes 'Threads' by grouping filenames by the mentioned phone number.
     """
     from pathlib import Path
 
     calls_dir = Path(voice_root) / "Calls"
     if not calls_dir.exists():
-        return
+        return 0, 0
 
     print("Scanning Google Voice data...")
 
@@ -254,6 +255,7 @@ def scan_google_voice(cursor, voice_root):
         count += 1
 
     print(f"Found {count} Google Voice metadata files across {len(file_groups)} threads.")
+    print("Starting processing...")
 
     # 2. Ingest groups
     processed_threads = 0
@@ -270,3 +272,27 @@ def scan_google_voice(cursor, voice_root):
             print(f"  ... Processed {processed_threads} GV threads...")
 
     print(f"Google Voice Ingestion Complete: {total_msgs} messages, {total_skipped} skipped.")
+    return total_msgs, total_skipped
+
+
+def discover_google_voice_identity(scan_path):
+    """
+    Attempts to discover the Google Voice phone number from Phones.vcf.
+    Returns the number if found, otherwise returns None.
+    """
+    p = Path(scan_path) / "Voice/Phones.vcf"
+    if p.exists():
+        try:
+            with p.open("r", encoding="utf-8") as f:
+                content = f.read()
+                # Look for a number followed by the Google Voice label
+                # Typical structure:
+                # item1.TEL:+15555555555
+                # item1.X-ABLabel:Google Voice
+                match = re.search(r"item(\d+)\.TEL:(.*?)\nitem\1\.X-ABLabel:Google Voice", content, re.MULTILINE)
+                if match:
+                    return match.group(2).strip()
+        except Exception:
+            pass
+
+    return None

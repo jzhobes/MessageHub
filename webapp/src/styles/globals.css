@@ -126,7 +126,11 @@ body {
 /* --- Baseline Interactive Elements --- */
 
 /* Reset for button elements to behave like clean boxes */
-.btn-reset {
+.btn-reset,
+.btn,
+.btn-primary,
+.btn-secondary,
+.btn-ghost {
   background: none;
   border: none;
   padding: 0;
@@ -145,9 +149,10 @@ body {
   cursor: default;
 }
 
-/* Standard Premium Button */
-.btn {
-  composes: btn-reset;
+/* Standard Premium Button - Base Styles */
+.btn,
+.btn-primary,
+.btn-secondary {
   padding: 8px 16px;
   border-radius: var(--radius-1);
   font-weight: 600;
@@ -156,9 +161,9 @@ body {
 }
 
 .btn-primary {
-  composes: btn;
   background: var(--bubble-sent-bg);
   color: white;
+  border: none;
 }
 
 .btn-primary:not(:disabled):hover {
@@ -174,7 +179,6 @@ body {
 }
 
 .btn-secondary {
-  composes: btn;
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
   color: var(--text-primary);
@@ -191,7 +195,6 @@ body {
 
 /* Ghost / Action Button (used in nav, bars, etc) */
 .btn-ghost {
-  composes: btn-reset;
   padding: 8px;
   border-radius: var(--radius-1);
 }

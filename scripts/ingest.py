@@ -1,7 +1,6 @@
 import argparse
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import json
 import os
-from pathlib import Path
 import shutil
 import sqlite3
 import sys
@@ -9,14 +8,22 @@ import tarfile
 import threading
 import time
 import zipfile
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
 
-from parsers.facebook import ingest_facebook_entry, ingest_instagram_entry
-from parsers.google_chat import ingest_google_chat_thread
-from parsers.google_voice import scan_google_voice
-from parsers.google_mail import ingest_google_mail_mbox
+# Local parser imports
+from parsers.facebook import (
+    discover_facebook_identity,
+    discover_instagram_identity,
+    ingest_facebook_entry,
+    ingest_instagram_entry,
+)
+from parsers.google_chat import discover_google_chat_identity, ingest_google_chat_thread
+from parsers.google_mail import discover_google_mail_identity, ingest_google_mail_mbox
+from parsers.google_voice import discover_google_voice_identity, ingest_google_voice
 from utils import (
-    WORKSPACE_PATH,
     PROJECT_ROOT,
+    WORKSPACE_PATH,
     clean_google_voice_files,
     clean_json_messages,
     merge_folders,
@@ -47,7 +54,7 @@ CREATE TABLE IF NOT EXISTS messages (
     media_json TEXT,         -- JSON array: [{"uri": "path/to/file", "type": "image"}]
     reactions_json TEXT,     -- JSON array: [{"reaction": "❤️", "actor": "Name"}]
     share_json TEXT,         -- JSON object: {"link": "url", "share_text": "..."}
-    annotations_json TEXT,   -- JSON array: Google Chat annotations (links, mentions)
+    annotations_json TEXT,   -- JSON array: Google Chat annotations
     
     -- Constraint to prevent duplicates from overlapping exports
     UNIQUE(thread_id, sender_name, timestamp_ms, content)
@@ -75,6 +82,15 @@ CREATE TRIGGER IF NOT EXISTS messages_au AFTER UPDATE ON messages BEGIN
     INSERT INTO messages_fts(messages_fts, rowid, content) VALUES('delete', old.id, old.content);
     INSERT INTO messages_fts(rowid, content) VALUES (new.id, new.content);
 END;
+
+CREATE TABLE IF NOT EXISTS identities (
+    platform TEXT,
+    id_type TEXT, -- 'email', 'name', 'id'
+    id_value TEXT,
+    is_me BOOLEAN DEFAULT 0,
+    metadata_json TEXT, -- Optional: extra names, counts, etc.
+    PRIMARY KEY (platform, id_type, id_value)
+);
 
 CREATE INDEX IF NOT EXISTS idx_messages_thread_id ON messages(thread_id);
 CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON messages(timestamp_ms);
@@ -147,41 +163,34 @@ def scan_directory(scan_path, db_path, platform_filter="all", limit_platforms=No
 
     # Count Standard Chat Files
     for root, dirs, files in os.walk(scan_path):
-        if "message_1.json" in files or "messages.json" in files:
-            p_root = Path(root)
-            path_str = str(p_root).lower()
+        p_root = Path(root)
+        path_str = str(p_root).lower()
 
-            # Platform detection
-            is_chat = "google chat" in path_str
-            is_fb = "facebook" in path_str or "messenger" in path_str
-            is_insta = "instagram" in path_str
+        # Check for message markers
+        if "message_1.json" not in files and "messages.json" not in files:
+            continue
 
-            # Platform filtering
-            target_platform = None
-            if is_chat:
-                target_platform = "google_chat"
-            elif is_fb:
-                target_platform = "facebook"
-            elif is_insta:
-                target_platform = "instagram"
+        # Platform detection mapping
+        platform_map = {
+            "google chat": "google_chat",
+            "facebook": "facebook",
+            "messenger": "facebook",
+            "instagram": "instagram",
+        }
 
-            if not target_platform:
-                continue
+        detected_platform = next((v for k, v in platform_map.items() if k in path_str), None)
+        if not detected_platform:
+            continue
 
-            # 1. Check --platform flag
-            if platform_filter != "all" and platform_filter != target_platform:
-                continue
+        # Platform filtering
+        if platform_filter != "all" and platform_filter != detected_platform:
+            continue
+        if limit_platforms is not None and detected_platform not in limit_platforms:
+            continue
 
-            # 2. Check Archive Detection (Archive-Driven)
-            if limit_platforms is not None and target_platform not in limit_platforms:
-                continue
-
-            if target_platform == "google_chat":
-                files_to_process.append((1, p_root, "google_chat"))
-            elif target_platform == "facebook":
-                files_to_process.append((2, p_root, "facebook"))
-            elif target_platform == "instagram":
-                files_to_process.append((3, p_root, "instagram"))
+        # Add to work queue with arbitrary but consistent priority
+        priority_map = {"google_chat": 1, "facebook": 2, "instagram": 3}
+        files_to_process.append((priority_map[detected_platform], p_root, detected_platform))
 
     total_files_count = len(files_to_process)
     print(f"[TotalFiles]: {total_files_count}")  # Signal for UI
@@ -192,6 +201,10 @@ def scan_directory(scan_path, db_path, platform_filter="all", limit_platforms=No
     total_skipped = 0
     processed_dirs = set()
 
+    # Identity tracking
+    gmail_identity_stats = {}
+    discovered_identities = set()
+
     for _, p_root, platform_type in files_to_process:
         if p_root in processed_dirs:
             continue
@@ -200,19 +213,48 @@ def scan_directory(scan_path, db_path, platform_filter="all", limit_platforms=No
         skipped = 0
 
         if platform_type == "google_voice":
-            scan_google_voice(cursor, p_root)
+            if "google_voice" not in discovered_identities:
+                gv_name = discover_google_voice_identity(scan_path)
+                if gv_name:
+                    print(f"[Identity]: Discovered Google Voice number as {gv_name}")
+                    save_identity(cursor, "google_voice", "name", gv_name, is_me=True)
+                discovered_identities.add("google_voice")
+            print(f"[Ingesting]: Google Voice - {p_root.name}")
+            count, skipped = ingest_google_voice(cursor, p_root)
+
         elif platform_type == "google_chat":
+            if "google_chat" not in discovered_identities:
+                gc_name = discover_google_chat_identity(scan_path)
+                if gc_name:
+                    print(f"[Identity]: Discovered Google Chat owner as {gc_name}")
+                    save_identity(cursor, "google_chat", "name", gc_name, is_me=True)
+                discovered_identities.add("google_chat")
             print(f"[Ingesting]: Google Chat - {p_root.name}")
             count, skipped = ingest_google_chat_thread(cursor, p_root)
+
         elif platform_type == "facebook":
+            if "facebook" not in discovered_identities:
+                fb_name = discover_facebook_identity(scan_path)
+                if fb_name:
+                    print(f"[Identity]: Discovered Facebook owner as {fb_name}")
+                    save_identity(cursor, "facebook", "name", fb_name, is_me=True)
+                discovered_identities.add("facebook")
             print(f"[Ingesting]: Facebook - {p_root.name}")
             count, skipped = ingest_facebook_entry(cursor, p_root)
+
         elif platform_type == "instagram":
+            if "instagram" not in discovered_identities:
+                ig_name = discover_instagram_identity(scan_path)
+                if ig_name:
+                    print(f"[Identity]: Discovered Instagram owner as {ig_name}")
+                    save_identity(cursor, "instagram", "name", ig_name, is_me=True)
+                discovered_identities.add("instagram")
             print(f"[Ingesting]: Instagram - {p_root.name}")
             count, skipped = ingest_instagram_entry(cursor, p_root)
+
         elif platform_type == "google_mail":
             print(f"[Ingesting]: Google Mail - {p_root.name}")
-            count, skipped = ingest_google_mail_mbox(cursor, p_root)
+            count, skipped = ingest_google_mail_mbox(cursor, p_root, gmail_identity_stats)
 
         if count > 0 or skipped > 0:
             total_threads += 1
@@ -223,10 +265,40 @@ def scan_directory(scan_path, db_path, platform_filter="all", limit_platforms=No
                 conn.commit()
                 print(f"  [Committed]: {total_threads} threads ({total_msgs} messages, {total_skipped} skipped)")
 
-    conn.commit()
+    # Finalize identities
+    if gmail_identity_stats:
+        finalize_gmail_identity(cursor, gmail_identity_stats)
+
     conn.close()
     print(f"Done! Processed {total_threads} standard threads and {total_msgs} messages.")
     print(f"Skipped {total_skipped} duplicate messages.")
+
+
+def save_identity(cursor, platform, id_type, id_value, is_me=False, metadata=None):
+    """Inserts or updates an identity record safely."""
+    cursor.execute(
+        """
+        INSERT OR REPLACE INTO identities (platform, id_type, id_value, is_me, metadata_json)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (platform, id_type, id_value, 1 if is_me else 0, json.dumps(metadata) if metadata else None),
+    )
+
+
+def finalize_gmail_identity(cursor, gmail_identity_stats):
+    """Determines the most likely owner of the Gmail account based on 'To' field counts."""
+    result = discover_google_mail_identity(gmail_identity_stats)
+    if not result:
+        return
+
+    best_email, names, count = result
+    print(f"[Identity]: Identified Gmail owner as {best_email} ({count} messages)")
+
+    save_identity(cursor, "google_mail", "email", best_email, is_me=True, metadata={"count": count, "names": names})
+
+    # Also register the names as 'Me' for this platform
+    for name in names:
+        save_identity(cursor, "google_mail", "name", name, is_me=True)
 
 
 def extract_zips_found(search_dirs, target_root, platform_filter="all"):
@@ -566,6 +638,8 @@ def start_ingestion():
             cleanup_targets.append("facebook")
         if "instagram" in detected_platforms:
             cleanup_targets.append("instagram")
+        if "google_chat" in detected_platforms:
+            cleanup_targets.append("google_chat")
 
         print("\n--- Cleanup ---")
 

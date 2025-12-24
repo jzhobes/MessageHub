@@ -140,7 +140,7 @@ export function StudioControls({
           </Dropdown>
         </div>
 
-        <span className={styles.resultsCount}>{selectedIds.size} selected</span>
+        <span className={styles.resultsCount}>{selectedIds.size.toLocaleString()} selected</span>
       </div>
     </div>
   );

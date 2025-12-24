@@ -431,7 +431,7 @@ export default function Studio() {
                     <span className={styles.label}>Selected Statistics:</span>
                     <div className={styles.statsGroup}>
                       <div>
-                        <div className={styles.statValue}>{selectedIds.size}</div>
+                        <div className={styles.statValue}>{selectedIds.size.toLocaleString()}</div>
                         <div className={styles.statLabel}>Threads</div>
                       </div>
                       <div>
@@ -470,7 +470,7 @@ export default function Studio() {
                   >
                     {generating
                       ? `Processing... ${progress.total > 0 ? Math.round((progress.current / progress.total) * 100) + '%' : ''}`
-                      : `Generate Dataset (${selectedIds.size})`}
+                      : `Generate Dataset (${selectedIds.size.toLocaleString()})`}
                   </button>
                   {generating && (
                     <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: 8 }}>
