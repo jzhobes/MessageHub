@@ -9,7 +9,7 @@ import {
   FaFileArchive,
 } from 'react-icons/fa';
 
-import { Message } from '@/lib/shared/types';
+import { ContentRecord } from '@/lib/shared/types';
 
 import LazyView from './LazyView';
 import LinkPreview from './LinkPreview';
@@ -39,7 +39,7 @@ export default function MessageItem({
   activePlatform,
   onQuoteClick,
 }: {
-  msg: Message;
+  msg: ContentRecord;
   isMyMsg: boolean;
   isTarget?: boolean;
   highlightToken?: number;

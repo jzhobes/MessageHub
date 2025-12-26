@@ -264,7 +264,7 @@ export default function SearchModal({ isOpen, onClose, onNavigate }: SearchModal
                       readOnly
                       className={styles.dropdownCheckbox}
                     />
-                    All Platforms {facets && `(${totalCount})`}
+                    All Platforms {facets && `(${totalCount.toLocaleString()})`}
                   </DropdownItem>
                   <DropdownDivider />
                   {PLATFORM_ORDER.map((dbKey) => {
@@ -279,7 +279,7 @@ export default function SearchModal({ isOpen, onClose, onNavigate }: SearchModal
                     return (
                       <DropdownItem key={dbKey} onClick={() => togglePlatform(label)}>
                         <input type="checkbox" checked={isSelected} readOnly className={styles.dropdownCheckbox} />
-                        {label} {count > 0 && <span className={styles.facetCount}>({count})</span>}
+                        {label} {count > 0 && <span className={styles.facetCount}>({count.toLocaleString()})</span>}
                       </DropdownItem>
                     );
                   })}
@@ -349,7 +349,7 @@ export default function SearchModal({ isOpen, onClose, onNavigate }: SearchModal
             <div className={`${styles.statsContent} ${isSendersExpanded ? styles.statsContentExpanded : ''}`}>
               {Object.entries(facets.senders).map(([sender, count]) => (
                 <span key={sender} className={styles.statItem}>
-                  {sender} ({count})
+                  {sender} ({count.toLocaleString()})
                 </span>
               ))}
             </div>

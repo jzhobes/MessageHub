@@ -3,16 +3,18 @@ import Head from 'next/head';
 import Link from 'next/link';
 import { FaArrowLeft, FaCog, FaRobot } from 'react-icons/fa';
 import { FiMoon, FiSun } from 'react-icons/fi';
+
 import Checkbox from '@/components/Checkbox';
-import TextareaAuto from '@/components/TextareaAuto';
 import TextInput from '@/components/TextInput';
-import ThreadPreviewModal from '@/components/modals/ThreadPreviewModal';
+import TextareaAuto from '@/components/TextareaAuto';
 import SetupModal from '@/components/modals/SetupModal';
+import ThreadPreviewModal from '@/components/modals/ThreadPreviewModal';
 import { useForm } from '@/hooks/useForm';
 import { useTheme } from '@/hooks/useTheme';
-import { Thread } from '@/lib/shared/types';
+import { ContentRecord, Thread } from '@/lib/shared/types';
 import { StudioControls } from '@/sections/StudioControls';
 import { StudioThreadList } from '@/sections/StudioThreadList';
+
 import layoutStyles from '@/components/Layout.module.css';
 import styles from '@/pages/studio.module.css';
 

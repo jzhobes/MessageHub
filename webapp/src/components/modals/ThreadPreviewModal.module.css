@@ -84,7 +84,7 @@
 
 .messageList {
   flex: 1;
-  background-color: var(--bg-chat);
+  background-color: var(--bg-content);
   overflow: hidden;
   position: relative;
 }

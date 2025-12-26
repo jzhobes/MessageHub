@@ -47,7 +47,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // 2. Delete platform directories and metadata
-    const dirsToDelete = ['Facebook', 'Instagram', 'Voice', 'Google Chat', 'Takeout', '.processed'];
+    const dirsToDelete = ['Facebook', 'Instagram', 'Voice', 'Google Chat', 'Mail', 'Takeout', '.processed'];
 
     for (const d of dirsToDelete) {
       const dirPath = path.join(appConfig.WORKSPACE_PATH, d);

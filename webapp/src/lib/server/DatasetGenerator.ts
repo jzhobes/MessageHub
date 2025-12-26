@@ -1,5 +1,6 @@
 import { get_encoding } from 'tiktoken';
-import { Message } from '@/lib/shared/types';
+
+import { ContentRecord } from '@/lib/shared/types';
 import db from './db';
 
 export interface DatasetEntry {
@@ -98,7 +99,7 @@ export class DatasetGenerator {
       }
       query += ' ORDER BY timestamp_ms ASC';
 
-      const messages = this._dbInstance.prepare(query).all(...params) as Message[];
+      const messages = this._dbInstance.prepare(query).all(...params) as ContentRecord[];
       if (!messages.length) {
         continue;
       }
@@ -200,7 +201,7 @@ export class DatasetGenerator {
     return patterns.some((regex) => regex.test(content));
   }
 
-  private _cleanContent(msg: Message): string | null {
+  private _cleanContent(msg: ContentRecord): string | null {
     let content = msg.content || '';
 
     if (content === 'MMS Sent') {

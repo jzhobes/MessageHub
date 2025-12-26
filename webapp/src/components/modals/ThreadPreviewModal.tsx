@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Message, Thread } from '@/lib/shared/types';
-import ChatWindow from '@/sections/ChatWindow';
+
 import BaseModal, { BaseModalProps, ModalHeader } from './BaseModal';
+import { ContentRecord, Thread } from '@/lib/shared/types';
+import ThreadContent from '@/sections/ThreadContent';
+
 import styles from './ThreadPreviewModal.module.css';
 
 interface ThreadPreviewModalProps extends Pick<BaseModalProps, 'isOpen' | 'onClose' | 'onAfterClose'> {
@@ -10,7 +12,7 @@ interface ThreadPreviewModalProps extends Pick<BaseModalProps, 'isOpen' | 'onClo
 
 export default function ThreadPreviewModal({ isOpen, onClose, onAfterClose, thread }: ThreadPreviewModalProps) {
   // State matching Home page usage of ChatWindow
-  const [messages, setMessages] = useState<Message[] | null>(null);
+  const [messages, setMessages] = useState<ContentRecord[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [pageRange, setPageRange] = useState({ min: 1, max: 1 });
   const [visiblePage, setVisiblePage] = useState(1);
@@ -35,7 +37,7 @@ export default function ThreadPreviewModal({ isOpen, onClose, onAfterClose, thre
 
       try {
         const res = await fetch(
-          `/api/messages?threadId=${encodeURIComponent(tid)}&page=${pageNum}&platform=${encodeURIComponent(
+          `/api/content?threadId=${encodeURIComponent(tid)}&page=${pageNum}&platform=${encodeURIComponent(
             thread?.platform || '',
           )}`,
         );
@@ -46,7 +48,7 @@ export default function ThreadPreviewModal({ isOpen, onClose, onAfterClose, thre
 
         if (res.ok) {
           const data = await res.json();
-          const newMsgs = data.messages || [];
+          const newMsgs = data.records || [];
           const hasData = newMsgs.length > 0;
           const isFullPage = newMsgs.length >= 100;
 
@@ -140,7 +142,7 @@ export default function ThreadPreviewModal({ isOpen, onClose, onAfterClose, thre
         </div>
       </ModalHeader>
       <div className={styles.messageList}>
-        <ChatWindow
+        <ThreadContent
           hideHeader
           activeThread={thread}
           messages={messages}

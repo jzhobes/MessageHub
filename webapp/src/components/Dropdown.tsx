@@ -1,17 +1,33 @@
-import React, { useRef, useState, useEffect, useCallback } from 'react';
-import styles from '@/pages/studio.module.css'; // Re-using existing studio styles for now
+import React, { useRef, useState, useEffect, useCallback, useContext } from 'react';
+import styles from './Dropdown.module.css';
+
+interface DropdownContextValue {
+  close: () => void;
+}
+
+const DropdownContext = React.createContext<DropdownContextValue | null>(null);
 
 interface DropdownProps {
   trigger: React.ReactNode;
   children: React.ReactNode;
-  width?: number;
+  width?: number | string;
   open?: boolean; // Controlled mode
   onOpenChange?: (open: boolean) => void;
   align?: 'left' | 'right';
   className?: string;
+  menuClassName?: string;
 }
 
-export function Dropdown({ trigger, children, width, open, onOpenChange, align = 'left', className }: DropdownProps) {
+export function Dropdown({
+  trigger,
+  children,
+  width,
+  open,
+  onOpenChange,
+  align = 'left',
+  className,
+  menuClassName,
+}: DropdownProps) {
   const [internalOpen, setInternalOpen] = useState(false);
   const [maxHeight, setMaxHeight] = useState('400px');
   const isControlled = open !== undefined;
@@ -66,28 +82,27 @@ export function Dropdown({ trigger, children, width, open, onOpenChange, align =
   }, [isOpen, updateMaxHeight]);
 
   return (
-    <div ref={containerRef} className={className} style={{ position: 'relative' }}>
-      <div onClick={toggle} style={{ display: 'flex', height: '100%', cursor: 'inherit' }}>
-        {trigger}
-      </div>
-
-      {isOpen && (
-        <div
-          className={styles.dropdownMenu}
-          style={{
-            width: width || 160,
-            right: align === 'right' ? 0 : 'auto',
-            left: align === 'left' ? 0 : 'auto',
-            maxHeight,
-          }}
-        >
-          {/* Inject close handler into children if they are standard divs? 
-              For now just render children directly. Consumers handle their own click-to-close logic if item clicked. 
-          */}
-          {children}
+    <DropdownContext.Provider value={{ close }}>
+      <div ref={containerRef} className={className} style={{ position: 'relative' }}>
+        <div onClick={toggle} style={{ display: 'flex', width: '100%', height: '100%', cursor: 'inherit' }}>
+          {trigger}
         </div>
-      )}
-    </div>
+
+        {isOpen && (
+          <div
+            className={`${styles.dropdownMenu} ${menuClassName || ''}`}
+            style={{
+              width: width || 160,
+              right: align === 'right' ? 0 : 'auto',
+              left: align === 'left' ? 0 : 'auto',
+              maxHeight,
+            }}
+          >
+            {children}
+          </div>
+        )}
+      </div>
+    </DropdownContext.Provider>
   );
 }
 
@@ -95,15 +110,42 @@ interface DropdownItemProps {
   children: React.ReactNode;
   onClick?: () => void;
   className?: string;
+  closeOnClick?: boolean; // Override for specific items
+  disabled?: boolean;
 }
 
-export function DropdownItem({ children, onClick, className }: DropdownItemProps) {
+export function DropdownItem({ children, onClick, className, closeOnClick = true, disabled }: DropdownItemProps) {
+  const ctx = useContext(DropdownContext);
+
   return (
     <div
-      className={className || styles.dropdownItem}
+      className={`${styles.dropdownItem} ${className || ''}`}
+      style={{
+        opacity: disabled ? 0.5 : 1,
+        pointerEvents: disabled ? 'none' : 'auto',
+        cursor: disabled ? 'not-allowed' : 'pointer',
+      }}
       onClick={(e) => {
-        e.stopPropagation();
+        if (disabled) {
+          return;
+        }
+        // e.stopPropagation(); // Removed so it can bubble if needed, but we handle closing manually now
+
         onClick?.();
+
+        // Smart Close Logic
+        if (closeOnClick) {
+          const target = e.target as HTMLElement;
+
+          // Check if we clicked a checkbox or a label associated with an input
+          const isCheckbox = target.closest('input[type="checkbox"]');
+          const isLabelWithInput = target.tagName === 'LABEL' && target.querySelector('input');
+          const isInputInsideLabel = target.closest('label') && target.tagName === 'INPUT';
+
+          if (!isCheckbox && !isLabelWithInput && !isInputInsideLabel) {
+            ctx?.close();
+          }
+        }
       }}
     >
       {children}

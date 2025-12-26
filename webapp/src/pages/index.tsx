@@ -3,15 +3,17 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { FaArrowLeft, FaBars, FaCog, FaSearch } from 'react-icons/fa';
 import { FiMoon, FiSun } from 'react-icons/fi';
+
 import SearchModal from '@/components/modals/SearchModal';
 import SetupModal from '@/components/modals/SetupModal';
-import { useTheme } from '@/hooks/useTheme';
-import { Message, Thread } from '@/lib/shared/types';
-import ChatWindow from '@/sections/ChatWindow';
-import Sidebar from '@/sections/Sidebar';
-import ThreadList from '@/sections/ThreadList';
-import styles from '@/components/Layout.module.css';
 import { useApp } from '@/context/AppContext';
+import { useTheme } from '@/hooks/useTheme';
+import { ContentRecord, Thread } from '@/lib/shared/types';
+import Sidebar from '@/sections/Sidebar';
+import ThreadContent from '@/sections/ThreadContent';
+import ThreadList from '@/sections/ThreadList';
+
+import styles from '@/components/Layout.module.css';
 
 // Convert raw DB platform identifiers to UI display names
 function mapPlatform(raw: string): string {
@@ -41,7 +43,7 @@ export default function Home() {
   const [activePlatform, setActivePlatform] = useState<string>('Facebook');
   const [threads, setThreads] = useState<Thread[] | null>(null);
   const [activeThread, setActiveThread] = useState<Thread | null>(null);
-  const [messages, setMessages] = useState<Message[] | null>(null);
+  const [messages, setMessages] = useState<ContentRecord[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [targetMessageId, setTargetMessageId] = useState<string | null>(null);
@@ -59,6 +61,7 @@ export default function Home() {
   const [pageRange, setPageRange] = useState({ min: 1, max: 1 });
   const [hasMoreOld, setHasMoreOld] = useState(false);
   const [hasMoreNew, setHasMoreNew] = useState(false);
+  const [activeCategory, setActiveCategory] = useState<string>('message');
 
   const { theme, toggleTheme, mounted } = useTheme();
 
@@ -120,7 +123,7 @@ export default function Home() {
 
       try {
         const res = await fetch(
-          `/api/messages?threadId=${encodeURIComponent(threadId)}&page=${pageNum}&platform=${encodeURIComponent(activePlatform)}`,
+          `/api/content?threadId=${encodeURIComponent(threadId)}&page=${pageNum}&platform=${encodeURIComponent(activePlatform)}`,
         );
 
         // Drop responses for superseded requests
@@ -130,7 +133,7 @@ export default function Home() {
 
         if (res.ok) {
           const data = await res.json();
-          const newMsgs = data.messages || [];
+          const newMsgs = data.records || [];
           const hasData = newMsgs.length > 0;
           const isFullPage = newMsgs.length >= 100;
 
@@ -183,11 +186,28 @@ export default function Home() {
     (p: string) => {
       const safePlatform = resolvePlatform(p, availability);
       updateUrl(safePlatform, undefined);
+
+      // Reset to appropriate category
+      const defaultCat = safePlatform === 'Gmail' ? 'inbox' : 'message';
+      setActiveCategory(defaultCat);
+
       if (isMobile) {
         setShowSidebar(false); // Close sidebar on mobile after selection
       }
     },
     [availability, resolvePlatform, updateUrl, isMobile],
+  );
+
+  const handleCategoryChange = useCallback(
+    (cat: string) => {
+      setActiveCategory(cat);
+      if (activeThread) {
+        setActiveThread(null);
+        setMessages(null);
+        updateUrl(activePlatform, undefined);
+      }
+    },
+    [activeThread, activePlatform, updateUrl],
   );
 
   const handleThreadSelect = useCallback(
@@ -309,6 +329,8 @@ export default function Home() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  const [categoryCounts, setCategoryCounts] = useState<Record<string, number>>({});
+  // ...
   // 4. Load Threads on activePlatform change
   useEffect(() => {
     if (!isRouterReady) {
@@ -321,17 +343,20 @@ export default function Home() {
       // Set to null while fetching to trigger loading state
       setThreads(null);
       try {
-        const res = await fetch(`/api/threads?platform=${encodeURIComponent(activePlatform)}`);
+        const res = await fetch(`/api/threads?platform=${encodeURIComponent(activePlatform)}&type=${activeCategory}`);
         if (res.ok) {
           const data = await res.json();
           if (!ignore) {
-            setThreads(data);
+            // Data now contains { threads, counts }
+            setThreads(data.threads);
+            setCategoryCounts(data.counts || {});
           }
         }
       } catch (e) {
         console.error('Failed to load threads', e);
         if (!ignore) {
           setThreads([]);
+          setCategoryCounts({});
         }
       }
     }
@@ -340,7 +365,7 @@ export default function Home() {
     return () => {
       ignore = true;
     };
-  }, [activePlatform, isRouterReady]);
+  }, [activePlatform, activeCategory, isRouterReady]);
 
   // 5. Sync state with URL params on mount/update (Navigation)
   useEffect(() => {
@@ -409,7 +434,7 @@ export default function Home() {
 
   // --- Calculated Values ---
   const showThreadList = !isMobile || (isMobile && !activeThread);
-  const showChatWindow = !isMobile || (isMobile && !!activeThread);
+  const showThreadContent = !isMobile || (isMobile && !!activeThread);
   const isSidebarVisible = true;
   const collapsed = !showSidebar;
 
@@ -509,6 +534,9 @@ export default function Home() {
             <div className={styles.threadListWrapper} style={{ width: isMobile ? '100%' : '350px' }}>
               <ThreadList
                 activePlatform={activePlatform}
+                activeCategory={activeCategory}
+                onCategoryChange={handleCategoryChange}
+                categoryCounts={categoryCounts}
                 threads={threads || []}
                 activeThread={activeThread}
                 loading={threads === null}
@@ -517,9 +545,9 @@ export default function Home() {
             </div>
           )}
 
-          {showChatWindow && (
-            <div className={styles.chatWindowWrapper} style={{ flex: 1 }}>
-              <ChatWindow
+          {showThreadContent && (
+            <div className={styles.threadContentWrapper} style={{ flex: 1 }}>
+              <ThreadContent
                 activeThread={activeThread}
                 messages={messages}
                 loading={loading}

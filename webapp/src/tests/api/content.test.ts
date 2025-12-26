@@ -1,13 +1,13 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createMocks } from 'node-mocks-http';
-import handler from '@/pages/api/messages';
+import handler from '@/pages/api/content';
 
 // Using Real DB with data from samples
 vi.mock('@/lib/server/identity', () => ({
   getMyNames: vi.fn().mockResolvedValue(['Me', 'John Doe']),
 }));
 
-describe('/api/messages (Integration)', () => {
+describe('/api/content (Integration)', () => {
   it('should split Text+Media into two bubbles', async () => {
     // We added a "Text + Photo" message to 'simulation_theory_888' in the sample build.
     // Content: "Look at this glich in the matrix I found!"
@@ -20,10 +20,10 @@ describe('/api/messages (Integration)', () => {
 
     await handler(req, res);
     expect(res._getStatusCode()).toBe(200);
-    const { messages } = res._getJSONData();
+    const { records } = res._getJSONData();
 
     // Find our specific message by content or ID pattern
-    const textPart = messages.find(
+    const textPart = records.find(
       (m: { content?: string }) => m.content === 'Look at this glich in the matrix I found!',
     );
     expect(textPart).toBeDefined();
@@ -32,7 +32,7 @@ describe('/api/messages (Integration)', () => {
     expect(textPart.photos).toBeUndefined();
 
     // There should be a corresponding media part (same timestamp)
-    const mediaPart = messages.find(
+    const mediaPart = records.find(
       (m: { timestamp_ms?: number; id?: string }) =>
         m.timestamp_ms === textPart.timestamp_ms && m.id?.endsWith('_media'),
     );
@@ -50,10 +50,10 @@ describe('/api/messages (Integration)', () => {
 
     await handler(req, res);
     expect(res._getStatusCode()).toBe(200);
-    const { messages } = res._getJSONData();
+    const { records } = res._getJSONData();
 
-    expect(messages.length).toBeGreaterThan(0);
-    const linkPreviewMsg = messages.find((m: { content?: string }) => m.content?.includes('matrix.org/glitch'));
+    expect(records.length).toBeGreaterThan(0);
+    const linkPreviewMsg = records.find((m: { content?: string }) => m.content?.includes('matrix.org/glitch'));
     expect(linkPreviewMsg).toBeDefined();
 
     expect(linkPreviewMsg.content).toBeDefined();

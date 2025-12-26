@@ -1,10 +1,10 @@
 import React from 'react';
 import DOMPurify from 'dompurify';
-import { Message } from '@/lib/shared/types';
+import { ContentRecord } from '@/lib/shared/types';
 import styles from './EmailItem.module.css';
 
 interface EmailItemProps {
-  msg: Message;
+  msg: ContentRecord;
   isMyMsg: boolean;
   showAvatar: boolean;
   showName: boolean;

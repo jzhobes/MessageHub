@@ -19,7 +19,7 @@
   display: flex;
   align-items: center;
   border-bottom: 1px solid var(--border-color);
-  background-color: var(--bg-chat-header);
+  background-color: var(--bg-content-header);
   flex-shrink: 0;
   padding: 0 16px;
   z-index: 200;
@@ -150,7 +150,7 @@
   font-size: 1rem;
 }
 
-.chatWindowWrapper {
+.threadContentWrapper {
   flex: 1;
   height: 100%;
   display: flex;

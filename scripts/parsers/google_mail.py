@@ -301,6 +301,15 @@ def ingest_google_mail_mbox(cursor, mbox_path, identity_stats):
                         decoded_name = fix_text(decode_mime_header(name))
                         if decoded_name:
                             identity_stats[addr]["names"].add(decoded_name)
+
+            # Label detection for thread_labels
+            raw_labels = str(message.get("X-Gmail-Labels", ""))
+            current_message_labels = set()
+            if "Sent" in raw_labels:
+                current_message_labels.add("sent")
+            if "Inbox" in raw_labels:
+                current_message_labels.add("inbox")
+
             # 1. Identity
             gm_thrid = message.get("X-GM-THRID")
             if not gm_thrid:
@@ -410,10 +419,10 @@ def ingest_google_mail_mbox(cursor, mbox_path, identity_stats):
 
             media_json = json.dumps(media) if media else None
 
-            # 5. Insert Message
+            # 5. Insert Content
             cursor.execute(
                 """
-                INSERT OR IGNORE INTO messages 
+                INSERT OR IGNORE INTO content 
                 (thread_id, sender_name, timestamp_ms, content, media_json)
                 VALUES (?, ?, ?, ?, ?)
                 """,
@@ -430,11 +439,15 @@ def ingest_google_mail_mbox(cursor, mbox_path, identity_stats):
                         "participants": parse_participants(message),
                         "last_ms": ts,
                         "snippet": get_plain_text_snippet(content),
+                        "labels": current_message_labels,
                     }
                 else:
                     if ts > cache_threads[thread_id]["last_ms"]:
                         cache_threads[thread_id]["last_ms"] = ts
                         cache_threads[thread_id]["snippet"] = get_plain_text_snippet(content)
+
+                    # Accumulate labels across all messages in thread
+                    cache_threads[thread_id]["labels"].update(current_message_labels)
             else:
                 skipped_total += 1
 
@@ -444,7 +457,7 @@ def ingest_google_mail_mbox(cursor, mbox_path, identity_stats):
         except Exception as e:
             print(f"Error processing message {i} in MBOX: {e}")
 
-    # Commit Threads
+    # Commit Threads and Labels
     print(f"Finishing {len(cache_threads)} threads...")
     for tid, info in cache_threads.items():
         participants_json = json.dumps(info["participants"])
@@ -463,6 +476,16 @@ def ingest_google_mail_mbox(cursor, mbox_path, identity_stats):
                 str(info["snippet"]),
             ),
         )
+
+        # Insert all labels encountered for this thread
+        labels = info.get("labels", set())
+        # Always add the base type as a label for unified querying
+        labels.add("message")
+
+        for label in labels:
+            cursor.execute(
+                "INSERT OR IGNORE INTO thread_labels (thread_id, label) VALUES (?, ?)", (str(tid), label.lower())
+            )
 
     return msg_total, skipped_total
 

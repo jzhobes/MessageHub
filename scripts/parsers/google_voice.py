@@ -171,7 +171,7 @@ def ingest_google_voice_thread(cursor, thread_data):
                 # 5. Insert
                 cursor.execute(
                     """
-                    INSERT OR IGNORE INTO messages 
+                    INSERT OR IGNORE INTO content 
                     (thread_id, sender_name, timestamp_ms, content, media_json, reactions_json, share_json)
                     VALUES (?, ?, ?, ?, ?, ?, ?)
                     """,
@@ -207,6 +207,9 @@ def ingest_google_voice_thread(cursor, thread_data):
             (thread_id, thread_id, parts_json, last_activity_ms, latest_snippet),
         )
 
+        # Insert label
+        cursor.execute("INSERT OR IGNORE INTO thread_labels (thread_id, label) VALUES (?, 'message')", (thread_id,))
+
     return msg_count, skipped_count
 
 
@@ -215,7 +218,6 @@ def ingest_google_voice(cursor, voice_root):
     Scans the Google Voice directory structure and ingests messages.
     Virtualizes 'Threads' by grouping filenames by the mentioned phone number.
     """
-    from pathlib import Path
 
     calls_dir = Path(voice_root) / "Calls"
     if not calls_dir.exists():

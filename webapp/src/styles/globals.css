@@ -11,8 +11,8 @@
   --bg-thread-item-active: #e4e4ed;
   --border-thread-active: #007aff;
 
-  --bg-chat: #ffffff;
-  --bg-chat-header: rgba(255, 255, 255, 0.95);
+  --bg-content: #ffffff;
+  --bg-content-header: rgba(255, 255, 255, 0.95);
 
   --text-primary: #000000;
   --text-secondary: #8e8e93;
@@ -72,8 +72,8 @@
   --bg-thread-item-active: #2c2c2e;
   --border-thread-active: #0a84ff;
 
-  --bg-chat: #000000;
-  --bg-chat-header: #1c1c1e;
+  --bg-content: #000000;
+  --bg-content-header: #1c1c1e;
 
   --text-primary: #ffffff;
   --text-secondary: #8e8e93;
@@ -97,7 +97,7 @@
 
 body {
   color: var(--text-primary);
-  background: var(--bg-chat);
+  background: var(--bg-content);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   margin: 0;
   padding: 0;

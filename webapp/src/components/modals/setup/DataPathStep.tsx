@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   FaEyeSlash,
   FaFolder,
@@ -134,7 +134,7 @@ export default function DataPathStep({
   const [showDangerZone, setShowDangerZone] = useState(false);
   const [isResetComplete, setIsResetComplete] = useState(false);
 
-  React.useEffect(() => {
+  useEffect(() => {
     onExistingWorkspaceDetected?.(!!metadata?.isExistingWorkspace);
   }, [metadata?.isExistingWorkspace, onExistingWorkspaceDetected]);
 

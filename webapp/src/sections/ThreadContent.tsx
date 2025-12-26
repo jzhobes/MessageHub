@@ -1,14 +1,16 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { FaSpinner } from 'react-icons/fa';
 import { IndexLocationWithAlign, Virtuoso, VirtuosoHandle } from 'react-virtuoso';
-import MessageItem from '@/components/MessageItem';
-import EmailItem from '@/components/EmailItem';
-import { Message, QuotedMessageMetadata, Thread } from '@/lib/shared/types';
-import styles from './ChatWindow.module.css';
 
-interface ChatWindowProps {
+import EmailItem from '@/components/EmailItem';
+import MessageItem from '@/components/MessageItem';
+import { ContentRecord, QuotedMessageMetadata, Thread } from '@/lib/shared/types';
+
+import styles from './ThreadContent.module.css';
+
+interface ThreadContentProps {
   activeThread: Thread | null;
-  messages: Message[] | null;
+  messages: ContentRecord[] | null;
   loading: boolean;
   hasMoreOld: boolean;
   hasMoreNew: boolean;
@@ -24,7 +26,7 @@ interface ChatWindowProps {
 
 const START_INDEX = 10000;
 
-export default function ChatWindow({
+export default function ThreadContent({
   activeThread,
   messages,
   loading,
@@ -38,7 +40,7 @@ export default function ChatWindow({
   initializing,
   hideHeader,
   onPageChange,
-}: ChatWindowProps) {
+}: ThreadContentProps) {
   // Refs
   const virtuosoRef = useRef<VirtuosoHandle>(null);
   const previousMessagesLength = useRef(0);
@@ -238,16 +240,16 @@ export default function ChatWindow({
   // Render logic (conditionals)
   if (!activeThread && !initializing) {
     return (
-      <div className={styles.chatArea}>
-        <div className={styles.emptyState}>Select a conversation</div>
+      <div className={styles.contentArea}>
+        <div className={styles.emptyState}>Select a thread</div>
       </div>
     );
   }
 
   if (initializing || messages === null) {
     return (
-      <div className={styles.chatArea}>
-        {!hideHeader && <div className={styles.chatHeader} />}
+      <div className={styles.contentArea}>
+        {!hideHeader && <div className={styles.contentHeader} />}
         <div className={styles.messagesContainer}>
           <div className={styles.emptyState}>
             <FaSpinner className="spinner" size={24} />
@@ -259,9 +261,9 @@ export default function ChatWindow({
   }
 
   return (
-    <div className={styles.chatArea}>
+    <div className={styles.contentArea}>
       {!hideHeader && (
-        <div className={styles.chatHeader}>
+        <div className={styles.contentHeader}>
           <div className={styles.headerTitle}>{activeThread?.title}</div>
           <div className={styles.pageIndicator}>
             (Page {currentTopPage?.toLocaleString()} of {(activeThread?.pageCount || 1).toLocaleString()})

@@ -8,7 +8,7 @@ import { getPlatformDbValue } from '@/lib/shared/platforms';
  * Reads from the SQLite database.
  */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const { platform } = req.query;
+  const { platform, type } = req.query;
 
   if (!db.exists()) {
     return res.status(200).json([]);
@@ -20,19 +20,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   // Retrieve 'My Names' for title filtering
   const myNames = await getMyNames();
 
-  // Use correlated subquery to get message count efficiently
+  // Use correlated subquery to get content record count efficiently
   let query = `
-    SELECT t.*, (SELECT COUNT(*) FROM messages m WHERE m.thread_id = t.id) as msg_count 
+    SELECT t.*, (SELECT COUNT(*) FROM content c WHERE c.thread_id = t.id) as msg_count 
     FROM threads t
   `;
   const params: string[] = [];
+  const conditions: string[] = [];
 
   if (validDbPlatforms.length > 0) {
-    query += ` WHERE platform IN (${validDbPlatforms.map(() => '?').join(',')})`;
+    conditions.push(`t.platform IN (${validDbPlatforms.map(() => '?').join(',')})`);
     params.push(...validDbPlatforms);
   }
 
-  query += ' ORDER BY last_activity_ms DESC';
+  if (type && typeof type === 'string' && type !== 'all') {
+    conditions.push(`t.id IN (SELECT thread_id FROM thread_labels WHERE label = ?)`);
+    params.push(type);
+  }
+
+  if (conditions.length > 0) {
+    query += ' WHERE ' + conditions.join(' AND ');
+  }
+
+  query += ' ORDER BY t.last_activity_ms DESC';
 
   try {
     interface ThreadRow {
@@ -49,6 +59,33 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const dbInstance = db.get();
     const rows = dbInstance.prepare(query).all(...params) as ThreadRow[];
     const PAGE_SIZE = 100;
+
+    // 2. Get category counts for the current platform filter using labels
+    const counts: Record<string, number> = {
+      message: 0,
+      event: 0,
+      post: 0,
+      checkin: 0,
+      inbox: 0,
+      sent: 0,
+    };
+
+    if (validDbPlatforms.length > 0) {
+      const countQuery = `
+        SELECT tl.label, COUNT(*) as count 
+        FROM thread_labels tl
+        INNER JOIN threads t ON tl.thread_id = t.id
+        WHERE t.platform IN (${validDbPlatforms.map(() => '?').join(',')})
+        GROUP BY tl.label
+      `;
+      const countRows = dbInstance.prepare(countQuery).all(...validDbPlatforms) as {
+        label: string;
+        count: number;
+      }[];
+      countRows.forEach((r) => {
+        counts[r.label] = r.count;
+      });
+    }
 
     const threads = rows.map((row) => {
       const participants = JSON.parse(row.participants_json || '[]');
@@ -76,7 +113,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       };
     });
 
-    return res.status(200).json(threads);
+    return res.status(200).json({ threads, counts });
   } catch (e) {
     console.error('Error querying threads:', e);
     return res.status(500).json({ error: 'Failed to load threads' });

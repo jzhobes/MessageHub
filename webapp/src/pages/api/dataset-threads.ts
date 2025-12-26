@@ -42,15 +42,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       SUM(CASE WHEN m.sender_name IN (${namesPlaceholders}) THEN 1 ELSE 0 END) as my_msgs,
       AVG(CASE WHEN m.sender_name IN (${namesPlaceholders}) THEN LENGTH(m.content) ELSE NULL END) as my_avg_len
     FROM threads t
-    JOIN messages m ON m.thread_id = t.id
+    JOIN content m ON m.thread_id = t.id
+    JOIN thread_labels tl ON t.id = tl.thread_id
   `;
 
   const params: (string | number)[] = [...myNames, ...myNames]; // User names are used twice in the CASE statements
 
+  const conditions = ["tl.label = 'message'"];
   if (platformStr && platformStr !== 'all') {
-    query += ' WHERE t.platform = ?';
+    conditions.push('t.platform = ?');
     params.push(platformStr);
   }
+
+  query += ' WHERE ' + conditions.join(' AND ');
 
   query += ' GROUP BY t.id';
   query += ' ORDER BY t.last_activity_ms DESC';

@@ -34,7 +34,11 @@ def ingest_google_chat_thread(cursor, thread_dir):
             pass
 
     participants_json = json.dumps(normalize_participants(participants))
-    is_group = True  # Google Chat exports are usually Groups or DMs (which are groups of 2)
+
+    # Determine if it's a group:
+    # 1. Any 'Space' is a group
+    # 2. Any DM with > 2 participants is a Group DM
+    is_group = (not thread_id.startswith("DM ")) or (len(participants) > 2)
 
     cursor.execute(
         """
@@ -43,6 +47,11 @@ def ingest_google_chat_thread(cursor, thread_dir):
         """,
         (thread_id, "google_chat", title, participants_json, is_group),
     )
+
+    # Insert labels
+    cursor.execute("INSERT OR IGNORE INTO thread_labels (thread_id, label) VALUES (?, 'message')", (thread_id,))
+    label = "group" if is_group else "dm"
+    cursor.execute("INSERT OR IGNORE INTO thread_labels (thread_id, label) VALUES (?, ?)", (thread_id, label))
 
     last_activity_ms = 0
     latest_snippet = ""
@@ -163,7 +172,7 @@ def ingest_google_chat_thread(cursor, thread_dir):
 
             cursor.execute(
                 """
-                INSERT OR IGNORE INTO messages 
+                INSERT OR IGNORE INTO content 
                 (thread_id, sender_name, timestamp_ms, content, media_json, reactions_json, share_json, annotations_json)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,

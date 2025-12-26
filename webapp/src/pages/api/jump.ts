@@ -11,22 +11,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const dbInstance = db.get();
 
   try {
-    // 1. Get the target message details
-    interface MsgRow {
+    // 1. Get the target content record details
+    interface ContentRow {
       id: number;
       thread_id: string;
       timestamp_ms: number;
     }
-    const msg = dbInstance.prepare('SELECT id, thread_id, timestamp_ms FROM messages WHERE id = ?').get(messageId) as
-      | MsgRow
+    const record = dbInstance.prepare('SELECT id, thread_id, timestamp_ms FROM content WHERE id = ?').get(messageId) as
+      | ContentRow
       | undefined;
 
-    if (!msg) {
-      return res.status(404).json({ error: 'Message not found' });
+    if (!record) {
+      return res.status(404).json({ error: 'Content not found' });
     }
 
     // 2. Calculate Rank (1-based index in DESC order)
-    // We count how many messages are "newer" (timestamp > target OR same timestamp but higher ID)
+    // We count how many records are "newer" (timestamp > target OR same timestamp but higher ID)
     interface CountRow {
       count: number;
     }
@@ -34,29 +34,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       .prepare(
         `
         SELECT COUNT(*) as count 
-        FROM messages 
+        FROM content 
         WHERE thread_id = ? 
         AND (timestamp_ms > ? OR (timestamp_ms = ? AND id > ?))
     `,
       )
-      .get(msg.thread_id, msg.timestamp_ms, msg.timestamp_ms, msg.id) as CountRow;
+      .get(record.thread_id, record.timestamp_ms, record.timestamp_ms, record.id) as CountRow;
 
     const newerCount = row.count;
     const rank = newerCount + 1;
-    const PAGE_SIZE = 100; // Must match api/messages.ts
+    const PAGE_SIZE = 100; // Must match api/content.ts
     const page = Math.ceil(rank / PAGE_SIZE);
 
     // 3. Get Platform info for context switching
     interface ThreadRow {
       platform: string;
     }
-    const thread = dbInstance.prepare('SELECT platform FROM threads WHERE id = ?').get(msg.thread_id) as ThreadRow;
+    const thread = dbInstance.prepare('SELECT platform FROM threads WHERE id = ?').get(record.thread_id) as ThreadRow;
 
     return res.status(200).json({
-      threadId: msg.thread_id,
+      threadId: record.thread_id,
       platform: thread.platform,
       page: page,
-      timestamp: msg.timestamp_ms,
+      timestamp: record.timestamp_ms,
     });
   } catch (e) {
     console.error('Error in jump:', e);

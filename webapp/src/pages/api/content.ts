@@ -2,7 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import path from 'path';
 import db from '@/lib/server/db';
 
-import { MediaItem, Message } from '@/lib/shared/types';
+import { MediaItem, ContentRecord } from '@/lib/shared/types';
 import { getMyNames } from '@/lib/server/identity';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -21,7 +21,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const myNames = await getMyNames();
 
   try {
-    interface MessageRow {
+    interface ContentRow {
       id: number;
       thread_id: string;
       sender_name: string;
@@ -37,17 +37,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       .get()
       .prepare(
         `
-        SELECT * FROM messages 
+        SELECT * FROM content 
         WHERE thread_id = ? 
         ORDER BY timestamp_ms DESC 
         LIMIT ? OFFSET ?
     `,
       )
-      .all(threadIdStr, PAGE_SIZE, offset) as MessageRow[];
+      .all(threadIdStr, PAGE_SIZE, offset) as ContentRow[];
 
     // If page 1 and empty, check if thread exists?
 
-    const messages: Message[] = rows.flatMap((row) => {
+    const records: ContentRecord[] = rows.flatMap((row) => {
       interface MediaJsonItem {
         uri: string;
         type: string;
@@ -112,7 +112,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const hasMedia = photos.length > 0 || videos.length > 0 || gifs.length > 0 || stickers.length > 0;
       const hasText = !!row.content || !!quoted_message_metadata || !!shareObj;
 
-      const result: Message[] = [];
+      const result: ContentRecord[] = [];
 
       // Logic to split Text and Media into separate bubbles to match original UI behavior.
       // However, if the message looks like a Link Preview (Text + 1 Photo), we keep them together
@@ -187,7 +187,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return result;
     });
 
-    return res.status(200).json({ messages });
+    return res.status(200).json({ records });
   } catch (e) {
     console.error('Error querying messages:', e);
     return res.status(500).json({ error: 'Failed to load messages' });

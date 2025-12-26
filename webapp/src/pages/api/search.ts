@@ -84,7 +84,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     ].filter(Boolean);
 
     const filteredBase = `
-      FROM ${ftsMatch ? 'messages_fts f CROSS JOIN messages m ON f.rowid = m.id' : 'messages m'}
+      FROM ${ftsMatch ? 'content_fts f CROSS JOIN content m ON f.rowid = m.id' : 'content m'}
       JOIN threads t ON m.thread_id = t.id
       ${whereConditions.length > 0 ? 'WHERE ' + whereConditions.join(' AND ') : ''}
     `;
@@ -118,7 +118,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // 4. Data Results
     const selectClause = `SELECT m.*, t.platform, t.title as thread_title${
-      ftsMatch ? ", snippet(messages_fts, 0, '', '', '...', 25) as search_snippet" : ''
+      ftsMatch ? ", snippet(content_fts, 0, '', '', '...', 25) as search_snippet" : ''
     }`;
 
     const dataSql = `${selectClause} ${filteredBase} ORDER BY m.timestamp_ms DESC LIMIT ? OFFSET ?`;
@@ -157,7 +157,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
 
       return {
-        message_id: row.id,
+        id: row.id,
         thread_id: row.thread_id,
         thread_title: row.thread_title,
         platform: row.platform,

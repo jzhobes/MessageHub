@@ -27,7 +27,7 @@ export interface QuotedMessageMetadata {
   text?: string;
 }
 
-export interface Message {
+export interface ContentRecord {
   id: string;
   is_sender: boolean;
   sender_name: string;
@@ -71,7 +71,7 @@ export interface Thread {
 }
 
 export interface SearchResult {
-  message_id: number;
+  id: number;
   thread_id: string;
   thread_title: string | null;
   platform: string;

@@ -1,7 +1,8 @@
 import os
 import re
+import shutil
 import stat
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 # External dependencies (assumes venv is active)
 try:
@@ -34,8 +35,6 @@ def get_workspace_path():
     workspace_path = os.environ.get("WORKSPACE_PATH")
 
     if workspace_path:
-        from pathlib import PureWindowsPath
-
         # Handle Windows paths (e.g. D:\Projects) when running in POSIX (WSL/Mac)
         if os.name == "posix" and (":" in workspace_path or "\\" in workspace_path):
             try:
@@ -222,13 +221,39 @@ def clean_google_voice_files(data_dir=WORKSPACE_PATH):
     print(f"Google Voice Cleanup Complete. Deleted {deleted_count} files ({mb:.2f} MB).")
 
 
+def clean_google_mail_files(data_dir=WORKSPACE_PATH):
+    """
+    Deletes processed Google Mail mbox files to save space.
+    """
+    mail_root = Path(data_dir) / "Mail"
+    if not mail_root.exists():
+        mail_root = Path(data_dir) / "Takeout" / "Mail"
+
+    if not mail_root.exists():
+        return
+
+    print("Cleaning up Google Mail mbox files...")
+    deleted_count = 0
+    reclaimed_bytes = 0
+
+    for f in mail_root.glob("*.mbox"):
+        try:
+            size = f.stat().st_size
+            f.unlink()
+            deleted_count += 1
+            reclaimed_bytes += size
+        except Exception as e:
+            print(f"Error deleting {f}: {e}")
+
+    mb = reclaimed_bytes / (1024 * 1024)
+    print(f"Google Mail Cleanup Complete. Deleted {deleted_count} files ({mb:.2f} MB).")
+
+
 def merge_folders(src, dst):
     """
     Recursively merges src directory into dst directory with progress reporting.
     Deletes src after successful merge.
     """
-    import shutil
-
     src = Path(src)
     dst = Path(dst)
 
