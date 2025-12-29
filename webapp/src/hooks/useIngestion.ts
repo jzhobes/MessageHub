@@ -23,6 +23,8 @@ export function useIngestion() {
 
   const [error, setError] = useState<string | null>(null);
 
+  const hasCheckedInFlightRef = useRef(false);
+
   // Prevent accidental refresh during installation
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -32,8 +34,37 @@ export function useIngestion() {
       }
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
+
+    // Initial check for in-flight ingestion
+    const checkInFlight = async () => {
+      if (hasCheckedInFlightRef.current) {
+        return;
+      }
+      hasCheckedInFlightRef.current = true;
+
+      try {
+        const res = await fetch('/api/setup/ingest-status');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.isRunning) {
+            // If already running, we can "start" it with no parameters to just attach
+            runInstall([], 'copy');
+          } else if (data.isComplete && !isComplete) {
+            // If finished while we were gone, mark as complete
+            setIsComplete(true);
+            setStatus('Complete');
+            setProgress(100);
+          }
+        }
+      } catch (e) {
+        console.error('Failed to check in-flight ingestion:', e);
+      }
+    };
+
+    checkInFlight();
+
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [isInstalling]);
+  }, [isInstalling, isComplete]);
 
   async function runInstall(remoteFiles: string[], transferMode: 'copy' | 'move') {
     setIsInstalling(true);
@@ -125,9 +156,12 @@ export function useIngestion() {
     // Start ingestion progress at offset (5% of its own range)
     setProgress(ingestOffset + Math.round(ingestWeight * 0.05));
 
-    const response = await fetch('/api/setup/ingest?deleteArchives=true', {
-      method: 'POST',
-    });
+    const response = await fetch(
+      `/api/setup/ingest?deleteArchives=true${remoteFiles.length === 0 ? '&reattach=true' : ''}`,
+      {
+        method: 'POST',
+      },
+    );
 
     if (!response.ok) {
       setError(`Ingest failed: ${response.statusText}`);

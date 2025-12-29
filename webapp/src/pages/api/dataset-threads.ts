@@ -1,6 +1,5 @@
 import db from '@/lib/server/db';
 import { getMyNames } from '@/lib/server/identity';
-import { getPlatformLabel } from '@/lib/shared/platforms';
 
 import type { NextApiRequest, NextApiResponse } from 'next';
 
@@ -43,12 +42,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       AVG(CASE WHEN m.sender_name IN (${namesPlaceholders}) THEN LENGTH(m.content) ELSE NULL END) as my_avg_len
     FROM threads t
     JOIN content m ON m.thread_id = t.id
-    JOIN thread_labels tl ON t.id = tl.thread_id
   `;
 
   const params: (string | number)[] = [...myNames, ...myNames]; // User names are used twice in the CASE statements
 
-  const conditions = ["tl.label = 'message'"];
+  const conditions = [
+    "EXISTS (SELECT 1 FROM thread_labels tl WHERE tl.thread_id = t.id AND tl.label IN ('message', 'inbox', 'sent'))",
+  ];
   if (platformStr && platformStr !== 'all') {
     conditions.push('t.platform = ?');
     params.push(platformStr);
@@ -128,7 +128,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return {
         id: row.id,
         title: title || 'Untitled',
-        platform: getPlatformLabel(row.platform),
+        platform: row.platform,
         timestamp: row.timestamp,
         is_group: !!row.is_group,
         pageCount: 1, // Legacy prop renamed to pageCount

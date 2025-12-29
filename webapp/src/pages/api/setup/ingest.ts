@@ -1,8 +1,5 @@
-import { spawn } from 'child_process';
-
-import { getIngestScriptPath, getPythonPath } from '@/lib/server/python';
+import { ingestionManager } from '@/lib/server/ingestionManager';
 import { setupSSE } from '@/lib/server/sse';
-import appConfig from '@/lib/shared/appConfig';
 
 import type { NextApiRequest, NextApiResponse } from 'next';
 
@@ -12,57 +9,58 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).end(`Method ${req.method} Not Allowed`);
   }
 
-  const dataDir = appConfig.WORKSPACE_PATH;
-  const scriptPath = getIngestScriptPath();
-  const pythonPath = await getPythonPath();
-
-  console.log(`Starting ingestion with ${pythonPath} on ${scriptPath} data=${dataDir}`);
-
   // Setup SSE
   const stream = setupSSE(res, { heartbeat: true });
 
-  const env = { ...process.env, WORKSPACE_PATH: dataDir, PYTHONUNBUFFERED: '1' };
-
   const deleteArchives = req.query.deleteArchives === 'true';
-  const args = ['-u', scriptPath];
-  if (deleteArchives) {
-    args.push('--delete-archives');
+  const child = await ingestionManager.start(deleteArchives);
+  const initialState = ingestionManager.getState();
+
+  // 1. Replay buffered logs
+  for (const log of initialState.logs) {
+    stream.send(log.type, log.payload);
   }
 
-  const child = spawn(pythonPath, args, { env });
+  // 2. Already done?
+  if (!initialState.isRunning && initialState.isComplete) {
+    stream.send('done', { code: initialState.exitCode });
+    stream.close();
+    return;
+  }
 
-  child.stdout.on('data', (data) => {
+  // 3. Attach current listeners
+  const onStdout = (data: Buffer | string) => {
     const lines = data.toString().split('\n');
     for (const line of lines) {
       if (line.trim()) {
         stream.send('stdout', line.trim());
-        console.log(`[Ingest] ${line.trim()}`);
       }
     }
-  });
+  };
 
-  child.stderr.on('data', (data) => {
+  const onStderr = (data: Buffer | string) => {
     const lines = data.toString().split('\n');
     for (const line of lines) {
       if (line.trim()) {
         stream.send('stderr', line.trim());
-        console.error(`[Ingest Error] ${line.trim()}`);
       }
     }
-  });
+  };
 
-  child.on('close', (code) => {
+  const onClose = (code: number) => {
     stream.send('done', { code });
     stream.close();
-  });
+  };
 
-  child.on('error', (e) => {
-    stream.send('error', e.message);
-    stream.close();
-  });
+  child.stdout?.on('data', onStdout);
+  child.stderr?.on('data', onStderr);
+  child.on('close', onClose);
 
   req.on('close', () => {
+    // Only remove local listeners, DON'T kill the child.
+    child.stdout?.removeListener('data', onStdout);
+    child.stderr?.removeListener('data', onStderr);
+    child.removeListener('close', onClose);
     stream.close();
-    child.kill();
   });
 }

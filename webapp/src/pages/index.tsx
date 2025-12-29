@@ -13,7 +13,6 @@ import SetupModal from '@/components/modals/SetupModal';
 import { useTheme } from '@/hooks/useTheme';
 
 import { useApp } from '@/context/AppContext';
-import { getPlatformLabel, PlatformMap } from '@/lib/shared/platforms';
 import { ContentRecord, Thread } from '@/lib/shared/types';
 import Sidebar from '@/sections/Sidebar';
 import ThreadContent from '@/sections/ThreadContent';
@@ -36,6 +35,7 @@ export default function Home() {
   const [targetTimestamp, setTargetTimestamp] = useState<number | null>(null);
   const [showSetup, setShowSetup] = useState(false);
   const [showMedia, setShowMedia] = useState(false);
+  const hasCheckedBgIngestRef = useRef(false);
 
   // Layout State
   const [showSidebar, setShowSidebar] = useState(true);
@@ -269,8 +269,6 @@ export default function Home() {
           setTargetMessageId(msgId.toString());
           setTargetTimestamp(info.timestamp || null);
           setHighlightToken((t) => t + 1);
-          // Map raw platform to display name before updating URL
-          const displayPlatform = getPlatformLabel(info.platform);
           // Navigate to the thread/page via URL update
           updateUrl(info.platform, info.threadId, info.page, info.category);
         }
@@ -329,6 +327,30 @@ export default function Home() {
       }
     }
   }, [activePlatform, resolvePlatform, isInitialized, availability]);
+
+  // 3. One-time Check for Background Jobs on Mount
+  useEffect(() => {
+    const checkIngest = async () => {
+      if (hasCheckedBgIngestRef.current) {
+        return;
+      }
+      hasCheckedBgIngestRef.current = true;
+
+      try {
+        const res = await fetch('/api/setup/ingest-status');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.isRunning) {
+            setShowSetup(true);
+          }
+        }
+      } catch (e) {
+        console.error('Failed to check background ingest:', e);
+      }
+    };
+
+    checkIngest();
+  }, [setShowSetup]);
 
   // 3. Responsive Check
   useEffect(() => {
@@ -488,6 +510,7 @@ export default function Home() {
     updateUrl,
     handleThreadSelect,
     isMobile,
+    showMedia,
   ]);
 
   const lastLoadedRef = useRef<string>('');
@@ -540,13 +563,15 @@ export default function Home() {
 
   return (
     <div className={styles.container} data-theme={theme}>
-      <SetupModal
-        isOpen={showSetup}
-        initialStep={isInitialized ? 2 : 0}
-        isFirstRun={isInitialized === false}
-        onClose={() => setShowSetup(false)}
-        onCompleted={() => window.location.reload()}
-      />
+      {showSetup && (
+        <SetupModal
+          isOpen={showSetup}
+          initialStep={isInitialized ? 2 : 0}
+          isFirstRun={isInitialized === false}
+          onClose={() => setShowSetup(false)}
+          onCompleted={() => window.location.reload()}
+        />
+      )}
       <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} onNavigate={handleSearchNavigate} />
 
       {/* Global Header */}

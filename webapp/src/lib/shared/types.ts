@@ -89,3 +89,10 @@ export interface SearchFacets {
   platforms: Record<string, number>;
   senders: Record<string, number>;
 }
+
+export interface DatasetEntry {
+  messages: {
+    role: 'system' | 'user' | 'assistant';
+    content: string;
+  }[];
+}

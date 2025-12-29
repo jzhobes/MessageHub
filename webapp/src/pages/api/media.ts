@@ -23,6 +23,33 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   filePath = decodeURIComponent(Array.isArray(filePath) ? filePath[0] : filePath);
   platform = Array.isArray(platform) ? platform[0] : platform;
 
+  // Handle external URLs (for Gmail proxies, etc.)
+  if (filePath.startsWith('http')) {
+    try {
+      const response = await fetch(filePath, {
+        headers: {
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        },
+        redirect: 'follow',
+      });
+
+      if (!response.ok) {
+        return res.status(response.status).send('Failed to fetch external media');
+      }
+
+      const contentType = response.headers.get('Content-Type') || 'application/octet-stream';
+      const buffer = Buffer.from(await response.arrayBuffer());
+
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      return res.send(buffer);
+    } catch (e) {
+      console.error('Error fetching external media:', e);
+      return res.status(500).send('Error fetching external media');
+    }
+  }
+
   // SECURITY: Prevent path traversal
   if (filePath.includes('..')) {
     return res.status(400).send('Invalid path');

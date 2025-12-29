@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 
 import DOMPurify from 'dompurify';
 
@@ -15,7 +15,7 @@ interface EmailItemProps {
   highlightToken?: number;
 }
 
-export default function EmailItem({ msg, isMyMsg, showAvatar, showName, isTarget, highlightToken }: EmailItemProps) {
+const EmailItem = React.memo(({ msg, isMyMsg, showAvatar, showName, isTarget, highlightToken }: EmailItemProps) => {
   const bubbleRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -32,6 +32,7 @@ export default function EmailItem({ msg, isMyMsg, showAvatar, showName, isTarget
       return () => animation.cancel();
     }
   }, [isTarget, highlightToken, isMyMsg]);
+
   const formatTime = (ms: number) => {
     return new Date(ms).toLocaleString();
   };
@@ -39,7 +40,9 @@ export default function EmailItem({ msg, isMyMsg, showAvatar, showName, isTarget
   const bubbleClasses = [styles.emailBubble, isMyMsg ? styles.sentBubble : styles.receivedBubble].join(' ');
 
   // Sanitize content only in browser to avoid SSR mismatch
-  const sanitizedContent = typeof window !== 'undefined' ? DOMPurify.sanitize(msg.content || '') : msg.content || '';
+  const sanitizedContent = useMemo(() => {
+    return typeof window !== 'undefined' ? DOMPurify.sanitize(msg.content || '') : msg.content || '';
+  }, [msg.content]);
 
   return (
     <div className={styles.emailRowContainer}>
@@ -63,4 +66,7 @@ export default function EmailItem({ msg, isMyMsg, showAvatar, showName, isTarget
       </div>
     </div>
   );
-}
+});
+
+EmailItem.displayName = 'EmailItem';
+export default EmailItem;

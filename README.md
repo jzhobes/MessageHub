@@ -87,12 +87,18 @@ Before running the start script, ensure you have:
 
 ## 🤖 DataForge AI (Fine-Tuning Studio)
 
-Create **"Virtual You"** datasets for training AI models.
+Create **"Virtual You"** datasets for training AI models from your local message history.
 
-1.  Click the **Robot Icon (🤖)** in the top header.
-2.  **Filter & Select**: Choose threads that represent your best writing.
-3.  **Configure**: Set your Identity (names), Cleanup rules, and Reaction handing.
-4.  **Generate**: The server produces a `.zip` containing optimized `.jsonl` files ready for OpenAI fine-tuning.
+1.  **Enter the Studio**: Click the **Robot Icon (🤖)** in the top header.
+2.  **Filter & Select**: Choose threads that represent your best writing. You can filter by platform to help find specific conversations.
+3.  **Analyze Your Style (Optional)**: Click the **"Analyze Style"** button inside the Persona field. This uses **Transformers.js** to run a local AI model (MobileBERT) in your browser that scans your messages and suggests persona tags (e.g., _Professional_, _Casual_, _Concise_).
+4.  **Configure Strategy**:
+    - **Identity**: Specify all names you use across different platforms so the system can identify "You".
+    - **Cleanup**: Auto-filter platform noise (e.g., "You missed a call").
+    - **Redact PII**: Scrub emails and phone numbers from the dataset.
+    - **Impute Reactions**: Convert your reactions (👍, ❤️) into conversational turns to thicken your training data.
+5.  **Live Preview**: Click **"Preview"** to see an instant sample of your generated data. This lets you verify your persona tags and PII redaction rules before initiating a full export.
+6.  **Generate**: MessageHub produces a `.zip` containing optimized `.jsonl` files ready for OpenAI fine-tuning.
 
 ---
 

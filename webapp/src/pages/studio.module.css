@@ -410,3 +410,159 @@
   color: var(--text-secondary);
   margin-left: auto;
 }
+.inputGroupContainer {
+  display: flex;
+  align-items: stretch;
+  /* Removed gap to make them touch */
+}
+
+/* Button inside TextInput Suffix */
+/* Button inside TextInput Suffix */
+/* Now using global .btn-input-suffix */
+
+.statusMessage {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: -4px;
+  font-weight: 500;
+}
+
+.previewBtn {
+  padding: 16px 20px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-1);
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.previewBtn:hover:not(:disabled) {
+  background: var(--bg-primary);
+  border-color: var(--text-secondary);
+}
+
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+}
+
+.previewModal {
+  background: var(--bg-primary);
+  width: 100%;
+  max-width: 900px;
+  max-height: 80vh;
+  border-radius: var(--radius-2);
+  border: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+}
+
+.previewModalHeader {
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.previewModalHeader h3 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.closeBtn {
+  background: none;
+  border: none;
+  font-size: 24px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.previewModalBody {
+  padding: 24px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.previewSession {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-1);
+  padding: 16px;
+  margin-bottom: 24px;
+}
+
+.sessionBadge {
+  font-size: 11px;
+  text-transform: uppercase;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.previewMessage {
+  margin-bottom: 16px;
+  padding: 12px;
+  border-radius: var(--radius-1);
+  background: var(--bg-primary);
+  border-left: 4px solid #6b7280;
+}
+
+.previewMessage[data-role='system'] {
+  border-left-color: #6366f1;
+  background: rgba(99, 102, 241, 0.05);
+}
+
+.previewMessage[data-role='user'] {
+  border-left-color: #10b981;
+}
+
+.previewMessage[data-role='assistant'] {
+  border-left-color: #2563eb;
+  background: rgba(37, 99, 235, 0.03);
+}
+
+.messageRole {
+  font-size: 10px;
+  font-weight: 700;
+  margin-bottom: 6px;
+  color: var(--text-secondary);
+}
+
+.messageContent {
+  margin: 0;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 13px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.miniProgress {
+  height: 4px;
+  background: var(--bg-secondary);
+  border-radius: 2px;
+  overflow: hidden;
+  width: 100%;
+  margin-top: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.miniProgressFill {
+  height: 100%;
+  background: linear-gradient(90deg, #0d9488 0%, #14b8a6 100%);
+  transition: width 0.2s linear;
+}

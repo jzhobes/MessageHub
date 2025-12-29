@@ -15,7 +15,8 @@ import TextInput from '@/components/TextInput';
 import { useForm } from '@/hooks/useForm';
 import { useTheme } from '@/hooks/useTheme';
 
-import { Thread } from '@/lib/shared/types';
+import { getPlatformLabel } from '@/lib/shared/platforms';
+import { DatasetEntry, Thread } from '@/lib/shared/types';
 import styles from '@/pages/studio.module.css';
 import { StudioControls } from '@/sections/StudioControls';
 import { StudioThreadList } from '@/sections/StudioThreadList';
@@ -74,7 +75,7 @@ export default function Studio() {
           // Tag with platform if not already (API provides it)
           allThreads = data.map((t: Thread) => ({
             ...t,
-            platform_source: t.platform, // map back for existing logic
+            platform_source: getPlatformLabel(t.platform || ''),
           }));
         }
 
@@ -98,8 +99,135 @@ export default function Studio() {
   // Filtered List
   const visibleThreads = useMemo(() => {
     // If set is empty, show all. Otherwise check if platform label is in set.
-    return threads.filter((t) => filterPlatforms.size === 0 || (t.platform && filterPlatforms.has(t.platform)));
+    return threads.filter(
+      (t) => filterPlatforms.size === 0 || (t.platform_source && filterPlatforms.has(t.platform_source)),
+    );
   }, [threads, filterPlatforms]);
+
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [downloadProgress, setDownloadProgress] = useState(0);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [previewing, setPreviewing] = useState(false);
+  const [previewData, setPreviewData] = useState<DatasetEntry[] | null>(null);
+
+  async function handlePreview() {
+    if (selectedIds.size === 0) {
+      alert('Select some threads first to preview the dataset.');
+      return;
+    }
+
+    setPreviewing(true);
+    try {
+      const names = config.identityNames
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+
+      const res = await fetch('/api/studio/preview-dataset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          threadIds: Array.from(selectedIds),
+          identityNames: names,
+          includeGroupSpeakerNames: config.includeGroupNames,
+          mergeSequential: config.mergeSequential,
+          removeSystemMessages: config.removeSystemMessages,
+          imputeReactions: config.imputeReactions,
+          redactPII: config.redactPII,
+          personaTag: config.personaTag.trim(),
+          customInstructions: config.customInstructions.trim(),
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error('Failed to generate preview');
+      }
+      const data = await res.json();
+      setPreviewData(data.sessions);
+    } catch (e) {
+      console.error(e);
+      alert('Preview failed');
+    } finally {
+      setPreviewing(false);
+    }
+  }
+
+  async function handleAnalyzeStyle() {
+    if (selectedIds.size === 0) {
+      alert('Select some threads first to analyze your style.');
+      return;
+    }
+
+    setAnalyzing(true);
+    setStatusMessage('Fetching sample messages...');
+    setField('personaTag', ''); // Clear input on start
+
+    try {
+      // 1. Fetch sample messages
+      const res = await fetch('/api/studio/sample-messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          threadIds: Array.from(selectedIds),
+          limit: 100,
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error('Failed to fetch sample messages');
+      }
+      const { messages } = await res.json();
+
+      if (messages.length === 0) {
+        alert('No messages found from you in the selected threads.');
+        setAnalyzing(false);
+        return;
+      }
+
+      // 2. Run Worker
+      setStatusMessage('Initializing AI...');
+      const worker = new Worker('/workers/style-worker.js', { type: 'module' });
+
+      worker.onmessage = (e) => {
+        const { type, message, suggestions, error, progress } = e.data;
+        if (type === 'status') {
+          setStatusMessage(message);
+          setDownloadProgress(0);
+        } else if (type === 'progress') {
+          setStatusMessage(message);
+          if (progress) {
+            setDownloadProgress(progress);
+          }
+        } else if (type === 'result') {
+          setAnalyzing(false);
+          setStatusMessage(null);
+          setDownloadProgress(0);
+          const nextTags = [...new Set(suggestions)];
+          setField('personaTag', nextTags.join(', '));
+          // Don't auto-terminate immediately if we want to allow more work,
+          // but here we are one-shot.
+          setTimeout(() => worker.terminate(), 100);
+        } else if (type === 'error') {
+          // If the error string contains the known harmless warning, ignore it
+          if (error && typeof error === 'string' && error.includes('VerifyEachNodeIsAssignedToAnEp')) {
+            return;
+          }
+          setAnalyzing(false);
+          setStatusMessage(null);
+          setDownloadProgress(0);
+          alert('AI Analysis failed: ' + error);
+          worker.terminate();
+        }
+      };
+
+      worker.postMessage({ messages });
+    } catch (e) {
+      console.error(e);
+      alert('Analysis failed: ' + (e instanceof Error ? e.message : 'Unknown error'));
+      setAnalyzing(false);
+      setStatusMessage(null);
+    }
+  }
 
   async function handleGenerate() {
     if (selectedIds.size === 0) {
@@ -322,11 +450,34 @@ export default function Studio() {
                         Example: &quot;Professional, Tech&quot;, &quot;Casual, Sarcastic&quot;. Multiple tags supported
                         (comma separated).
                       </p>
-                      <TextInput
-                        placeholder="e.g. Casual, Friendly"
-                        value={config.personaTag}
-                        onChange={(e) => setField('personaTag', e.target.value)}
-                      />
+                      <div className={styles.inputGroupContainer}>
+                        <TextInput
+                          placeholder="e.g. Casual, Friendly"
+                          value={config.personaTag}
+                          suffix={
+                            <button
+                              className="btn-input-suffix"
+                              disabled={analyzing || selectedIds.size === 0}
+                              title="Analyze writing style in selected threads"
+                              onClick={handleAnalyzeStyle}
+                            >
+                              <FaRobot size={16} />
+                              <span>{analyzing ? 'Analyzing' : 'Analyze Style'}</span>
+                            </button>
+                          }
+                          onChange={(e) => setField('personaTag', e.target.value)}
+                        />
+                      </div>
+                      {(statusMessage || downloadProgress > 0) && (
+                        <div style={{ margin: '4px 12px 0 12px' }}>
+                          {statusMessage && <div className={styles.statusMessage}>{statusMessage}</div>}
+                          {downloadProgress > 0 && downloadProgress < 100 && (
+                            <div className={styles.miniProgress}>
+                              <div className={styles.miniProgressFill} style={{ width: `${downloadProgress}%` }} />
+                            </div>
+                          )}
+                        </div>
+                      )}
                       <div className={styles.templateContainer}>
                         <span className={styles.templateLabel}>Templates:</span>
                         {PERSONA_TEMPLATES.map((t) => (
@@ -467,15 +618,25 @@ export default function Studio() {
                     </p>
                   </div>
 
-                  <button
-                    className={styles.generateBtn}
-                    disabled={generating || selectedIds.size === 0}
-                    onClick={handleGenerate}
-                  >
-                    {generating
-                      ? `Processing... ${progress.total > 0 ? Math.round((progress.current / progress.total) * 100) + '%' : ''}`
-                      : `Generate Dataset (${selectedIds.size.toLocaleString()})`}
-                  </button>
+                  <div style={{ display: 'flex', gap: 12 }}>
+                    <button
+                      className={styles.previewBtn}
+                      disabled={generating || previewing || selectedIds.size === 0}
+                      onClick={handlePreview}
+                    >
+                      {previewing ? '...' : 'Preview'}
+                    </button>
+                    <button
+                      className={styles.generateBtn}
+                      disabled={generating || previewing || selectedIds.size === 0}
+                      style={{ flex: 1 }}
+                      onClick={handleGenerate}
+                    >
+                      {generating
+                        ? `Processing... ${progress.total > 0 ? Math.round((progress.current / progress.total) * 100) + '%' : ''}`
+                        : `Generate (${selectedIds.size.toLocaleString()})`}
+                    </button>
+                  </div>
                   {generating && (
                     <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: 8 }}>
                       This may take a minute...
@@ -493,6 +654,36 @@ export default function Studio() {
         onClose={() => setIsPreviewThreadOpen(false)}
         onAfterClose={() => setActivePreviewThread(null)}
       />
+
+      {/* Dataset Preview Modal */}
+      {previewData && (
+        <div className={styles.modalOverlay} onClick={() => setPreviewData(null)}>
+          <div className={styles.previewModal} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.previewModalHeader}>
+              <h3>Dataset Preview (First 5 turns)</h3>
+              <button className={styles.closeBtn} onClick={() => setPreviewData(null)}>
+                &times;
+              </button>
+            </div>
+            <div className={styles.previewModalBody}>
+              <p className={styles.helperText} style={{ marginBottom: 16 }}>
+                This is exactly how your data will be formatted for fine-tuning.
+              </p>
+              {previewData.map((session, i) => (
+                <div key={i} className={styles.previewSession}>
+                  <div className={styles.sessionBadge}>Session {i + 1}</div>
+                  {session.messages.map((msg, j) => (
+                    <div key={j} className={styles.previewMessage} data-role={msg.role}>
+                      <div className={styles.messageRole}>{msg.role.toUpperCase()}</div>
+                      <pre className={styles.messageContent}>{msg.content}</pre>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

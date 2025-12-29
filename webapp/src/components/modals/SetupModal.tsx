@@ -73,6 +73,13 @@ export default function SetupModal({
     runInstall: startIngestion,
   } = useIngestion();
 
+  // Auto-switch to scan tab if ingestion starts or re-attaches
+  useEffect(() => {
+    if (isInstalling) {
+      setActiveTab((prev) => (prev !== 'scan' ? 'scan' : prev)); // eslint-disable-line react-hooks/set-state-in-effect
+    }
+  }, [isInstalling]);
+
   // Side-effect: Load config on open
   useEffect(() => {
     if (!isOpen) {

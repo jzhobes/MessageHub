@@ -252,6 +252,14 @@ def map_cid_to_local(html, media):
     # We need to find if any of these were CIDs
     for m in media:
         uri = m["uri"]
+
+        if uri.startswith("http"):
+            # Also proxy known problematic external links (like Google proxies)
+            if "googleusercontent.com/proxy" in uri.lower():
+                local_url = f"/api/media?path={uri}&platform=google_mail"
+                html = html.replace(uri, local_url)
+            continue
+
         fname = uri.split("/")[-1]
 
         # If the filename was derived from a CID (e.g. ii_k1r2z3x4.png)
