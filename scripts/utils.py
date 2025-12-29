@@ -99,6 +99,26 @@ def parse_iso_time(iso_str):
         return 0
 
 
+def get_media_type(filename, default="file"):
+    """
+    Determines MessageHub media type (photo, video, gif, audio) based on filename extension.
+    """
+    if not filename:
+        return default
+
+    ext = Path(filename).suffix.lower()
+    if ext in [".jpg", ".jpeg", ".png", ".webp", ".heic", ".bmp"]:
+        return "photo"
+    if ext in [".mp4", ".mov", ".avi", ".mkv", ".webm"]:
+        return "video"
+    if ext == ".gif":
+        return "gif"
+    if ext in [".mp3", ".wav", ".m4a", ".ogg", ".aac"]:
+        return "audio"
+
+    return default
+
+
 def clean_json_messages(directory, platforms=None):
     """
     Recursively deletes message JSON files from the specified directory

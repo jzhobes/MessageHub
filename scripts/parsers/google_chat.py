@@ -3,7 +3,7 @@ import re
 import sys
 from pathlib import Path
 
-from utils import fix_text, parse_iso_time
+from utils import fix_text, get_media_type, parse_iso_time
 
 
 def normalize_participants(participant_list):
@@ -154,7 +154,8 @@ def ingest_google_chat_thread(cursor, thread_dir):
                     export_name = att.get("export_name")
                     if export_name:
                         uri = f"{thread_id}/{export_name}"
-                        media.append({"uri": uri, "type": "file"})
+                        m_type = get_media_type(export_name)
+                        media.append({"uri": uri, "type": m_type})
 
             media_json = json.dumps(media) if media else None
 

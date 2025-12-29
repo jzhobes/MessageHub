@@ -44,11 +44,11 @@
 }
 
 .categoryTriggerInteractive:hover {
-  background: rgba(0, 0, 0, 0.05);
+  background: var(--bg-hover);
 }
 
 [data-theme='dark'] .categoryTriggerInteractive:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--bg-hover);
 }
 
 .categoryIcon {
@@ -56,7 +56,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 20px; /* Fixed width for perfect alignment */
+  width: 20px;
   flex-shrink: 0;
 }
 
@@ -68,7 +68,7 @@
 .categoryChevron {
   color: var(--text-secondary);
   font-size: 0.8rem;
-  margin-left: auto; /* Push to the right */
+  margin-left: auto;
   opacity: 0.5;
 }
 
@@ -89,7 +89,7 @@
 .dropdownItemActive {
   background-color: rgba(0, 122, 255, 0.15) !important;
   border-left: 4px solid var(--border-thread-active) !important;
-  padding-left: 16px !important; /* Adjust for 4px border to keep 20px total alignment */
+  padding-left: 16px !important;
   font-weight: 600;
   color: var(--text-primary);
 }

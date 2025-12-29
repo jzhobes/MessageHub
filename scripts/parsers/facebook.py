@@ -4,7 +4,7 @@ import sys
 import traceback
 from pathlib import Path
 
-from utils import fix_text
+from utils import fix_text, get_media_type
 
 
 def get_stable_id(title):
@@ -99,7 +99,7 @@ def ingest_facebook_instagram_thread(cursor, thread_dir, platform, thread_id_ove
                     if "audio_files" in m:
                         media.extend([{"uri": x.get("uri"), "type": "audio"} for x in m["audio_files"]])
                     if "files" in m:
-                        media.extend([{"uri": x.get("uri"), "type": "file"} for x in m["files"]])
+                        media.extend([{"uri": x.get("uri"), "type": get_media_type(x.get("uri"))} for x in m["files"]])
                     if "sticker" in m:
                         s = m["sticker"]
                         if isinstance(s, dict) and "uri" in s:

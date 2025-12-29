@@ -1,4 +1,4 @@
-import React from 'react';
+import { useEffect, useRef } from 'react';
 
 import DOMPurify from 'dompurify';
 
@@ -16,9 +16,9 @@ interface EmailItemProps {
 }
 
 export default function EmailItem({ msg, isMyMsg, showAvatar, showName, isTarget, highlightToken }: EmailItemProps) {
-  const bubbleRef = React.useRef<HTMLDivElement>(null);
+  const bubbleRef = useRef<HTMLDivElement>(null);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (isTarget && bubbleRef.current && highlightToken) {
       const color = isMyMsg ? 'var(--bubble-sent-bg)' : 'var(--bubble-received-bg)';
       const animation = bubbleRef.current.animate(

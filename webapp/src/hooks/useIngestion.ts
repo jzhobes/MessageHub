@@ -35,7 +35,7 @@ export function useIngestion() {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [isInstalling]);
 
-  const runInstall = async (remoteFiles: string[], transferMode: 'copy' | 'move') => {
+  async function runInstall(remoteFiles: string[], transferMode: 'copy' | 'move') {
     setIsInstalling(true);
     setIsComplete(false);
     setError(null);
@@ -317,7 +317,7 @@ export function useIngestion() {
         }
       }
     }
-  };
+  }
 
   return {
     isInstalling,

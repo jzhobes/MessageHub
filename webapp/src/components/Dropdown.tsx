@@ -213,4 +213,6 @@ export function DropdownItem({ children, className, closeOnClick, disabled, onCl
   );
 }
 
-export const DropdownDivider = () => <div style={{ height: 1, background: 'var(--border-color)', margin: '4px 0' }} />;
+export function DropdownDivider() {
+  return <div style={{ height: 1, background: 'var(--border-color)', margin: '4px 0' }} />;
+}

@@ -6,43 +6,27 @@ import { FaArrowLeft, FaBars, FaCog, FaSearch } from 'react-icons/fa';
 import { FiMoon, FiSun } from 'react-icons/fi';
 
 import styles from '@/components/Layout.module.css';
+import MediaPanel from '@/components/MediaPanel';
 import SearchModal from '@/components/modals/SearchModal';
 import SetupModal from '@/components/modals/SetupModal';
 
 import { useTheme } from '@/hooks/useTheme';
 
 import { useApp } from '@/context/AppContext';
+import { getPlatformLabel, PlatformMap } from '@/lib/shared/platforms';
 import { ContentRecord, Thread } from '@/lib/shared/types';
 import Sidebar from '@/sections/Sidebar';
 import ThreadContent from '@/sections/ThreadContent';
 import ThreadList from '@/sections/ThreadList';
 
-// Convert raw DB platform identifiers to UI display names
-function mapPlatform(raw: string): string {
-  switch (raw) {
-    case 'google_chat':
-      return 'Google Chat';
-    case 'google_voice':
-      return 'Google Voice';
-    case 'facebook':
-      return 'Facebook';
-    case 'instagram':
-      return 'Instagram';
-    case 'google_mail':
-      return 'Gmail';
-    default:
-      return raw.replace(/[_-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-  }
-}
-
-const platformPreference = ['Facebook', 'Instagram', 'Google Chat', 'Gmail', 'Google Voice'];
+const platformPreference = ['facebook', 'instagram', 'google_chat', 'google_mail', 'google_voice'];
 
 export default function Home() {
   const router = useRouter();
   const prevWidthRef = useRef(0);
 
   // --- State ---
-  const [activePlatform, setActivePlatform] = useState<string>('Facebook');
+  const [activePlatform, setActivePlatform] = useState<string>('facebook');
   const [threads, setThreads] = useState<Thread[] | null>(null);
   const [activeThread, setActiveThread] = useState<Thread | null>(null);
   const [messages, setMessages] = useState<ContentRecord[] | null>(null);
@@ -51,10 +35,12 @@ export default function Home() {
   const [targetMessageId, setTargetMessageId] = useState<string | null>(null);
   const [targetTimestamp, setTargetTimestamp] = useState<number | null>(null);
   const [showSetup, setShowSetup] = useState(false);
+  const [showMedia, setShowMedia] = useState(false);
 
   // Layout State
   const [showSidebar, setShowSidebar] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
+  const [windowWidth, setWindowWidth] = useState(0);
   const [highlightToken, setHighlightToken] = useState(0);
   // Availability & Router State
   const { isInitialized, availability } = useApp();
@@ -193,7 +179,7 @@ export default function Home() {
   const handlePlatformSelect = useCallback(
     (p: string) => {
       const safePlatform = resolvePlatform(p, availability);
-      const defaultCat = safePlatform === 'Gmail' ? 'inbox' : 'message';
+      const defaultCat = safePlatform === 'google_mail' ? 'inbox' : 'message';
 
       // 1. Same platform/category selection
       if (safePlatform === activePlatform && activeCategory === defaultCat) {
@@ -257,7 +243,10 @@ export default function Home() {
       if (activeThread?.id === t.id) {
         return;
       }
-      setActiveThread(t);
+      setActiveThread({
+        ...t,
+        platform: activePlatform,
+      });
       setMessages(null);
       // Don't set loading(true) here, as messages=null handles the spinner
       setHasMoreOld(false);
@@ -281,9 +270,9 @@ export default function Home() {
           setTargetTimestamp(info.timestamp || null);
           setHighlightToken((t) => t + 1);
           // Map raw platform to display name before updating URL
-          const displayPlatform = mapPlatform(info.platform);
+          const displayPlatform = getPlatformLabel(info.platform);
           // Navigate to the thread/page via URL update
-          updateUrl(displayPlatform, info.threadId, info.page, info.category);
+          updateUrl(info.platform, info.threadId, info.page, info.category);
         }
       } catch (e) {
         console.error('Jump failed', e);
@@ -345,15 +334,19 @@ export default function Home() {
   useEffect(() => {
     const handleResize = () => {
       const width = window.innerWidth;
+      setWindowWidth(width);
       const mobile = width < 768;
       setIsMobile(mobile);
 
-      // Auto-collapse sidebar logic on threshold cross (1024px)
+      // Auto-collapse sidebar logic
+      // When media is open, we need more room, so we collapse sidebar at 1350px instead of 1024px
+      const threshold = showMedia ? 1350 : 1024;
       const prevWidth = prevWidthRef.current;
+
       if (prevWidth > 0) {
-        if (prevWidth >= 1024 && width < 1024) {
+        if (prevWidth >= threshold && width < threshold) {
           setShowSidebar(false);
-        } else if (prevWidth < 1024 && width >= 1024) {
+        } else if (prevWidth < threshold && width >= threshold) {
           setShowSidebar(true);
         }
       }
@@ -364,7 +357,8 @@ export default function Home() {
     prevWidthRef.current = initialWidth;
 
     handleResize();
-    if (initialWidth < 1024) {
+    const threshold = showMedia ? 1350 : 1024;
+    if (initialWidth < threshold) {
       setShowSidebar(false);
     } else {
       setShowSidebar(true);
@@ -372,7 +366,24 @@ export default function Home() {
 
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, []);
+  }, [showMedia]);
+
+  // Sync sidebar state when Media Panel is toggled manually
+  useEffect(() => {
+    if (!mounted) {
+      return;
+    }
+    const width = window.innerWidth;
+    if (showMedia) {
+      if (width < 1350) {
+        setShowSidebar(false);
+      }
+    } else {
+      if (width >= 1024) {
+        setShowSidebar(true);
+      }
+    }
+  }, [showMedia, mounted]);
 
   const [categoryCounts, setCategoryCounts] = useState<Record<string, number>>({});
   // ...
@@ -431,12 +442,17 @@ export default function Home() {
       setMessages(null);
       setThreads(null);
       // If no type param, set default for new platform
-      const defaultCat = safePlatform === 'Gmail' ? 'inbox' : 'message';
+      const defaultCat = safePlatform === 'google_mail' ? 'inbox' : 'message';
       setActiveCategory(typeParam || defaultCat);
       return;
     }
 
-    const defaultCat = activePlatform === 'Gmail' ? 'inbox' : 'message';
+    const defaultCat = activePlatform === 'google_mail' ? 'inbox' : 'message';
+
+    // Auto-close Media Panel if switching to a platform that doesn't support it (e.g., Gmail)
+    if (activePlatform === 'google_mail' && showMedia) {
+      setShowMedia(false);
+    }
     const effectiveType = typeParam || defaultCat;
     if (effectiveType !== activeCategory) {
       setActiveCategory(effectiveType);
@@ -506,8 +522,10 @@ export default function Home() {
   }
 
   // --- Calculated Values ---
-  const showThreadList = !isMobile || (isMobile && !activeThread);
-  const showThreadContent = !isMobile || (isMobile && !!activeThread);
+  const showThreadList = !isMobile
+    ? !(showMedia && windowWidth > 0 && windowWidth < 1150)
+    : !activeThread && !showMedia;
+  const showThreadContent = !isMobile || (isMobile && !!activeThread && !showMedia);
   const isSidebarVisible = true;
   const collapsed = !showSidebar;
 
@@ -540,7 +558,13 @@ export default function Home() {
             </button>
           )}
           {isMobile && activeThread && (
-            <button className={styles.iconButton} onClick={() => updateUrl(activePlatform)}>
+            <button
+              className={styles.iconButton}
+              onClick={() => {
+                setShowMedia(false);
+                updateUrl(activePlatform);
+              }}
+            >
               <FaArrowLeft />
             </button>
           )}
@@ -640,11 +664,31 @@ export default function Home() {
                 targetTimestamp={targetTimestamp}
                 highlightToken={highlightToken}
                 initializing={isInitializing}
+                showMedia={showMedia}
                 onStartReached={handleLoadOld}
                 onEndReached={handleLoadNew}
+                onShowMediaChange={setShowMedia}
               />
             </div>
           )}
+
+          <div
+            className={styles.mediaPanelWrapper}
+            style={{
+              width: showMedia ? (isMobile ? '100%' : '400px') : '0px',
+              borderLeft: showMedia ? '1px solid var(--border-color)' : 'none',
+              flexShrink: 0,
+            }}
+          >
+            <MediaPanel
+              key={activeThread?.id}
+              isOpen={showMedia}
+              platform={activeThread?.platform || ''}
+              threadId={activeThread?.id || ''}
+              onClose={() => setShowMedia(false)}
+              onMediaClick={handleSearchNavigate}
+            />
+          </div>
         </div>
       </div>
     </div>

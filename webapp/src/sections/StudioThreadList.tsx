@@ -24,7 +24,7 @@ export function StudioThreadList({ loading, threads, selectedIds, onChange, onPr
     getId: (t) => t.id,
   });
 
-  const getScoreColor = (score: number) => {
+  function getScoreColor(score: number) {
     if (score >= 70) {
       return '#10b981';
     } // Green (High)
@@ -32,12 +32,12 @@ export function StudioThreadList({ loading, threads, selectedIds, onChange, onPr
       return '#f59e0b';
     } // Yellow (Med)
     return '#ef4444'; // Red (Low)
-  };
+  }
 
-  const handlePreview = (e: React.MouseEvent, threadId: string) => {
+  function handlePreview(e: React.MouseEvent, threadId: string) {
     e.stopPropagation();
     onPreview(threadId);
-  };
+  }
 
   return (
     <div className={styles.threadList}>

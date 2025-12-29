@@ -1,4 +1,4 @@
-import React from 'react';
+import { useEffect, useRef } from 'react';
 
 import { FaMapMarkerAlt } from 'react-icons/fa';
 
@@ -15,9 +15,9 @@ interface EventItemProps {
 
 export default function EventItem({ msg, isMyMsg, isTarget, highlightToken }: EventItemProps) {
   const { content, event_metadata } = msg;
-  const bubbleRef = React.useRef<HTMLDivElement>(null);
+  const bubbleRef = useRef<HTMLDivElement>(null);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (isTarget && bubbleRef.current && highlightToken) {
       const color = isMyMsg ? 'var(--bubble-sent-bg)' : 'var(--bubble-received-bg)';
       const animation = bubbleRef.current.animate(

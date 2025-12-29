@@ -7,7 +7,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     if (!db.exists()) {
       const empty: Record<string, boolean> = {};
-      Object.values(PlatformMap).forEach((label) => (empty[label] = false));
+      Object.keys(PlatformMap).forEach((dbKey) => (empty[dbKey] = false));
       return res.status(200).json({ initialized: false, platforms: empty });
     }
 
@@ -21,8 +21,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     };
 
     const status: Record<string, boolean> = {};
-    Object.entries(PlatformMap).forEach(([dbKey, label]) => {
-      status[label] = hasThreads(dbKey);
+    Object.keys(PlatformMap).forEach((dbKey) => {
+      status[dbKey] = hasThreads(dbKey);
     });
 
     res.status(200).json({

@@ -1,5 +1,6 @@
 import { get_encoding } from 'tiktoken';
 
+import { PlatformMap } from '@/lib/shared/platforms';
 import { ContentRecord } from '@/lib/shared/types';
 
 import db from './db';
@@ -108,13 +109,7 @@ export class DatasetGenerator {
       let currentSession: { role: 'system' | 'user' | 'assistant'; content: string }[] = [];
       const contextType = isGroup ? 'Group chat' : 'Chat';
 
-      const platformMap: Record<string, string> = {
-        google_voice: 'Google Voice',
-        google_chat: 'Google Chat',
-        facebook: 'Facebook',
-        instagram: 'Instagram',
-      };
-      const displayPlatform = platformMap[thread.platform] || thread.platform;
+      const displayPlatform = PlatformMap[thread.platform] || thread.platform;
 
       let systemContent = `Context: ${contextType} with "${thread.title || 'Unknown'}" on "${displayPlatform}".`;
       if (this._personaTag) {

@@ -5,6 +5,7 @@
   --text-sidebar: #000000;
   --text-sidebar-muted: #8e8e93;
   --text-sidebar-active: #000000;
+  --bg-hover: rgba(0, 0, 0, 0.05);
 
   --bg-thread-list: rgba(255, 255, 255, 0.8);
   --bg-thread-item-hover: #f2f2f7;
@@ -66,6 +67,7 @@
   --text-sidebar: #ffffff;
   --text-sidebar-muted: #98989d;
   --text-sidebar-active: #ffffff;
+  --bg-hover: rgba(255, 255, 255, 0.05);
 
   --bg-thread-list: #1c1c1e;
   --bg-thread-item-hover: #2c2c2e;

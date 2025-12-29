@@ -1,4 +1,4 @@
-import React, { ReactNode, useEffect } from 'react';
+import React, { ReactNode, useContext, useEffect, useRef, useState } from 'react';
 
 import { FaTimes } from 'react-icons/fa';
 
@@ -32,7 +32,7 @@ export function ModalHeader({
   disabled?: boolean;
   onClose?: () => void;
 }) {
-  const { isReady } = React.useContext(BaseModalContext);
+  const { isReady } = useContext(BaseModalContext);
 
   return (
     <div className={`${styles.header} ${className}`}>
@@ -63,8 +63,8 @@ export default function BaseModal({
   onClose,
   onAfterClose,
 }: BaseModalProps) {
-  const dialogRef = React.useRef<HTMLDialogElement>(null);
-  const [isReady, setIsReady] = React.useState(false);
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const [isReady, setIsReady] = useState(false);
   const { isMounted, isClosing } = useModalAnimation(isOpen, 300);
 
   useEffect(() => {

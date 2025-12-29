@@ -14,8 +14,8 @@
   border-block-end: 1px solid var(--border-color);
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding-inline: 20px;
+  justify-content: flex-start;
+  padding-inline: 0 20px;
   font-weight: 600;
   font-size: 1.1rem;
   color: var(--text-primary);
@@ -37,6 +37,8 @@
   font-size: 0.8rem;
   color: var(--text-secondary);
   margin-inline-start: 10px;
+  margin-left: auto;
+  flex-shrink: 0;
 }
 
 .messagesContainer {
@@ -126,4 +128,140 @@
       border-end-start-radius: var(--radius-3);
     }
   }
+}
+
+/* Header Dropdown */
+.headerDropdownWrapper {
+  height: 100%;
+  display: flex;
+  align-items: stretch;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 650px;
+}
+
+.headerDropdown {
+  height: 100%;
+  display: flex;
+  flex: 1;
+  min-width: 0;
+}
+
+.headerTitleButton {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 20px;
+  height: 100%;
+  width: 100%;
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  font-weight: 600;
+  font-size: 1.1rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+  border-radius: 0;
+  min-width: 0;
+}
+
+.headerTitleButton:hover {
+  background: var(--bg-hover);
+}
+
+[data-theme='dark'] .headerTitleButton:hover {
+  background: var(--bg-hover);
+}
+
+.headerDropdownMenu {
+  min-width: 240px;
+}
+
+.headerDropdownItem {
+  font-size: 1rem !important;
+  font-weight: 500;
+  padding: 12px 20px !important;
+  white-space: nowrap;
+}
+
+/* Members Modal */
+.modalOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+
+.modalContent {
+  background: var(--bg-primary);
+  border-radius: 12px;
+  max-width: 500px;
+  width: 90%;
+  max-height: 80vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.modalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.modalHeader h3 {
+  margin: 0;
+  font-size: 18px;
+  color: var(--text-primary);
+}
+
+.modalHeader button {
+  background: none;
+  border: none;
+  font-size: 24px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.modalHeader button:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.modalBody {
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.participantsList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.participantsList li {
+  padding: 12px;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-primary);
+}
+
+.participantsList li:last-child {
+  border-bottom: none;
 }

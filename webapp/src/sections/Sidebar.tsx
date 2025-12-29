@@ -1,8 +1,9 @@
 import React from 'react';
 
 import Link from 'next/link';
-import { FaFacebook, FaInstagram, FaPhone, FaRobot } from 'react-icons/fa';
-import { SiGmail, SiGooglechat } from 'react-icons/si';
+import { FaRobot } from 'react-icons/fa';
+
+import PlatformIcon from '@/components/PlatformIcon';
 
 import styles from './Sidebar.module.css';
 
@@ -13,29 +14,31 @@ interface SidebarProps {
   onPlatformSelect: (platform: string) => void;
 }
 
-export default function Sidebar({ activePlatform, availability, collapsed, onPlatformSelect }: SidebarProps) {
-  const platforms = [
-    { name: 'Facebook', icon: <FaFacebook color={availability['Facebook'] ? '#1877F2' : '#666'} size={20} /> },
-    { name: 'Instagram', icon: <FaInstagram color={availability['Instagram'] ? '#E4405F' : '#666'} size={18} /> },
-    { name: 'Google Chat', icon: <SiGooglechat color={availability['Google Chat'] ? '#00AC47' : '#666'} size={18} /> },
-    { name: 'Google Voice', icon: <FaPhone color={availability['Google Voice'] ? '#34A853' : '#666'} size={18} /> },
-    { name: 'Gmail', icon: <SiGmail color={availability['Gmail'] ? '#EA4335' : '#666'} size={18} /> },
-  ];
+const SIDEBAR_PLATFORMS = [
+  { id: 'facebook', label: 'Facebook', size: 20 },
+  { id: 'instagram', label: 'Instagram', size: 18 },
+  { id: 'google_chat', label: 'Google Chat', size: 18 },
+  { id: 'google_voice', label: 'Google Voice', size: 18 },
+  { id: 'google_mail', label: 'Gmail', size: 18 },
+];
 
+export default function Sidebar({ activePlatform, availability, collapsed, onPlatformSelect }: SidebarProps) {
   return (
     <div className={`${styles.sidebar} ${collapsed ? styles.sidebarCollapsed : ''}`}>
-      {platforms.map((p) => {
-        const isAvailable = availability[p.name];
+      {SIDEBAR_PLATFORMS.map((p) => {
+        const isAvailable = availability[p.id];
         return (
           <button
-            key={p.name}
-            className={`${styles.navItem} ${activePlatform === p.name ? styles.navItemActive : ''}`}
+            key={p.id}
+            className={`${styles.navItem} ${activePlatform === p.id ? styles.navItemActive : ''}`}
             disabled={!isAvailable}
-            title={collapsed ? p.name : ''}
-            onClick={() => onPlatformSelect(p.name)}
+            title={collapsed ? p.label : ''}
+            onClick={() => onPlatformSelect(p.id)}
           >
-            <span className={styles.sidebarIconWrapper}>{p.icon}</span>
-            <span className={styles.sidebarLabel}>{p.name}</span>
+            <span className={styles.sidebarIconWrapper}>
+              <PlatformIcon platform={p.id} active={isAvailable} size={p.size} />
+            </span>
+            <span className={styles.sidebarLabel}>{p.label}</span>
           </button>
         );
       })}

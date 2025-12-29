@@ -164,6 +164,16 @@
   flex-direction: column;
   overflow: hidden;
 }
+
+.mediaPanelWrapper {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-left: 1px solid var(--border-color);
+  background-color: var(--bg-thread-list);
+  transition: width 0.3s ease-in-out;
+}
 @media (max-width: 768px) {
   .searchTrigger span {
     display: none;

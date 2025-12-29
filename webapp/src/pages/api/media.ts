@@ -13,62 +13,102 @@ import type { NextApiRequest, NextApiResponse } from 'next';
  * @param res - Next.js API response
  */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const { path: pathParam, platform } = req.query;
+  let { path: filePath, platform } = req.query;
 
-  if (!pathParam || !platform) {
+  if (!filePath || !platform) {
     return res.status(400).send('Missing path or platform');
   }
 
-  const pathStr = decodeURIComponent(Array.isArray(pathParam) ? pathParam[0] : pathParam);
+  // Normalize to single strings
+  filePath = decodeURIComponent(Array.isArray(filePath) ? filePath[0] : filePath);
+  platform = Array.isArray(platform) ? platform[0] : platform;
 
   // SECURITY: Prevent path traversal
-  // This is critical since this API reads arbitrary files from disk
-  if (pathStr.includes('..')) {
+  if (filePath.includes('..')) {
     return res.status(400).send('Invalid path');
   }
 
-  const platformStr = Array.isArray(platform) ? platform[0] : platform;
-
-  if (!pathStr) {
-    return res.status(400).send('Missing path');
-  }
-
   const baseDir = appConfig.WORKSPACE_PATH;
-  let relativePath = pathStr;
+  let relativePath = filePath;
 
   // Platform-specific path adjustments (case-insensitive)
-  const pLower = platformStr.toLowerCase();
-  if (pLower === 'facebook' || pLower === 'messenger') {
+  platform = platform.toLowerCase();
+  if (platform === 'facebook') {
     relativePath = path.join(
       'Facebook',
-      pathStr.startsWith('your_facebook_activity') ? '' : 'your_facebook_activity',
-      pathStr,
+      filePath.startsWith('your_facebook_activity') ? '' : 'your_facebook_activity',
+      filePath,
     );
-  } else if (pLower === 'instagram') {
+  } else if (platform === 'instagram') {
     relativePath = path.join(
       'Instagram',
-      pathStr.startsWith('your_instagram_activity') ? '' : 'your_instagram_activity',
-      pathStr,
+      filePath.startsWith('your_instagram_activity') ? '' : 'your_instagram_activity',
+      filePath,
     );
-  } else if (pLower === 'google chat') {
-    // Google Chat paths are usually in Groups subdirectory
-    relativePath = path.join('Google Chat/Groups', pathStr);
+  } else if (platform === 'google_chat') {
+    // Google Chat paths are usually in Groups or DMs subdirectory
+    const groupsPath = path.join('Google Chat/Groups', filePath);
+    const dmsPath = path.join('Google Chat/DMs', filePath);
+
+    // First check Groups
+    try {
+      await fs.access(path.join(baseDir, groupsPath));
+      relativePath = groupsPath;
+    } catch {
+      // Then check DMs
+      try {
+        await fs.access(path.join(baseDir, dmsPath));
+        relativePath = dmsPath;
+      } catch {
+        // Fallback to original
+        relativePath = path.join('Google Chat/Groups', filePath);
+      }
+    }
+  } else if (platform === 'google_voice') {
+    // Google Voice paths in DB often start with "Voice/".
+    // The directory on disk is usually just "Voice/".
+    if (filePath.toLowerCase().startsWith('voice/')) {
+      relativePath = filePath;
+    } else {
+      relativePath = path.join('Voice', filePath);
+    }
+  } else if (platform === 'google_mail') {
+    relativePath = path.join('Mail', filePath);
   }
 
   // First try the constructed path
   let absolutePath = path.join(baseDir, relativePath);
 
-  // Fallback: If not found, try the raw path (in case it was already correct or different structure)
-  try {
-    await fs.access(absolutePath);
-  } catch {
-    // Original path failed, try valid fallback
-    const altPath = path.join(baseDir, pathStr);
+  // Helper to check if file exists or try common extensions
+  const resolvePath = async (p: string) => {
     try {
-      await fs.access(altPath);
-      absolutePath = altPath;
+      await fs.access(p);
+      return p;
     } catch {
-      // Both failed
+      // If file doesn't exist exactly, try common extensions (especially for Google Voice)
+      const commonExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.mp3', '.mp4', '.mov', '.vcf'];
+      for (const ext of commonExtensions) {
+        try {
+          await fs.access(p + ext);
+          return p + ext;
+        } catch {
+          // continue
+        }
+      }
+      return null;
+    }
+  };
+
+  const resolved = await resolvePath(absolutePath);
+  if (resolved) {
+    absolutePath = resolved;
+  } else {
+    // Try one more time with the "altPath" (raw filePath)
+    const fallback = await resolvePath(path.join(baseDir, filePath));
+    if (fallback) {
+      absolutePath = fallback;
+    } else {
+      // Both failed, keep the original absolutePath so the 404 block below captures it
     }
   }
 
@@ -111,7 +151,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       disposition = 'attachment';
     }
 
-    const fileName = path.basename(pathStr).replace(/^File-/, '');
+    const fileName = path.basename(filePath).replace(/^File-/, '');
     res.setHeader('Content-Type', contentType);
     res.setHeader('Content-Length', stats.size);
     res.setHeader('Content-Disposition', `${disposition}; filename="${fileName}"`);

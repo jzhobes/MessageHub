@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
-import { FaSpinner } from 'react-icons/fa';
+import { FaChevronDown, FaImage, FaSpinner, FaUsers } from 'react-icons/fa';
 import { IndexLocationWithAlign, Virtuoso, VirtuosoHandle } from 'react-virtuoso';
 
+import { Dropdown, DropdownItem } from '@/components/Dropdown';
 import EmailItem from '@/components/EmailItem';
 import EventItem from '@/components/EventItem';
 import MessageItem from '@/components/MessageItem';
@@ -30,6 +31,94 @@ interface ThreadContentProps {
 
 const START_INDEX = 10000;
 
+// Thread Header Dropdown Component
+function ThreadHeaderDropdown({
+  title,
+  participants,
+  showMedia,
+  onShowMediaChange,
+}: {
+  title: string;
+  participants: string[];
+  showMedia?: boolean;
+  onShowMediaChange?: (show: boolean) => void;
+}) {
+  const [showMembers, setShowMembers] = useState(false);
+
+  return (
+    <>
+      <div className={styles.headerDropdownWrapper}>
+        <Dropdown
+          align="left"
+          width="100%"
+          className={styles.headerDropdown}
+          menuClassName={styles.headerDropdownMenu}
+          gap={0}
+          trigger={
+            <div className={styles.headerTitleButton}>
+              <span className={styles.headerTitle}>{title}</span>
+              <FaChevronDown size={12} />
+            </div>
+          }
+        >
+          <DropdownItem className={styles.headerDropdownItem} onClick={() => setShowMembers(true)}>
+            <FaUsers size={14} />
+            <span>Thread Members</span>
+          </DropdownItem>
+          {onShowMediaChange && (
+            <DropdownItem className={styles.headerDropdownItem} onClick={() => onShowMediaChange(!showMedia)}>
+              <FaImage size={14} />
+              <span>Media</span>
+            </DropdownItem>
+          )}
+        </Dropdown>
+      </div>
+
+      {/* Members Modal - Simple implementation */}
+      {showMembers && (
+        <div className={styles.modalOverlay} onClick={() => setShowMembers(false)}>
+          <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.modalHeader}>
+              <h3>Thread Members</h3>
+              <button onClick={() => setShowMembers(false)}>×</button>
+            </div>
+            <div className={styles.modalBody}>
+              {participants.length > 0 ? (
+                <ul className={styles.participantsList}>
+                  {participants.map((p, i) => (
+                    <li key={i}>{p}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p>No participants found</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+interface ThreadContentProps {
+  activeThread: Thread | null;
+  messages: ContentRecord[] | null;
+  loading: boolean;
+  hasMoreOld: boolean;
+  hasMoreNew: boolean;
+  pageRange: { min: number; max: number };
+  targetMessageId: string | null;
+  targetTimestamp?: number | null;
+  highlightToken: number;
+  initializing?: boolean;
+  hideHeader?: boolean;
+  onStartReached: () => void;
+  onEndReached: () => void;
+  onPageChange?: (page: number) => void;
+  showMedia?: boolean;
+  onShowMediaChange?: (show: boolean) => void;
+}
+
 export default function ThreadContent({
   activeThread,
   messages,
@@ -45,6 +134,8 @@ export default function ThreadContent({
   onStartReached,
   onEndReached,
   onPageChange,
+  showMedia,
+  onShowMediaChange,
 }: ThreadContentProps) {
   // Refs
   const virtuosoRef = useRef<VirtuosoHandle>(null);
@@ -269,7 +360,12 @@ export default function ThreadContent({
     <div className={styles.contentArea}>
       {!hideHeader && (
         <div className={styles.contentHeader}>
-          <div className={styles.headerTitle}>{activeThread?.title}</div>
+          <ThreadHeaderDropdown
+            title={activeThread?.title || ''}
+            participants={activeThread?.participants || []}
+            showMedia={showMedia}
+            onShowMediaChange={activeThread?.platform === 'google_mail' ? undefined : onShowMediaChange}
+          />
           <div className={styles.pageIndicator}>
             (Page {currentTopPage?.toLocaleString()} of {(activeThread?.pageCount || 1).toLocaleString()})
           </div>
@@ -378,7 +474,7 @@ export default function ThreadContent({
               isBottom || !!msg?.reactions?.length ? styles.lastMessage : null,
             ].filter(Boolean);
 
-            const isEmail = activeThread?.platform === 'Gmail';
+            const isEmail = activeThread?.platform === 'google_mail';
             const isEvent = activeThread?.id.startsWith('fb-event-');
 
             return (

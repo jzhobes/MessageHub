@@ -53,16 +53,16 @@ export default function ThreadList({
   onThreadSelect,
 }: ThreadListProps) {
   const filteredCategories = useMemo(() => {
-    if (activePlatform === 'Facebook') {
+    if (activePlatform === 'facebook') {
       return ALL_CATEGORIES.filter((c) => !['inbox', 'sent', 'dm', 'group'].includes(c.id));
     }
-    if (activePlatform === 'Instagram') {
+    if (activePlatform === 'instagram') {
       return ALL_CATEGORIES.filter((c) => c.id === 'message' || c.id === 'post');
     }
-    if (activePlatform === 'Gmail') {
+    if (activePlatform === 'google_mail') {
       return ALL_CATEGORIES.filter((c) => c.id === 'inbox' || c.id === 'sent');
     }
-    if (activePlatform === 'Google Chat') {
+    if (activePlatform === 'google_chat') {
       return ALL_CATEGORIES.filter((c) => ['message', 'dm', 'group'].includes(c.id)).map((c) =>
         c.id === 'message' ? { ...c, label: 'All Messages' } : c,
       );

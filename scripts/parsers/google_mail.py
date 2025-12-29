@@ -1,12 +1,13 @@
-import json
-import mailbox
-import re
 from email.header import decode_header
 from email.utils import getaddresses, parseaddr, parsedate_to_datetime
+import json
+import mailbox
 from pathlib import Path
+import re
 
 from bs4 import BeautifulSoup
-from utils import fix_text
+
+from utils import fix_text, get_media_type
 
 
 def get_body(msg):
@@ -391,8 +392,8 @@ def ingest_google_mail_mbox(cursor, mbox_path, identity_stats):
                                     f.write(payload)
 
                             rel_path = f"Mail/attachments/{fname}"
-                            mtype = "photo" if is_image else "file"
-                            media.append({"uri": rel_path, "type": mtype})
+                            m_type = "photo" if is_image else get_media_type(fname)
+                            media.append({"uri": rel_path, "type": m_type})
                         except Exception as e:
                             print(f"  [Error] Failed to save attachment {fname}: {e}")
 

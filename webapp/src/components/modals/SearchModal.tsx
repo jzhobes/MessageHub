@@ -8,7 +8,6 @@ import TextInput from '@/components/TextInput';
 
 import { useForm } from '@/hooks/useForm';
 
-// No-op - removed Thread import
 import { PlatformMap } from '@/lib/shared/platforms';
 
 import BaseModal, { ModalHeader } from './BaseModal';
@@ -196,7 +195,7 @@ export default function SearchModal({ isOpen, onClose, onNavigate }: SearchModal
     })();
   }, [hasMore, loading, appending, page, config.query, results.length, fetchResults]); // Dependencies for callback
 
-  const Footer = () => {
+  function Footer() {
     return appending ? (
       <div className={styles.footerLoading}>
         <FaSpinner className="spinner" size={24} />
@@ -205,7 +204,7 @@ export default function SearchModal({ isOpen, onClose, onNavigate }: SearchModal
     ) : (
       <div style={{ height: 20 }} /> // Spacer
     );
-  };
+  }
 
   return (
     <BaseModal isOpen={isOpen} maxWidth={800} height="80vh" className={styles.modalContent} onClose={onClose}>
@@ -259,10 +258,10 @@ export default function SearchModal({ isOpen, onClose, onNavigate }: SearchModal
                     }
 
                     const count = facets?.platforms?.[dbKey] || 0;
-                    const isSelected = config.filterPlatforms.includes(label);
+                    const isSelected = config.filterPlatforms.includes(dbKey);
 
                     return (
-                      <DropdownItem key={dbKey} onClick={() => togglePlatform(label)}>
+                      <DropdownItem key={dbKey} onClick={() => togglePlatform(dbKey)}>
                         <input type="checkbox" checked={isSelected} className={styles.dropdownCheckbox} readOnly />
                         {label} {count > 0 && <span className={styles.facetCount}>({count.toLocaleString()})</span>}
                       </DropdownItem>
@@ -346,7 +345,7 @@ export default function SearchModal({ isOpen, onClose, onNavigate }: SearchModal
             {config.filterPlatforms.map((p) => (
               <div key={p} className={styles.chip}>
                 <span className={styles.chipLabel}>Platform</span>
-                {p}
+                {PlatformMap[p] || p}
                 <button className={styles.chipRemove} onClick={() => togglePlatform(p)}>
                   <FaTimes size={10} />
                 </button>

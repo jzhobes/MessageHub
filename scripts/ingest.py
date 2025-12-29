@@ -4,11 +4,8 @@ import shutil
 import sys
 from pathlib import Path
 
-# Local library imports
 from lib.archives import extract_archives_found_with_opts
 from lib.db_ops import finalize_gmail_identity, get_db_connection, init_db, save_identity
-
-# Local parser imports
 from parsers.facebook import (
     discover_facebook_identity,
     discover_instagram_identity,

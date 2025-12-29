@@ -1,8 +1,10 @@
 import json
 import re
 from pathlib import Path
+
 from bs4 import BeautifulSoup
-from utils import fix_text, parse_iso_time
+
+from utils import fix_text, get_media_type, parse_iso_time
 
 
 def ingest_google_voice_thread(cursor, thread_data):
@@ -143,28 +145,40 @@ def ingest_google_voice_thread(cursor, thread_data):
                 media = []
 
                 # Images
-                # <img src="...">
                 for img in msg_el.find_all("img"):
                     src = img.get("src")
                     if src:
+                        # Google Voice HTML often lacks extensions for media.
+                        # Try to resolve it by checking disk.
+                        if "." not in src:
+                            for ext in [".jpg", ".jpeg", ".png", ".gif"]:
+                                if (fpath.parent / (src + ext)).exists():
+                                    src += ext
+                                    break
                         rel_path = f"Voice/Calls/{src}"
-                        media.append({"uri": rel_path, "type": "photo"})
+                        m_type = get_media_type(src, default="photo")
+                        media.append({"uri": rel_path, "type": m_type})
 
                 # Audio
-                # <audio src="...">
                 for audio in msg_el.find_all("audio"):
                     src = audio.get("src")
                     if src:
+                        if "." not in src:
+                            for ext in [".mp3", ".wav", ".m4a"]:
+                                if (fpath.parent / (src + ext)).exists():
+                                    src += ext
+                                    break
                         rel_path = f"Voice/Calls/{src}"
-                        media.append({"uri": rel_path, "type": "audio"})
+                        m_type = get_media_type(src, default="audio")
+                        media.append({"uri": rel_path, "type": m_type})
 
                 # VCF (Contacts)
-                # <a class="vcard" href="..."> -- regex matched .vcf, let's look for links ending in .vcf
                 for link in msg_el.find_all("a"):
                     href = link.get("href")
                     if href and href.lower().endswith(".vcf"):
                         rel_path = f"Voice/Calls/{href}"
-                        media.append({"uri": rel_path, "type": "file"})
+                        m_type = get_media_type(href)
+                        media.append({"uri": rel_path, "type": m_type})
 
                 media_json = json.dumps(media) if media else None
 

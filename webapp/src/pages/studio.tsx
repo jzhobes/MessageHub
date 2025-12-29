@@ -101,7 +101,7 @@ export default function Studio() {
     return threads.filter((t) => filterPlatforms.size === 0 || (t.platform && filterPlatforms.has(t.platform)));
   }, [threads, filterPlatforms]);
 
-  const handleGenerate = async () => {
+  async function handleGenerate() {
     if (selectedIds.size === 0) {
       return;
     }
@@ -178,7 +178,7 @@ export default function Studio() {
       alert('Generation failed to start');
       setGenerating(false);
     }
-  };
+  }
 
   // Rough Token Estimation
   const selectedThreads = threads.filter((t) => selectedIds.has(t.id));
@@ -197,7 +197,7 @@ export default function Studio() {
     return Math.round(totalScore / selected.length);
   }, [selectedIds, threads]);
 
-  const getValidityLabel = (score: number) => {
+  function getValidityLabel(score: number) {
     if (score >= 80) {
       return { label: 'Excellent', color: '#10b981' };
     }
@@ -208,7 +208,7 @@ export default function Studio() {
       return { label: 'Mixed', color: '#f59e0b' };
     }
     return { label: 'Low Quality', color: '#ef4444' };
-  };
+  }
 
   const validity = getValidityLabel(avgSelectedScore);
 
