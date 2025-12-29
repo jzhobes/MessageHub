@@ -1,7 +1,8 @@
-import { readdir, stat } from 'fs/promises';
 import fs from 'fs';
-import path from 'path';
+import { readdir, stat } from 'fs/promises';
 import os from 'os';
+import path from 'path';
+
 import { PathMetadata } from '../shared/types';
 
 /**

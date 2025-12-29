@@ -1,6 +1,9 @@
 import React from 'react';
+
 import DOMPurify from 'dompurify';
+
 import { ContentRecord } from '@/lib/shared/types';
+
 import styles from './EmailItem.module.css';
 
 interface EmailItemProps {
@@ -8,9 +11,27 @@ interface EmailItemProps {
   isMyMsg: boolean;
   showAvatar: boolean;
   showName: boolean;
+  isTarget?: boolean;
+  highlightToken?: number;
 }
 
-export default function EmailItem({ msg, isMyMsg, showAvatar, showName }: EmailItemProps) {
+export default function EmailItem({ msg, isMyMsg, showAvatar, showName, isTarget, highlightToken }: EmailItemProps) {
+  const bubbleRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    if (isTarget && bubbleRef.current && highlightToken) {
+      const color = isMyMsg ? 'var(--bubble-sent-bg)' : 'var(--bubble-received-bg)';
+      const animation = bubbleRef.current.animate(
+        [
+          { transform: 'scale(1)', boxShadow: '0 0 0 0 var(--highlight-border)' },
+          { transform: 'scale(1.02)', boxShadow: `0 0 0 5px ${color}` },
+          { transform: 'scale(1)', boxShadow: '0 0 0 0 rgba(0, 0, 0, 0)' },
+        ],
+        { duration: 1000, easing: 'ease-in-out' },
+      );
+      return () => animation.cancel();
+    }
+  }, [isTarget, highlightToken, isMyMsg]);
   const formatTime = (ms: number) => {
     return new Date(ms).toLocaleString();
   };
@@ -35,7 +56,7 @@ export default function EmailItem({ msg, isMyMsg, showAvatar, showName }: EmailI
 
         <div className={`${styles.emailContentStack} ${isMyMsg ? styles.alignRight : styles.alignLeft}`}>
           {showName && <div className={styles.senderNameOutside}>{msg.sender_name}</div>}
-          <div className={bubbleClasses} title={formatTime(msg.timestamp_ms)}>
+          <div ref={bubbleRef} className={bubbleClasses} title={formatTime(msg.timestamp_ms)}>
             <div className={styles.emailBody} dangerouslySetInnerHTML={{ __html: sanitizedContent }} />
           </div>
         </div>

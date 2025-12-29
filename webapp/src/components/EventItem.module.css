@@ -1,0 +1,82 @@
+.eventRow {
+  display: flex;
+  align-items: flex-end;
+  width: 100%;
+}
+
+.justifyRight {
+  justify-content: flex-end;
+}
+
+.justifyLeft {
+  justify-content: flex-start;
+}
+
+.eventContentStack {
+  display: flex;
+  flex-direction: column;
+  max-width: 80%;
+  position: relative;
+}
+
+.eventContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: var(--radius-3);
+  width: fit-content;
+  line-height: 1.4;
+}
+
+.myEvent {
+  background: var(--bubble-sent-bg);
+  color: var(--bubble-sent-text);
+  border: none;
+}
+
+.otherEvent {
+  background: var(--bubble-received-bg);
+  color: var(--bubble-received-text);
+  border: none;
+}
+
+.myEvent .eventName,
+.myEvent .eventDescription {
+  color: var(--bubble-sent-text);
+}
+
+.myEvent .eventLocation {
+  color: var(--bubble-sent-text);
+  opacity: 0.8;
+}
+
+.otherEvent .eventName {
+  color: var(--bubble-received-text);
+}
+
+.eventName {
+  font-weight: 600;
+}
+
+.eventLocation {
+  font-size: 0.85rem;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: -2px;
+}
+
+.locationIcon {
+  font-size: 1rem;
+  opacity: 1;
+}
+
+.eventDescription {
+  font-size: 0.95rem;
+  margin-top: 8px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  opacity: 0.95;
+}

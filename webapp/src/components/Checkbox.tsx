@@ -1,4 +1,5 @@
 import React from 'react';
+
 import styles from './Checkbox.module.css';
 
 interface CheckboxProps {
@@ -19,7 +20,7 @@ export default function Checkbox({ label, checked, onChange, id, className, desc
   return (
     <div className={`${styles.container} ${className || ''}`} style={style}>
       <div className={styles.row}>
-        <input type="checkbox" id={id} checked={checked} onChange={handleChange} className={styles.input} />
+        <input type="checkbox" id={id} checked={checked} className={styles.input} onChange={handleChange} />
         <label htmlFor={id} className={styles.label}>
           {label}
         </label>

@@ -1,5 +1,6 @@
-import { describe, it, expect, vi } from 'vitest';
 import { createMocks } from 'node-mocks-http';
+import { describe, expect, it, vi } from 'vitest';
+
 import handler from '@/pages/api/content';
 
 // Using Real DB with data from samples

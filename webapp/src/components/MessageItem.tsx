@@ -1,12 +1,13 @@
 import React, { useEffect, useRef } from 'react';
+
 import {
-  FaQuoteLeft,
+  FaFileArchive,
+  FaFileCsv,
   FaFileDownload,
+  FaFileExcel,
   FaFilePdf,
   FaFileWord,
-  FaFileExcel,
-  FaFileCsv,
-  FaFileArchive,
+  FaQuoteLeft,
 } from 'react-icons/fa';
 
 import { ContentRecord } from '@/lib/shared/types';
@@ -53,17 +54,18 @@ export default function MessageItem({
 
   useEffect(() => {
     if (isTarget && bubbleRef.current && highlightToken) {
+      const color = isMyMsg ? 'var(--bubble-sent-bg)' : 'var(--bubble-received-bg)';
       const animation = bubbleRef.current.animate(
         [
           { transform: 'scale(1)', boxShadow: '0 0 0 0 var(--highlight-border)' },
-          { transform: 'scale(1.1)', boxShadow: '0 0 0 5px rgba(0, 122, 255, 0)' },
-          { transform: 'scale(1)', boxShadow: '0 0 0 0 rgba(0, 122, 255, 0)' },
+          { transform: 'scale(1.02)', boxShadow: `0 0 0 5px ${color}` },
+          { transform: 'scale(1)', boxShadow: '0 0 0 0 rgba(0, 0, 0, 0)' },
         ],
         { duration: 1000, easing: 'ease-in-out' },
       );
       return () => animation.cancel();
     }
-  }, [isTarget, highlightToken]);
+  }, [isTarget, highlightToken, isMyMsg]);
 
   const formatMessageContent = (text: string) => {
     const urlRegex = /(https?:\/\/[^\s]+)/g;
@@ -197,10 +199,10 @@ export default function MessageItem({
                   <LazyView rootMargin="200px">
                     {(inView) => (
                       <video
-                        controls
                         preload={inView ? 'metadata' : 'none'}
                         src={`/api/media?path=${encodeURIComponent(uri)}&platform=${activePlatform}`}
                         className={styles.msgVideo}
+                        controls
                       />
                     )}
                   </LazyView>

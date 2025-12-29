@@ -1,8 +1,10 @@
-import type { NextApiRequest, NextApiResponse } from 'next';
 import { spawnSync } from 'child_process';
+
 import db from '@/lib/server/db';
-import { getPythonPath, getIngestScriptPath } from '@/lib/server/python';
+import { getIngestScriptPath, getPythonPath } from '@/lib/server/python';
 import appConfig from '@/lib/shared/appConfig';
+
+import type { NextApiRequest, NextApiResponse } from 'next';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {

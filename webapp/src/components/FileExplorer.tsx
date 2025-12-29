@@ -1,20 +1,23 @@
-import React, { useRef, useState, useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+
 import {
-  FaFolder,
-  FaFileArchive,
-  FaFile,
   FaArrowUp,
-  FaSpinner,
   FaCheckSquare,
-  FaSquare,
-  FaHome,
+  FaFile,
+  FaFileArchive,
+  FaFolder,
   FaFolderOpen,
+  FaHome,
+  FaSpinner,
+  FaSquare,
 } from 'react-icons/fa';
 
-import TextInput from './TextInput';
 import { useRangeSelection } from '@/hooks/useRangeSelection';
+
 import { PathMetadata } from '@/lib/shared/types';
+
 import styles from './FileExplorer.module.css';
+import TextInput from './TextInput';
 
 export type { PathMetadata };
 
@@ -353,26 +356,26 @@ export default function FileExplorer({
       {/* Header / Address Bar */}
       <div className={styles.header}>
         <TextInput
-          autoFocus
           className={styles.addressBar}
           value={currentPath}
+          adornment={
+            <>
+              <button className={styles.navButton} title="Go Home" onClick={() => navigateTo('', true)}>
+                <FaHome size={16} />
+              </button>
+              <button className={styles.navButton} disabled={!parentPath} title="Go Up" onClick={handleUp}>
+                <FaArrowUp size={16} />
+              </button>
+            </>
+          }
+          suffix={addressBarSuffix}
+          autoFocus
           onChange={(e) => setCurrentPath(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
               navigateTo(currentPath, true);
             }
           }}
-          adornment={
-            <>
-              <button className={styles.navButton} onClick={() => navigateTo('', true)} title="Go Home">
-                <FaHome size={16} />
-              </button>
-              <button className={styles.navButton} onClick={handleUp} disabled={!parentPath} title="Go Up">
-                <FaArrowUp size={16} />
-              </button>
-            </>
-          }
-          suffix={addressBarSuffix}
         />
       </div>
       {/* Subheader / Actions */}
@@ -380,7 +383,6 @@ export default function FileExplorer({
         <div className={styles.headerActions}>
           {allowSelectAll && (
             <button
-              onClick={handleToggleAll}
               className={`${styles.selectAllButton} ${
                 visibleItems.some((i: FileItem) => i.type === 'file') && selectableFiles.length === 0
                   ? styles.selectAllHidden
@@ -388,6 +390,7 @@ export default function FileExplorer({
                     ? styles.selectAllDisabled
                     : styles.selectAllVisible
               }`}
+              onClick={handleToggleAll}
             >
               {allSelected ? (
                 <FaCheckSquare color="var(--border-thread-active)" size={16} />

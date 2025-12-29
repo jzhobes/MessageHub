@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+
 import LazyView from './LazyView';
 import styles from './LinkPreview.module.css';
 
@@ -48,7 +49,7 @@ export default function LinkPreview({ url }: LinkPreviewProps) {
   if (loading) {
     return (
       <div className={`${styles.container} previewContainer`}>
-        <LazyView onEnter={fetchPreview} rootMargin="50px" className={`linkPreview ${styles.linkPreviewLazy}`}>
+        <LazyView rootMargin="50px" className={`linkPreview ${styles.linkPreviewLazy}`} onEnter={fetchPreview}>
           <a href={url} target="_blank" rel="noopener noreferrer" className={styles.linkPreviewLink}>
             {url}
           </a>

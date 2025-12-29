@@ -1,6 +1,6 @@
-import type { NextApiRequest, NextApiResponse } from 'next';
-
 import { getFacebookCrawlerHeaders } from '@/lib/server/facebook';
+
+import type { NextApiRequest, NextApiResponse } from 'next';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { url } = req.query;
@@ -12,12 +12,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     const u = new URL(targetUrl);
-    const allowed =
-      u.hostname.includes('facebook.com') ||
-      u.hostname.includes('fb.com') ||
-      u.hostname.includes('fbsbx.com') ||
-      u.hostname.includes('fbcdn.net');
-    if (!allowed) {
+    const allowedDomains = ['facebook.com', 'fb.com', 'fbsbx.com', 'fbcdn.net'];
+    const isAllowed = allowedDomains.some((domain) => u.hostname === domain || u.hostname.endsWith(`.${domain}`));
+
+    if (!isAllowed) {
       return res.status(403).json({ error: 'Domain not allowed' });
     }
   } catch (e) {
@@ -35,9 +33,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const contentType = response.headers.get('content-type');
-    if (contentType) {
-      res.setHeader('Content-Type', contentType);
+    if (!contentType || !contentType.startsWith('image/')) {
+      return res.status(415).send('Unsupported Media Type: Proxy only allows images');
     }
+
+    res.setHeader('Content-Type', contentType);
     res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
 
     // Pipe the response body to the client

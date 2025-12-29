@@ -79,7 +79,7 @@ def fix_text(text):
         decoded = text.encode("latin1").decode("utf8")
         # Fix heart emoji (U+2764) to be followed by VS-16 (U+FE0F) if not already
         decoded = re.sub(r"\u2764(?!\uFE0F)", "\u2764\ufe0f", decoded)
-        return decoded
+        return decoded.strip()
     except Exception:
         return text
 
@@ -146,18 +146,8 @@ def clean_json_messages(directory, platforms=None):
             if not is_target:
                 continue
 
-        # Files to target for deletion
-        targets = {
-            "messages.json",
-            "profile_information.json",
-            "personal_information.json",
-            "user_info.json",
-        }
-
         for f in files:
-            # Match standard Facebook/Instagram/Google patterns
-            is_message_json = f.startswith("message_") and f.endswith(".json")
-            if f in targets or is_message_json:
+            if f.endswith(".json") and f != "preview_cache.json":
                 file_path = root_path / f
                 try:
                     size = file_path.stat().st_size

@@ -1,11 +1,14 @@
-import type { NextApiRequest, NextApiResponse } from 'next';
-import archiver from 'archiver';
-import fs from 'fs';
-import path from 'path';
-import os from 'os';
 import crypto from 'crypto';
-import { DatasetGenerator } from '@/lib/server/DatasetGenerator';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+
+import archiver from 'archiver';
+
 import { jobStore } from '@/lib/jobStore';
+import { DatasetGenerator } from '@/lib/server/DatasetGenerator';
+
+import type { NextApiRequest, NextApiResponse } from 'next';
 
 /**
  * Next.js API Configuration
@@ -40,7 +43,6 @@ async function processJob(jobId: string, body: GenerateDatasetBody) {
   try {
     jobStore.update(jobId, { status: 'processing' });
 
-    // Safety delay to ensure checking logic works
     await new Promise((r) => setTimeout(r, 100));
 
     const {

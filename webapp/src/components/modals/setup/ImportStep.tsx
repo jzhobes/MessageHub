@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { FaCopy, FaShare, FaDatabase } from 'react-icons/fa';
+
+import { FaCopy, FaDatabase, FaShare } from 'react-icons/fa';
+import { FaTriangleExclamation } from 'react-icons/fa6';
 
 import FileExplorer, { formatBytes } from '@/components/FileExplorer';
-import { FaTriangleExclamation } from 'react-icons/fa6';
 import styles from '@/components/modals/SetupModal.module.css';
 
 const IMPORT_ITEM_FILTERS = [
@@ -52,15 +53,14 @@ export default function ImportStep({
         <FileExplorer
           mode="import"
           filters={IMPORT_ITEM_FILTERS}
-          onSelectionChange={handleSelectionChange}
           height="100%"
           addressBarSuffix={
             !isFirstRun && (
               <button
                 className={`${styles.button} ${styles.explorerActionBtn}`}
                 disabled={selectionCount === 0}
-                onClick={onConfirm}
                 title="Proceed to overview to start processing"
+                onClick={onConfirm}
               >
                 <FaDatabase size={16} />
                 Confirm
@@ -70,18 +70,18 @@ export default function ImportStep({
           subheader={
             <div className={styles.importActions}>
               <button
-                onClick={() => setTransferMode('copy')}
                 title="Preserve original files and copy them to the workspace"
                 className={`${styles.actionButton} ${transferMode === 'copy' ? styles.actionButtonActive : ''}`}
+                onClick={() => setTransferMode('copy')}
               >
                 <FaCopy size={12} />
                 Copy
               </button>
               <span className={styles.importSeparator}>|</span>
               <button
-                onClick={() => setTransferMode('move')}
                 title="Move files to the workspace and remove them from the source location"
                 className={`${styles.actionButton} ${transferMode === 'move' ? styles.actionButtonActive : ''}`}
+                onClick={() => setTransferMode('move')}
               >
                 <FaShare size={12} />
                 Move
@@ -116,6 +116,7 @@ export default function ImportStep({
               </div>
             </>
           )}
+          onSelectionChange={handleSelectionChange}
         />
       </div>
     </div>

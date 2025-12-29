@@ -286,22 +286,6 @@ def ingest_google_mail_mbox(cursor, mbox_path, identity_stats):
 
     for i, message in enumerate(mbox):
         try:
-            # 0. Collect 'To' stats for identity discovery
-            to_header = str(message.get("to", ""))
-            if to_header:
-                addr_list = getaddresses([to_header])
-                for name, addr in addr_list:
-                    if not addr:
-                        continue
-                    addr = addr.lower().strip()
-                    if addr not in identity_stats:
-                        identity_stats[addr] = {"names": set(), "count": 0}
-                    identity_stats[addr]["count"] += 1
-                    if name:
-                        decoded_name = fix_text(decode_mime_header(name))
-                        if decoded_name:
-                            identity_stats[addr]["names"].add(decoded_name)
-
             # Label detection for thread_labels
             raw_labels = str(message.get("X-Gmail-Labels", ""))
             current_message_labels = set()
@@ -310,7 +294,21 @@ def ingest_google_mail_mbox(cursor, mbox_path, identity_stats):
             if "Inbox" in raw_labels:
                 current_message_labels.add("inbox")
 
-            # 1. Identity
+            # 1. Collect identity from 'Delivered-To' header only
+            # This is the most accurate and reliable way to identify the mailbox owner
+            # Delivered-To is added by Gmail servers and always contains the actual recipient email
+            delivered_to = str(message.get("Delivered-To", ""))
+            if delivered_to:
+                addr_list = getaddresses([delivered_to])
+                for name, addr in addr_list:
+                    if not addr:
+                        continue
+                    addr = addr.lower().strip()
+                    if addr not in identity_stats:
+                        identity_stats[addr] = {"names": set(), "count": 0}
+                    identity_stats[addr]["count"] += 1
+
+            # 2. Thread ID
             gm_thrid = message.get("X-GM-THRID")
             if not gm_thrid:
                 subject = message.get("subject", "No Subject")
@@ -329,7 +327,7 @@ def ingest_google_mail_mbox(cursor, mbox_path, identity_stats):
             except Exception:
                 ts = 0
 
-            # 2. Content Extraction (HTML Preferred for EmailItem)
+            # 3. Content Extraction (HTML Preferred for EmailItem)
             # Find both parts if they exist
             plain_body = ""
             html_body = ""
@@ -358,7 +356,7 @@ def ingest_google_mail_mbox(cursor, mbox_path, identity_stats):
                 else:
                     plain_body = message.get_payload(decode=True).decode("utf-8", errors="replace")
 
-            # 3. Media Extraction (Do this before content processing to map CIDs)
+            # 4. Media Extraction (Do this before content processing to map CIDs)
             media = []
             attach_dir = mbox_file.parent / "attachments"
             attach_dir.mkdir(exist_ok=True)
@@ -398,7 +396,7 @@ def ingest_google_mail_mbox(cursor, mbox_path, identity_stats):
                         except Exception as e:
                             print(f"  [Error] Failed to save attachment {fname}: {e}")
 
-            # 4. Content Processing (HTML focus)
+            # 5. Content Processing (HTML focus)
             content = ""
             if html_body:
                 # Strip history from HTML
@@ -411,7 +409,7 @@ def ingest_google_mail_mbox(cursor, mbox_path, identity_stats):
                 unwrapped = unwrap_text(stripped_plain)
                 content = f"<div style='white-space: pre-wrap;'>{unwrapped}</div>"
 
-            # Merge with external images (GIFs)
+            # 6. Merge with external images (GIFs)
             external_imgs = extract_external_images(html_body if html_body else plain_body)
             for ext_img in external_imgs:
                 if not any(m["uri"] == ext_img["uri"] for m in media):
@@ -419,7 +417,7 @@ def ingest_google_mail_mbox(cursor, mbox_path, identity_stats):
 
             media_json = json.dumps(media) if media else None
 
-            # 5. Insert Content
+            # 7. Insert Content
             cursor.execute(
                 """
                 INSERT OR IGNORE INTO content 
@@ -452,7 +450,7 @@ def ingest_google_mail_mbox(cursor, mbox_path, identity_stats):
                 skipped_total += 1
 
             if i % 100 == 0:
-                print(f"  Processed {i} messages...")
+                print(f"  ... Processed {i} emails...")
 
         except Exception as e:
             print(f"Error processing message {i} in MBOX: {e}")
@@ -479,8 +477,10 @@ def ingest_google_mail_mbox(cursor, mbox_path, identity_stats):
 
         # Insert all labels encountered for this thread
         labels = info.get("labels", set())
-        # Always add the base type as a label for unified querying
-        labels.add("message")
+
+        # Ensure every Gmail thread has at least one label (default to inbox)
+        if not labels:
+            labels = {"inbox"}
 
         for label in labels:
             cursor.execute(

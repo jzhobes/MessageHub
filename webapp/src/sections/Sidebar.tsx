@@ -1,17 +1,19 @@
 import React from 'react';
+
 import Link from 'next/link';
 import { FaFacebook, FaInstagram, FaPhone, FaRobot } from 'react-icons/fa';
-import { SiGooglechat, SiGmail } from 'react-icons/si';
+import { SiGmail, SiGooglechat } from 'react-icons/si';
+
 import styles from './Sidebar.module.css';
 
 interface SidebarProps {
   activePlatform: string;
-  onPlatformSelect: (platform: string) => void;
   availability: Record<string, boolean>;
   collapsed: boolean;
+  onPlatformSelect: (platform: string) => void;
 }
 
-export default function Sidebar({ activePlatform, onPlatformSelect, availability, collapsed }: SidebarProps) {
+export default function Sidebar({ activePlatform, availability, collapsed, onPlatformSelect }: SidebarProps) {
   const platforms = [
     { name: 'Facebook', icon: <FaFacebook color={availability['Facebook'] ? '#1877F2' : '#666'} size={20} /> },
     { name: 'Instagram', icon: <FaInstagram color={availability['Instagram'] ? '#E4405F' : '#666'} size={18} /> },
@@ -28,9 +30,9 @@ export default function Sidebar({ activePlatform, onPlatformSelect, availability
           <button
             key={p.name}
             className={`${styles.navItem} ${activePlatform === p.name ? styles.navItemActive : ''}`}
-            onClick={() => onPlatformSelect(p.name)}
             disabled={!isAvailable}
             title={collapsed ? p.name : ''}
+            onClick={() => onPlatformSelect(p.name)}
           >
             <span className={styles.sidebarIconWrapper}>{p.icon}</span>
             <span className={styles.sidebarLabel}>{p.name}</span>

@@ -1,7 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { FaDatabase, FaCheckCircle, FaFileArchive, FaSync } from 'react-icons/fa';
-import { ArchiveProgress } from '@/hooks/useIngestion';
+import React, { useEffect, useRef, useState } from 'react';
+
+import { FaCheckCircle, FaDatabase, FaFileArchive, FaSync } from 'react-icons/fa';
+
 import styles from '@/components/modals/SetupModal.module.css';
+
+import { ArchiveProgress } from '@/hooks/useIngestion';
 
 interface ScanStepProps {
   isFirstRun?: boolean;
@@ -124,7 +127,7 @@ export default function ScanStep({
                 <span className={styles.actionStatusText}>Ready to build your index.</span>
               </div>
               {!isFirstRun && (
-                <button onClick={runInstall} className={`${styles.button} ${styles.bigButton}`}>
+                <button className={`${styles.button} ${styles.bigButton}`} onClick={runInstall}>
                   Start Processing
                 </button>
               )}

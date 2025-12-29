@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+
 import Database from 'better-sqlite3';
 
 import appConfig from '@/lib/shared/appConfig';
@@ -37,6 +38,7 @@ class DatabaseService {
 
     try {
       this._instance = new Database(dbPath, { readonly: true });
+      this._instance.pragma('foreign_keys = ON');
       return this._instance;
     } catch (e) {
       console.error(`Failed to open database at ${dbPath}`, e);
@@ -57,6 +59,11 @@ class DatabaseService {
         this._instance = null;
       }
     }
+  }
+
+  public reconnect(): Database.Database {
+    this.close();
+    return this.get();
   }
 }
 

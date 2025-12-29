@@ -1,17 +1,19 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { FaSearch, FaSpinner, FaChevronDown, FaChevronUp } from 'react-icons/fa';
+
+import { FaChevronDown, FaChevronUp, FaSearch, FaSpinner, FaTimes, FaUndo } from 'react-icons/fa';
 import { Virtuoso } from 'react-virtuoso';
 
+import { Dropdown, DropdownDivider, DropdownItem } from '@/components/Dropdown';
 import TextInput from '@/components/TextInput';
-import { Dropdown, DropdownItem, DropdownDivider } from '@/components/Dropdown';
-import SearchResultItem from './SearchResultItem';
-import BaseModal, { ModalHeader } from './BaseModal';
 
 import { useForm } from '@/hooks/useForm';
-import { Thread } from '@/lib/shared/types';
+
+// No-op - removed Thread import
 import { PlatformMap } from '@/lib/shared/platforms';
 
+import BaseModal, { ModalHeader } from './BaseModal';
 import styles from './SearchModal.module.css';
+import SearchResultItem from './SearchResultItem';
 
 interface SearchModalProps {
   isOpen: boolean;
@@ -30,17 +32,25 @@ interface SearchResult {
 }
 
 const PLATFORM_ORDER = ['facebook', 'instagram', 'google_chat', 'google_voice', 'google_mail'];
+const CATEGORY_ORDER = ['message', 'post', 'event', 'checkin', 'inbox', 'sent'];
+const CategoryLabels: Record<string, string> = {
+  message: 'Messages',
+  post: 'Posts',
+  event: 'Events',
+  checkin: 'Check-ins',
+  inbox: 'Inbox',
+  sent: 'Sent',
+};
 
 const initialConfig = {
   query: '',
   filterPlatforms: [] as string[],
-  filterThreads: [] as string[],
+  filterCategories: [] as string[],
 };
 
 export default function SearchModal({ isOpen, onClose, onNavigate }: SearchModalProps) {
   // 1. State hooks
   const { values: config, setField, resetForm } = useForm(initialConfig);
-  const [availableThreads, setAvailableThreads] = useState<Thread[]>([]);
   const [results, setResults] = useState<SearchResult[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [page, setPage] = useState(1);
@@ -49,9 +59,10 @@ export default function SearchModal({ isOpen, onClose, onNavigate }: SearchModal
   const [appending, setAppending] = useState(false); // Load more
   const [isSendersExpanded, setIsSendersExpanded] = useState(true);
   const [platformDropdownOpen, setPlatformDropdownOpen] = useState(false);
-  const [threadDropdownOpen, setThreadDropdownOpen] = useState(false);
+  const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
   const [facets, setFacets] = useState<{
     platforms: Record<string, number>;
+    categories: Record<string, number>;
     senders: Record<string, number>;
   } | null>(null);
 
@@ -72,8 +83,8 @@ export default function SearchModal({ isOpen, onClose, onNavigate }: SearchModal
       config.filterPlatforms.forEach((p) => {
         params.append('platform', p);
       });
-      config.filterThreads.forEach((t) => {
-        params.append('threadId', t);
+      config.filterCategories.forEach((c) => {
+        params.append('type', c);
       });
       try {
         const res = await fetch(`/api/search?${params}`, { signal: controller.signal });
@@ -84,7 +95,11 @@ export default function SearchModal({ isOpen, onClose, onNavigate }: SearchModal
         return json as {
           data: SearchResult[];
           total: number;
-          facets?: { platforms: Record<string, number>; senders: Record<string, number> };
+          facets?: {
+            platforms: Record<string, number>;
+            categories: Record<string, number>;
+            senders: Record<string, number>;
+          };
         };
       } catch (e) {
         if (e instanceof Error && e.name === 'AbortError') {
@@ -93,36 +108,8 @@ export default function SearchModal({ isOpen, onClose, onNavigate }: SearchModal
         throw e;
       }
     },
-    [config.filterPlatforms, config.filterThreads],
+    [config.filterPlatforms, config.filterCategories],
   ); // Dependencies for fetchResults
-
-  // Fetch threads when platform filter changes
-  useEffect(() => {
-    if (config.filterPlatforms.length === 0) {
-      setAvailableThreads([]);
-      return;
-    }
-    let ignore = false;
-    const fetchThreads = async () => {
-      try {
-        const params = new URLSearchParams();
-        config.filterPlatforms.forEach((p) => params.append('platform', p));
-        const res = await fetch(`/api/threads?${params.toString()}`);
-        if (res.ok) {
-          const data = await res.json();
-          if (!ignore) {
-            setAvailableThreads(data);
-          }
-        }
-      } catch (e) {
-        console.error(e);
-      }
-    };
-    fetchThreads();
-    return () => {
-      ignore = true;
-    };
-  }, [config.filterPlatforms]);
 
   // Debounce effect for Query/Filters
   useEffect(() => {
@@ -158,7 +145,7 @@ export default function SearchModal({ isOpen, onClose, onNavigate }: SearchModal
       clearTimeout(timer);
       abortControllerRef.current?.abort();
     };
-  }, [config.query, config.filterPlatforms, config.filterThreads, fetchResults]);
+  }, [config.query, config.filterPlatforms, config.filterCategories, fetchResults]);
 
   // Sync isOpen prop to ref
   useEffect(() => {
@@ -169,7 +156,6 @@ export default function SearchModal({ isOpen, onClose, onNavigate }: SearchModal
   const handleReset = () => {
     resetForm();
     setResults([]);
-    setAvailableThreads([]);
   };
 
   const togglePlatform = (p: string) => {
@@ -177,14 +163,13 @@ export default function SearchModal({ isOpen, onClose, onNavigate }: SearchModal
       ? config.filterPlatforms.filter((x) => x !== p)
       : [...config.filterPlatforms, p];
     setField('filterPlatforms', next);
-    setField('filterThreads', []);
   };
 
-  const toggleThread = (t: string) => {
-    const next = config.filterThreads.includes(t)
-      ? config.filterThreads.filter((x) => x !== t)
-      : [...config.filterThreads, t];
-    setField('filterThreads', next);
+  const toggleCategory = (c: string) => {
+    const next = config.filterCategories.includes(c)
+      ? config.filterCategories.filter((x) => x !== c)
+      : [...config.filterCategories, c];
+    setField('filterCategories', next);
   };
 
   const handleEndReached = useCallback(() => {
@@ -223,29 +208,19 @@ export default function SearchModal({ isOpen, onClose, onNavigate }: SearchModal
   };
 
   return (
-    <BaseModal
-      isOpen={isOpen}
-      onClose={onClose}
-      maxWidth={800}
-      height="80vh"
-      overlayClassName={styles.modalOverlay}
-      className={styles.modalContent}
-    >
+    <BaseModal isOpen={isOpen} maxWidth={800} height="80vh" className={styles.modalContent} onClose={onClose}>
       <ModalHeader onClose={onClose} />
       <div className={styles.searchHeader}>
         <div className={styles.searchTopRow}>
           <TextInput
-            autoFocus
             placeholder="Search messages..."
             value={config.query}
-            onChange={(e) => setField('query', e.target.value)}
             adornment={<FaSearch className={styles.searchIcon} />}
             className={styles.searchTextInput}
             suffix={
               <div className={styles.inputSuffix}>
                 <Dropdown
                   open={platformDropdownOpen}
-                  onOpenChange={setPlatformDropdownOpen}
                   width={220}
                   className={styles.dropdownWrapper}
                   trigger={
@@ -256,15 +231,25 @@ export default function SearchModal({ isOpen, onClose, onNavigate }: SearchModal
                       <FaChevronDown size={10} />
                     </button>
                   }
+                  onOpenChange={setPlatformDropdownOpen}
                 >
                   <DropdownItem onClick={() => setField('filterPlatforms', [])}>
                     <input
                       type="checkbox"
                       checked={config.filterPlatforms.length === 0}
-                      readOnly
                       className={styles.dropdownCheckbox}
+                      readOnly
                     />
-                    All Platforms {facets && `(${totalCount.toLocaleString()})`}
+                    All Platforms{' '}
+                    {facets && (
+                      <span className={styles.facetCount}>
+                        (
+                        {Object.values(facets.platforms || {})
+                          .reduce((a, b) => a + b, 0)
+                          .toLocaleString()}
+                        )
+                      </span>
+                    )}
                   </DropdownItem>
                   <DropdownDivider />
                   {PLATFORM_ORDER.map((dbKey) => {
@@ -278,7 +263,7 @@ export default function SearchModal({ isOpen, onClose, onNavigate }: SearchModal
 
                     return (
                       <DropdownItem key={dbKey} onClick={() => togglePlatform(label)}>
-                        <input type="checkbox" checked={isSelected} readOnly className={styles.dropdownCheckbox} />
+                        <input type="checkbox" checked={isSelected} className={styles.dropdownCheckbox} readOnly />
                         {label} {count > 0 && <span className={styles.facetCount}>({count.toLocaleString()})</span>}
                       </DropdownItem>
                     );
@@ -286,51 +271,66 @@ export default function SearchModal({ isOpen, onClose, onNavigate }: SearchModal
                 </Dropdown>
 
                 <Dropdown
-                  open={threadDropdownOpen}
-                  onOpenChange={setThreadDropdownOpen}
-                  width={280}
+                  open={categoryDropdownOpen}
+                  width={220}
+                  align="right"
                   className={styles.dropdownWrapper}
                   trigger={
-                    <button className={styles.suffixDropdown} disabled={availableThreads.length === 0}>
-                      <span>Threads {config.filterThreads.length > 0 ? `(${config.filterThreads.length})` : ''}</span>
+                    <button className={styles.suffixDropdown}>
+                      <span>
+                        Categories {config.filterCategories.length > 0 ? `(${config.filterCategories.length})` : ''}
+                      </span>
                       <FaChevronDown size={10} />
                     </button>
                   }
+                  onOpenChange={setCategoryDropdownOpen}
                 >
-                  <DropdownItem onClick={() => setField('filterThreads', [])}>
+                  <DropdownItem onClick={() => setField('filterCategories', [])}>
                     <input
                       type="checkbox"
-                      checked={config.filterThreads.length === 0}
-                      readOnly
+                      checked={config.filterCategories.length === 0}
                       className={styles.dropdownCheckbox}
+                      readOnly
                     />
-                    All Threads
+                    All Categories{' '}
+                    {facets && (
+                      <span className={styles.facetCount}>
+                        (
+                        {Object.values(facets.categories || {})
+                          .reduce((a, b) => a + b, 0)
+                          .toLocaleString()}
+                        )
+                      </span>
+                    )}
                   </DropdownItem>
                   <DropdownDivider />
-                  {availableThreads.map((t) => (
-                    <DropdownItem key={t.id} onClick={() => toggleThread(t.id)}>
-                      <input
-                        type="checkbox"
-                        checked={config.filterThreads.includes(t.id)}
-                        readOnly
-                        className={styles.dropdownCheckbox}
-                      />
-                      {t.title.length > 30 ? t.title.substring(0, 30) + '...' : t.title}
-                    </DropdownItem>
-                  ))}
+                  {CATEGORY_ORDER.map((cat) => {
+                    const label = CategoryLabels[cat];
+                    const count = facets?.categories?.[cat] || 0;
+                    const isSelected = config.filterCategories.includes(cat);
+
+                    return (
+                      <DropdownItem key={cat} onClick={() => toggleCategory(cat)}>
+                        <input type="checkbox" checked={isSelected} className={styles.dropdownCheckbox} readOnly />
+                        {label} {count > 0 && <span className={styles.facetCount}>({count.toLocaleString()})</span>}
+                      </DropdownItem>
+                    );
+                  })}
                 </Dropdown>
 
-                <button className={styles.suffixReset} onClick={handleReset}>
-                  Reset
+                <button className={styles.suffixReset} title="Clear search and filters" onClick={handleReset}>
+                  <FaUndo size={14} />
                 </button>
               </div>
             }
+            autoFocus
+            onChange={(e) => setField('query', e.target.value)}
           />
         </div>
         <div className={styles.searchMetaRow}>
           <div className={styles.searchHelp}>
-            Supports: <b>Two words</b>, <b>&ldquo;Exact phrase&rdquo;</b>. <b>^start</b> matches start of word. <b>*</b>
-            =any, <b>?</b>=1 char.
+            Supports: <b>Two words</b>, <b>&ldquo;Exact phrase&rdquo;</b>, <b>^start</b> matches start of word. <b>*</b>
+            =any, <b>?</b>=1 char. <b>OR</b> for boolean search.
           </div>
           {!loading && config.query && totalCount > 0 && (
             <span className={styles.resultsCount}>
@@ -340,6 +340,30 @@ export default function SearchModal({ isOpen, onClose, onNavigate }: SearchModal
             </span>
           )}
         </div>
+
+        {(config.filterPlatforms.length > 0 || config.filterCategories.length > 0) && (
+          <div className={styles.chipsRow}>
+            {config.filterPlatforms.map((p) => (
+              <div key={p} className={styles.chip}>
+                <span className={styles.chipLabel}>Platform</span>
+                {p}
+                <button className={styles.chipRemove} onClick={() => togglePlatform(p)}>
+                  <FaTimes size={10} />
+                </button>
+              </div>
+            ))}
+            {config.filterCategories.map((c) => (
+              <div key={c} className={styles.chip}>
+                <span className={styles.chipLabel}>Category</span>
+                {CategoryLabels[c] || c}
+                <button className={styles.chipRemove} onClick={() => toggleCategory(c)}>
+                  <FaTimes size={10} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
         {facets && Object.keys(facets.senders).length > 0 && (
           <div className={styles.statsSection}>
             <div className={styles.statsHeader} onClick={() => setIsSendersExpanded(!isSendersExpanded)}>
@@ -363,7 +387,22 @@ export default function SearchModal({ isOpen, onClose, onNavigate }: SearchModal
             <span>Searching...</span>
           </div>
         )}
-        {!loading && results.length === 0 && config.query && <div className={styles.empty}>No matches found.</div>}
+        {!loading && results.length === 0 && config.query && (
+          <div className={styles.emptyContainer}>
+            <div className={styles.noResultsTitle}>No matches found for &ldquo;{config.query}&rdquo;</div>
+            {(config.filterPlatforms.length > 0 || config.filterCategories.length > 0) && (
+              <button
+                className={styles.noResultsAction}
+                onClick={() => {
+                  setField('filterPlatforms', []);
+                  setField('filterCategories', []);
+                }}
+              >
+                Clear all filters and search again
+              </button>
+            )}
+          </div>
+        )}
         {!loading && !!results.length && (
           <Virtuoso
             style={{ height: '100%' }}

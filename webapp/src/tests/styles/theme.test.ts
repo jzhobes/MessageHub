@@ -1,6 +1,7 @@
-import { describe, it, expect } from 'vitest';
 import fs from 'fs';
 import path from 'path';
+
+import { describe, expect, it } from 'vitest';
 
 describe('Theme Variable Integrity', () => {
   const globalsPath = path.resolve(__dirname, '../../styles/globals.css');

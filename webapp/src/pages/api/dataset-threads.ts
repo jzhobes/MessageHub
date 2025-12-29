@@ -1,7 +1,8 @@
-import type { NextApiRequest, NextApiResponse } from 'next';
 import db from '@/lib/server/db';
 import { getMyNames } from '@/lib/server/identity';
 import { getPlatformLabel } from '@/lib/shared/platforms';
+
+import type { NextApiRequest, NextApiResponse } from 'next';
 
 interface ThreadStatsRow {
   id: string;
@@ -28,7 +29,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const namesPlaceholders = myNames.map(() => '?').join(',');
 
   // 1. Get raw stats per thread
-  // We utilize a subquery or join. Grouping by thread_id on the messages table is efficient if indexed.
   // Note: LENGTH(content) is a rough proxy for token count.
   let query = `
     SELECT 
@@ -142,8 +142,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       };
     });
 
-    // Sort by Score by default for this view? Or let frontend handle it.
-    // Let's sort by Score DESC to surface gold first.
+    // Sort by Quality Score (highest first)
     threadsWithScore.sort((a, b) => b.qualityScore - a.qualityScore);
 
     res.status(200).json(threadsWithScore);

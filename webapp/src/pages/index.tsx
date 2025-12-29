@@ -1,19 +1,21 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { FaArrowLeft, FaBars, FaCog, FaSearch } from 'react-icons/fa';
 import { FiMoon, FiSun } from 'react-icons/fi';
 
+import styles from '@/components/Layout.module.css';
 import SearchModal from '@/components/modals/SearchModal';
 import SetupModal from '@/components/modals/SetupModal';
-import { useApp } from '@/context/AppContext';
+
 import { useTheme } from '@/hooks/useTheme';
+
+import { useApp } from '@/context/AppContext';
 import { ContentRecord, Thread } from '@/lib/shared/types';
 import Sidebar from '@/sections/Sidebar';
 import ThreadContent from '@/sections/ThreadContent';
 import ThreadList from '@/sections/ThreadList';
-
-import styles from '@/components/Layout.module.css';
 
 // Convert raw DB platform identifiers to UI display names
 function mapPlatform(raw: string): string {
@@ -47,6 +49,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [targetMessageId, setTargetMessageId] = useState<string | null>(null);
+  const [targetTimestamp, setTargetTimestamp] = useState<number | null>(null);
   const [showSetup, setShowSetup] = useState(false);
 
   // Layout State
@@ -82,8 +85,13 @@ export default function Home() {
   // --- Callbacks & Helpers ---
 
   const updateUrl = useCallback(
-    (platform: string, threadId?: string, pageNum?: number) => {
+    (platform: string, threadId?: string, pageNum?: number, category?: string) => {
       const query: Record<string, string> = { platform };
+      const activeCat = category || activeCategory;
+
+      if (activeCat && activeCat !== 'message' && activeCat !== 'inbox') {
+        query.type = activeCat;
+      }
       if (threadId) {
         query.threadId = threadId;
       }
@@ -100,7 +108,7 @@ export default function Home() {
         { scroll: false },
       );
     },
-    [router],
+    [router, activeCategory],
   );
 
   const latestRequestRef = useRef<symbol | null>(null);
@@ -185,29 +193,63 @@ export default function Home() {
   const handlePlatformSelect = useCallback(
     (p: string) => {
       const safePlatform = resolvePlatform(p, availability);
-      updateUrl(safePlatform, undefined);
-
-      // Reset to appropriate category
       const defaultCat = safePlatform === 'Gmail' ? 'inbox' : 'message';
-      setActiveCategory(defaultCat);
+
+      // 1. Same platform/category selection
+      if (safePlatform === activePlatform && activeCategory === defaultCat) {
+        if (isMobile) {
+          if (activeThread) {
+            setActiveThread(null);
+            setMessages(null);
+            lastLoadedRef.current = '';
+            updateUrl(safePlatform, undefined, undefined, defaultCat);
+          }
+          setShowSidebar(false);
+        }
+        return;
+      }
+
+      // 2. Changing Platform or Category:
+      // Full reset. Threads will be re-fetched by Effect 4 because activePlatform or activeCategory will change.
+      setThreads(null);
+      setActiveThread(null);
+      setMessages(null);
+      lastLoadedRef.current = '';
+      if (activeCategory !== defaultCat) {
+        setActiveCategory(defaultCat);
+      }
+      updateUrl(safePlatform, undefined, undefined, defaultCat);
 
       if (isMobile) {
-        setShowSidebar(false); // Close sidebar on mobile after selection
+        setShowSidebar(false);
       }
     },
-    [availability, resolvePlatform, updateUrl, isMobile],
+    [availability, resolvePlatform, updateUrl, isMobile, activePlatform, activeCategory, activeThread],
   );
 
   const handleCategoryChange = useCallback(
     (cat: string) => {
-      setActiveCategory(cat);
-      if (activeThread) {
-        setActiveThread(null);
-        setMessages(null);
-        updateUrl(activePlatform, undefined);
+      // 1. Same category selection
+      if (cat === activeCategory) {
+        if (isMobile && activeThread) {
+          setActiveThread(null);
+          setMessages(null);
+          lastLoadedRef.current = '';
+          updateUrl(activePlatform, undefined, undefined, cat);
+          return;
+        }
+        return;
       }
+
+      // 2. Changing category
+      setActiveCategory(cat); // Trigger Effect 4
+      setThreads(null);
+      setActiveThread(null);
+      setMessages(null);
+      lastLoadedRef.current = '';
+      updateUrl(activePlatform, undefined, undefined, cat);
     },
-    [activeThread, activePlatform, updateUrl],
+    [activePlatform, updateUrl, activeCategory, activeThread, isMobile],
   );
 
   const handleThreadSelect = useCallback(
@@ -215,15 +257,17 @@ export default function Home() {
       if (activeThread?.id === t.id) {
         return;
       }
+      setActiveThread(t);
       setMessages(null);
       // Don't set loading(true) here, as messages=null handles the spinner
       setHasMoreOld(false);
       setHasMoreNew(false);
       setPageRange({ min: 1, max: 1 });
       setTargetMessageId(null);
-      updateUrl(activePlatform, t.id); // Page undefined -> 1
+      setTargetTimestamp(null);
+      updateUrl(activePlatform, t.id, undefined, activeCategory); // Page undefined -> 1
     },
-    [activeThread, activePlatform, updateUrl],
+    [activeThread, activePlatform, activeCategory, updateUrl],
   );
 
   const handleSearchNavigate = useCallback(
@@ -234,11 +278,12 @@ export default function Home() {
           const info = await res.json();
 
           setTargetMessageId(msgId.toString());
+          setTargetTimestamp(info.timestamp || null);
           setHighlightToken((t) => t + 1);
           // Map raw platform to display name before updating URL
           const displayPlatform = mapPlatform(info.platform);
           // Navigate to the thread/page via URL update
-          updateUrl(displayPlatform, info.threadId, info.page);
+          updateUrl(displayPlatform, info.threadId, info.page, info.category);
         }
       } catch (e) {
         console.error('Jump failed', e);
@@ -375,20 +420,26 @@ export default function Home() {
 
     const platformParam = router.query.platform as string;
     const threadIdParam = router.query.threadId as string;
+    const typeParam = router.query.type as string;
 
     const safePlatform = resolvePlatform(platformParam || activePlatform, availability);
 
     // If URL contains an invalid/unavailable platform, rewrite it to the first valid one
-    if (platformParam && platformParam !== safePlatform) {
-      updateUrl(safePlatform);
-      return;
-    }
-
     if (safePlatform !== activePlatform) {
       setActivePlatform(safePlatform);
       setActiveThread(null);
       setMessages(null);
+      setThreads(null);
+      // If no type param, set default for new platform
+      const defaultCat = safePlatform === 'Gmail' ? 'inbox' : 'message';
+      setActiveCategory(typeParam || defaultCat);
       return;
+    }
+
+    const defaultCat = activePlatform === 'Gmail' ? 'inbox' : 'message';
+    const effectiveType = typeParam || defaultCat;
+    if (effectiveType !== activeCategory) {
+      setActiveCategory(effectiveType);
     }
 
     if (threads?.length) {
@@ -396,22 +447,38 @@ export default function Home() {
         if (threadIdParam !== activeThread?.id) {
           const target = threads.find((t) => t.id === threadIdParam);
           if (target) {
-            // TODO: Commonize backend's Thread type with ThreadRow?
             setActiveThread({
               ...target,
               platform: safePlatform,
             });
           }
         }
+      } else if (!isMobile) {
+        // Auto-select first thread on desktop
+        handleThreadSelect(threads[0]);
       } else if (activeThread) {
         setActiveThread(null);
       }
     }
-  }, [isRouterReady, router.query, activePlatform, activeThread, threads, resolvePlatform, availability, updateUrl]);
+  }, [
+    isRouterReady,
+    router.query,
+    activePlatform,
+    activeThread,
+    activeCategory,
+    threads,
+    resolvePlatform,
+    availability,
+    updateUrl,
+    handleThreadSelect,
+    isMobile,
+  ]);
+
+  const lastLoadedRef = useRef<string>('');
 
   // 6. Initial Load / Reset Messages when Active Thread changes
   useEffect(() => {
-    if (!activeThread) {
+    if (!activeThread?.id) {
       return;
     }
 
@@ -422,11 +489,17 @@ export default function Home() {
 
     const pageParam = router.query.page;
     const startPage = pageParam ? parseInt(pageParam as string, 10) : 1;
+    const loadKey = `${activeThread.id}-${startPage}`;
 
-    console.info(`Initializing at Page ${startPage}`);
+    if (lastLoadedRef.current === loadKey) {
+      return;
+    }
+
+    console.info(`[Effect] Initializing thread ${activeThread.id} at Page ${startPage}`);
+    lastLoadedRef.current = loadKey;
     setPageRange({ min: startPage, max: startPage });
     loadMessages(activeThread.id, startPage, 'reset');
-  }, [activeThread, router.query.page, router.query.threadId, loadMessages]);
+  }, [activeThread?.id, router.query.page, router.query.threadId, loadMessages]);
 
   if (!isRouterReady) {
     return <div>Loading...</div>;
@@ -438,14 +511,23 @@ export default function Home() {
   const isSidebarVisible = true;
   const collapsed = !showSidebar;
 
+  // Derive initialization state to prevent flickering during transitions
+  // We are initializing if:
+  // 1. A threadId is in the URL but we haven't loaded it into state yet
+  // 2. We're on desktop, no thread is active, and we're currently loading threads (threads === null)
+  // 3. We're on desktop, no thread is active, but threads have arrived and are waiting to be auto-selected (threads.length > 0)
+  const isInitializing =
+    (!!router.query.threadId && !activeThread && availability[activePlatform]) ||
+    (!isMobile && !activeThread && (threads === null || !!threads?.length));
+
   return (
     <div className={styles.container} data-theme={theme}>
       <SetupModal
         isOpen={showSetup}
-        onClose={() => setShowSetup(false)}
-        onCompleted={() => window.location.reload()}
         initialStep={isInitialized ? 2 : 0}
         isFirstRun={isInitialized === false}
+        onClose={() => setShowSetup(false)}
+        onCompleted={() => window.location.reload()}
       />
       <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} onNavigate={handleSearchNavigate} />
 
@@ -497,16 +579,16 @@ export default function Home() {
         <div className={styles.themeToggleWrapper}>
           <button
             className={`${styles.iconButton} ${styles.headerIconBtn}`}
-            onClick={() => setShowSetup(true)}
             title="Setup"
             style={{ marginRight: 8 }}
+            onClick={() => setShowSetup(true)}
           >
             <FaCog size={20} />
           </button>
           <button
             className={`${styles.iconButton} ${styles.headerIconBtn}`}
-            onClick={toggleTheme}
             title={theme === 'light' ? 'Switch to Dark Mode' : 'Switch to Light Mode'}
+            onClick={toggleTheme}
           >
             {!mounted || theme === 'light' ? <FiMoon size={20} /> : <FiSun size={20} />}
           </button>
@@ -523,9 +605,9 @@ export default function Home() {
         >
           <Sidebar
             activePlatform={activePlatform}
-            onPlatformSelect={handlePlatformSelect}
             availability={availability}
             collapsed={collapsed}
+            onPlatformSelect={handlePlatformSelect}
           />
         </div>
 
@@ -535,11 +617,11 @@ export default function Home() {
               <ThreadList
                 activePlatform={activePlatform}
                 activeCategory={activeCategory}
-                onCategoryChange={handleCategoryChange}
                 categoryCounts={categoryCounts}
                 threads={threads || []}
                 activeThread={activeThread}
                 loading={threads === null}
+                onCategoryChange={handleCategoryChange}
                 onThreadSelect={handleThreadSelect}
               />
             </div>
@@ -554,11 +636,12 @@ export default function Home() {
                 hasMoreOld={hasMoreOld}
                 hasMoreNew={hasMoreNew}
                 pageRange={pageRange}
+                targetMessageId={targetMessageId}
+                targetTimestamp={targetTimestamp}
+                highlightToken={highlightToken}
+                initializing={isInitializing}
                 onStartReached={handleLoadOld}
                 onEndReached={handleLoadNew}
-                targetMessageId={targetMessageId}
-                highlightToken={highlightToken}
-                initializing={!!router.query.threadId && !activeThread && availability[activePlatform]}
               />
             </div>
           )}

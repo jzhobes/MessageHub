@@ -15,6 +15,7 @@ from parsers.facebook import (
     ingest_facebook_checkins,
     ingest_facebook_entry,
     ingest_facebook_events,
+    ingest_facebook_owned_events,
     ingest_facebook_posts,
     ingest_instagram_entry,
 )
@@ -73,12 +74,27 @@ def handle_facebook(cursor, p_root, scan_path, discovered_identities):
         print("[Ingesting]: Facebook Social Activity (Events, Posts, Check-ins)...")
         my_full_name = discover_facebook_identity(scan_path)
 
+        # Cleanup legacy hashed IDs to prevent "doubles"
+        print("  Cleaning up legacy social activity records...")
+        for prefix in ["fb_event_", "fb_post_", "fb_ci_"]:
+            # Delete threads that follow the old pattern: prefix + timestamp + _ + hash
+            # New pattern is just prefix + timestamp
+            cursor.execute(f"SELECT id FROM threads WHERE id LIKE '{prefix}%' AND id GLOB '{prefix}*[0-9]_*'")
+            legacy_ids = [row[0] for row in cursor.fetchall()]
+            if legacy_ids:
+                placeholders = ",".join(["?"] * len(legacy_ids))
+                cursor.execute(f"DELETE FROM content WHERE thread_id IN ({placeholders})", legacy_ids)
+                cursor.execute(f"DELETE FROM threads WHERE id IN ({placeholders})", legacy_ids)
+                # Labels will cascade if foreign keys are active, but safe to do manually
+                cursor.execute(f"DELETE FROM thread_labels WHERE thread_id IN ({placeholders})", legacy_ids)
+
         ec, es = ingest_facebook_events(cursor, scan_path, my_full_name)
+        oc, os = ingest_facebook_owned_events(cursor, scan_path, my_full_name)
         pc, ps = ingest_facebook_posts(cursor, scan_path, my_full_name)
         cc, cs = ingest_facebook_checkins(cursor, scan_path, my_full_name)
 
-        count += ec + pc + cc
-        skipped += es + ps + cs
+        count += ec + oc + pc + cc
+        skipped += es + os + ps + cs
         discovered_identities.add("facebook_activity")
 
     return count, skipped
@@ -147,7 +163,17 @@ def scan_directory(scan_path, db_path, platform_filter="all", limit_platforms=No
     priority_map = {"google_chat": 1, "facebook": 2, "instagram": 3}
 
     for root, _, files in os.walk(scan_path):
-        if "message_1.json" not in files and "messages.json" not in files:
+        # Look for message threads OR identity files
+        if not any(
+            f in files
+            for f in [
+                "message_1.json",
+                "messages.json",
+                "profile_information.json",
+                "personal_information.json",
+                "user_info.json",
+            ]
+        ):
             continue
 
         p_root = Path(root)

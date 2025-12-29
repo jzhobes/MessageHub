@@ -1,11 +1,12 @@
 import { promises as fs } from 'fs';
 import path from 'path';
-import type { NextApiRequest, NextApiResponse } from 'next';
 
 import { getFacebookCrawlerHeaders } from '@/lib/server/facebook';
 import { getInstagramHeaders } from '@/lib/server/instagram';
 import appConfig from '@/lib/shared/appConfig';
 import { decodeHtmlEntities } from '@/lib/shared/stringUtils';
+
+import type { NextApiRequest, NextApiResponse } from 'next';
 
 interface PreviewMetadata {
   url: string;
@@ -49,10 +50,12 @@ function parseMetadata(html: string): { title: string | null; image: string | nu
 function detectPlatform(url: string): { isFacebook: boolean; isInstagram: boolean; isReddit: boolean } {
   try {
     const u = new URL(url);
+    const host = u.hostname.toLowerCase();
     return {
-      isFacebook: u.hostname.includes('facebook.com') || u.hostname.includes('fb.com'),
-      isInstagram: u.hostname.includes('instagram.com'),
-      isReddit: u.hostname.includes('reddit.com'),
+      isFacebook:
+        host === 'facebook.com' || host.endsWith('.facebook.com') || host === 'fb.com' || host.endsWith('.fb.com'),
+      isInstagram: host === 'instagram.com' || host.endsWith('.instagram.com'),
+      isReddit: host === 'reddit.com' || host.endsWith('.reddit.com'),
     };
   } catch {
     return { isFacebook: false, isInstagram: false, isReddit: false };
@@ -110,6 +113,37 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ error: 'Missing url' });
   }
 
+  // SSRF Protection: Block local and private network access
+  try {
+    const u = new URL(targetUrl);
+    const hostname = u.hostname.toLowerCase();
+
+    // Block common local hostnames
+    if (
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1' ||
+      hostname === '[::1]' ||
+      hostname.endsWith('.local') ||
+      hostname.endsWith('.internal')
+    ) {
+      return res.status(403).json({ error: 'Local network access is not allowed' });
+    }
+
+    // Block private IP ranges (CIDR-like checks for common ones)
+    // 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16 (Link-local)
+    const isPrivateIp =
+      /^10\./.test(hostname) ||
+      /^192\.168\./.test(hostname) ||
+      /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(hostname) ||
+      /^169\.254\./.test(hostname);
+
+    if (isPrivateIp) {
+      return res.status(403).json({ error: 'Private network access is not allowed' });
+    }
+  } catch {
+    return res.status(400).json({ error: 'Invalid URL' });
+  }
+
   // Check cache first
   const cache = await readCache();
   if (cache[targetUrl]) {
@@ -158,20 +192,40 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         console.log('[Preview] Using Authenticated Instagram Fetch');
       }
 
-      const response = await fetch(targetUrl, { headers, signal: AbortSignal.timeout(5000) });
-      if (response.ok) {
-        const html = await response.text();
-        const meta = parseMetadata(html);
-        title = meta.title;
-        image = meta.image;
-        description = meta.description;
+      try {
+        const response = await fetch(targetUrl, {
+          headers,
+          signal: AbortSignal.timeout(5000),
+          redirect: 'follow',
+        });
 
-        // Facebook Proxy for Lookaside
-        if (isFacebook && image && image.includes('lookaside')) {
-          image = `/api/fb-image-proxy?url=${encodeURIComponent(image)}`;
+        if (response.ok) {
+          const html = await response.text();
+          const meta = parseMetadata(html);
+          title = meta.title;
+          image = meta.image;
+          description = meta.description;
+
+          // Facebook Proxy for Lookaside
+          if (isFacebook && image && image.includes('lookaside')) {
+            image = `/api/fb-image-proxy?url=${encodeURIComponent(image)}`;
+          }
+        } else {
+          console.warn(`[Preview] Fetch status ${response.status} for ${targetUrl}`);
         }
-      } else {
-        console.error(`❌ [Preview] Fetch failed for ${targetUrl} (${response.status})`);
+      } catch (e: unknown) {
+        const error = e as Error;
+        const errorWithCause = e as { cause?: { message?: string } };
+        if (error.name === 'TimeoutError' || error.name === 'AbortError') {
+          console.error(`[Preview] Timeout/Abort fetching ${targetUrl}`);
+        } else if (
+          errorWithCause.cause?.message?.includes('redirect count exceeded') ||
+          error.message?.includes('redirect')
+        ) {
+          console.error(`[Preview] Redirect loop detected for ${targetUrl}`);
+        } else {
+          console.error(`[Preview] Fetch failed for ${targetUrl}:`, error.message || error);
+        }
       }
     }
 
@@ -198,7 +252,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       console.error('[Preview] Deferred cache update failed', e);
     }
   } catch (e) {
-    console.error('Preview fetch error:', e);
+    console.error(`Preview fetch error for "${targetUrl}":`, e);
     return res.status(500).json({ error: 'Internal Error' });
   }
 }

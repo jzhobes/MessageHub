@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 export interface ArchiveProgress {
   name: string;
@@ -59,41 +59,54 @@ export function useIngestion() {
     if (hasTransfer) {
       setStatus(`${transferMode === 'copy' ? 'Copying' : 'Moving'} files...`);
       try {
-        // Use GET with EventSource for simple streaming progress
-        const params = new URLSearchParams({
-          files: JSON.stringify(remoteFiles),
-          operation: transferMode,
+        const response = await fetch('/api/setup/transfer', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            files: remoteFiles,
+            operation: transferMode,
+          }),
         });
 
-        await new Promise<void>((resolve, reject) => {
-          const evt = new EventSource(`/api/setup/transfer?${params.toString()}`);
+        if (!response.ok) {
+          throw new Error(`Transfer failed: ${response.statusText}`);
+        }
 
-          evt.onmessage = (event) => {
-            const json = JSON.parse(event.data);
-            if (json.type === 'log') {
-              setLogs((p) => [...p, json.payload]);
-            }
-            if (json.type === 'progress') {
-              const { index, total, file, status, error: fileErr } = json.payload;
-              const pct = Math.floor((index / total) * transferWeight);
-              setProgress(pct);
-              setLogs((p) => [...p, `[${index}/${total}] ${file}: ${status}${fileErr ? ` (${fileErr})` : ''}`]);
-            }
-            if (json.type === 'done') {
-              evt.close();
-              resolve();
-            }
-            if (json.type === 'error') {
-              evt.close();
-              reject(new Error(json.payload));
-            }
-          };
+        const reader = response.body?.getReader();
+        const decoder = new TextDecoder();
+        if (!reader) {
+          throw new Error('No readable stream available');
+        }
 
-          evt.onerror = () => {
-            evt.close();
-            reject(new Error('Connection to transfer service lost'));
-          };
-        });
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) {
+            break;
+          }
+          const chunk = decoder.decode(value, { stream: true });
+          const messages = chunk.split('\n\n');
+
+          for (const msg of messages) {
+            if (msg.startsWith('data: ')) {
+              const json = JSON.parse(msg.replace('data: ', ''));
+              if (json.type === 'log') {
+                setLogs((p) => [...p, json.payload]);
+              }
+              if (json.type === 'progress') {
+                const { index, total, file, status, error: fileErr } = json.payload;
+                const pct = Math.floor((index / total) * transferWeight);
+                setProgress(pct);
+                setLogs((p) => [...p, `[${index}/${total}] ${file}: ${status}${fileErr ? ` (${fileErr})` : ''}`]);
+              }
+              if (json.type === 'done') {
+                break;
+              }
+              if (json.type === 'error') {
+                throw new Error(json.payload);
+              }
+            }
+          }
+        }
 
         setLogs((p) => [...p, `Transfer complete.`]);
         setProgress(transferWeight);
@@ -112,182 +125,198 @@ export function useIngestion() {
     // Start ingestion progress at offset (5% of its own range)
     setProgress(ingestOffset + Math.round(ingestWeight * 0.05));
 
-    const evtSource = new EventSource(`/api/setup/ingest?deleteArchives=true`);
+    const response = await fetch('/api/setup/ingest?deleteArchives=true', {
+      method: 'POST',
+    });
 
-    evtSource.onmessage = (event) => {
-      try {
-        const json = JSON.parse(event.data);
+    if (!response.ok) {
+      setError(`Ingest failed: ${response.statusText}`);
+      setIsInstalling(false);
+      return;
+    }
 
-        if (json.payload && typeof json.payload === 'string') {
-          // Parse explicit Error signals from backend
-          if (json.payload.includes('[Error]:')) {
-            setLogs((p) => [...p, json.payload]);
-            const err = json.payload.split('[Error]:')[1].trim();
-            setError(err);
-            setStatus('Failed');
-            setIsInstalling(false);
-            evtSource.close();
-            return;
-          }
+    const reader = response.body?.getReader();
+    const decoder = new TextDecoder();
+    if (!reader) {
+      setError('No readable stream available for ingestion');
+      setIsInstalling(false);
+      return;
+    }
 
-          // Parse TotalArchives
-          const totalArchivesMatch = json.payload.match(/\[TotalArchives\]: (\d+)/);
-          if (totalArchivesMatch) {
-            totalArchivesRef.current = parseInt(totalArchivesMatch[1], 10);
-            setLogs((p) => [...p, json.payload]);
-          }
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+      const chunk = decoder.decode(value, { stream: true });
+      const messagesBuffer = chunk.split('\n\n');
 
-          // Parse ArchiveStarted
-          if (json.payload.includes('[ArchiveStarted]:')) {
-            const parts = json.payload.split(']:')[1].trim().split('|');
-            const name = parts[0];
-            const total = parts.length > 1 ? parseInt(parts[1], 10) : 0;
+      for (const msg of messagesBuffer) {
+        if (!msg.startsWith('data: ')) {
+          continue;
+        }
 
-            setStatus(`Extracting ${name}...`);
-            setLogs((p) => [...p, `Starting extraction: ${name}`]);
+        try {
+          const json = JSON.parse(msg.replace('data: ', ''));
 
-            // Initialize progress bar immediately at 0
-            if (total > 0) {
-              transferMapRef.current = {
-                ...transferMapRef.current,
-                [name]: { name, current: 0, total },
-              };
-              setActiveTransfers({ ...transferMapRef.current });
+          if (json.payload && typeof json.payload === 'string') {
+            // Parse explicit Error signals from backend
+            if (json.payload.includes('[Error]:')) {
+              setLogs((p) => [...p, json.payload]);
+              const err = json.payload.split('[Error]:')[1].trim();
+              setError(err);
+              setStatus('Failed');
+              setIsInstalling(false);
+              return;
             }
-          }
 
-          // Parse ArchiveProgress
-          if (json.payload.includes('[ArchiveProgress]:')) {
-            const parts = json.payload.split(']:')[1].trim().split('|');
-            const name = parts[0];
-            const current = parseInt(parts[1], 10);
-            const total = parseInt(parts[2], 10);
-
-            // Update tracker ref and state
-            transferMapRef.current = {
-              ...transferMapRef.current,
-              [name]: { name, current, total },
-            };
-            setActiveTransfers({ ...transferMapRef.current });
-
-            // Do NOT add progress ticks to logs to keep them clean
-            return;
-          }
-
-          // Parse MergeProgress (Folder Consolidation)
-          if (json.payload.includes('[MergeProgress]:')) {
-            const parts = json.payload.split(']:')[1].trim().split('|');
-            const name = `Consolidating ${parts[0]}`;
-            const current = parseInt(parts[1], 10);
-            const total = parseInt(parts[2], 10);
-
-            // Update tracker ref and state
-            transferMapRef.current = {
-              ...transferMapRef.current,
-              [name]: { name, current, total },
-            };
-            setActiveTransfers({ ...transferMapRef.current });
-
-            // Do NOT add progress ticks to logs to keep them clean
-            return;
-          }
-
-          // Parse ArchiveExtracted
-          if (json.payload.includes('[ArchiveExtracted]:')) {
-            extractedArchivesRef.current += 1;
-            const name = json.payload.split(']:')[1].trim();
-            setStatus(`Extracted ${name}`);
-            setLogs((p) => [...p, `Finished: ${name}`]);
-
-            // Remove from tracker
-            const newMap = { ...transferMapRef.current };
-            delete newMap[name];
-            transferMapRef.current = newMap;
-            setActiveTransfers(newMap);
-
-            // Extraction phase: first 30% of ingestion weight
-            if (totalArchivesRef.current > 0) {
-              const phasePct = (extractedArchivesRef.current / totalArchivesRef.current) * 0.3;
-              const globalPct = ingestOffset + Math.round(phasePct * ingestWeight);
-              setProgress(globalPct);
-            }
-          }
-
-          // Parse TotalFiles
-          const totalMatch = json.payload.match(/\[TotalFiles\]: (\d+)/);
-          if (totalMatch) {
-            totalFilesRef.current = parseInt(totalMatch[1], 10);
-            setLogs((p) => [...p, json.payload]);
-          }
-
-          // Track progress (Ingestion)
-          if (json.payload.includes('[Ingesting]:')) {
-            setLogs((p) => [...p, json.payload]);
-            setStatus(json.payload.split(']:')[1].trim() + '...');
-            processedFilesRef.current += 1;
-
-            // Ingestion phase: 30% to 100% of ingestion weight
-            const hasArchives = totalArchivesRef.current > 0;
-            const startOfPhase = hasArchives ? 0.3 : 0.0;
-            const sizeOfPhase = 1.0 - startOfPhase;
-
-            if (totalFilesRef.current > 0) {
-              const phaseProgress = processedFilesRef.current / totalFilesRef.current;
-              const phasePct = startOfPhase + phaseProgress * sizeOfPhase;
-              const globalPct = ingestOffset + Math.min(Math.round(phasePct * ingestWeight), 99);
-              setProgress(globalPct);
-            } else {
-              // Fallback bump
-              setProgress((prev) => Math.min(prev + 1, 99));
-            }
-          } else if (json.payload.includes('[Committed]:')) {
-            setLogs((p) => [...p, json.payload]);
-            setStatus(json.payload.split(']:')[1].trim());
-          } else {
-            // General status logs
-            if (!json.payload.startsWith('[')) {
+            // Parse TotalArchives
+            const totalArchivesMatch = json.payload.match(/\[TotalArchives\]: (\d+)/);
+            if (totalArchivesMatch) {
+              totalArchivesRef.current = parseInt(totalArchivesMatch[1], 10);
               setLogs((p) => [...p, json.payload]);
             }
+
+            // Parse ArchiveStarted
+            if (json.payload.includes('[ArchiveStarted]:')) {
+              const parts = json.payload.split(']:')[1].trim().split('|');
+              const name = parts[0];
+              const total = parts.length > 1 ? parseInt(parts[1], 10) : 0;
+
+              setStatus(`Extracting ${name}...`);
+              setLogs((p) => [...p, `Starting extraction: ${name}`]);
+
+              // Initialize progress bar immediately at 0
+              if (total > 0) {
+                transferMapRef.current = {
+                  ...transferMapRef.current,
+                  [name]: { name, current: 0, total },
+                };
+                setActiveTransfers({ ...transferMapRef.current });
+              }
+            }
+
+            // Parse ArchiveProgress
+            if (json.payload.includes('[ArchiveProgress]:')) {
+              const parts = json.payload.split(']:')[1].trim().split('|');
+              const name = parts[0];
+              const current = parseInt(parts[1], 10);
+              const total = parseInt(parts[2], 10);
+
+              // Update tracker ref and state
+              transferMapRef.current = {
+                ...transferMapRef.current,
+                [name]: { name, current, total },
+              };
+              setActiveTransfers({ ...transferMapRef.current });
+
+              // Skip intermediate progress signatures for cleaner UI logs
+              continue;
+            }
+
+            // Parse MergeProgress (Folder Consolidation)
+            if (json.payload.includes('[MergeProgress]:')) {
+              const parts = json.payload.split(']:')[1].trim().split('|');
+              const name = `Consolidating ${parts[0]}`;
+              const current = parseInt(parts[1], 10);
+              const total = parseInt(parts[2], 10);
+
+              // Update tracker ref and state
+              transferMapRef.current = {
+                ...transferMapRef.current,
+                [name]: { name, current, total },
+              };
+              setActiveTransfers({ ...transferMapRef.current });
+
+              // Skip intermediate progress signatures for cleaner UI logs
+              continue;
+            }
+
+            // Parse ArchiveExtracted
+            if (json.payload.includes('[ArchiveExtracted]:')) {
+              extractedArchivesRef.current += 1;
+              const name = json.payload.split(']:')[1].trim();
+              setStatus(`Extracted ${name}`);
+              setLogs((p) => [...p, `Finished: ${name}`]);
+
+              // Remove from tracker
+              const newMap = { ...transferMapRef.current };
+              delete newMap[name];
+              transferMapRef.current = newMap;
+              setActiveTransfers(newMap);
+
+              // Extraction phase: first 30% of ingestion weight
+              if (totalArchivesRef.current > 0) {
+                const phasePct = (extractedArchivesRef.current / totalArchivesRef.current) * 0.3;
+                const globalPct = ingestOffset + Math.round(phasePct * ingestWeight);
+                setProgress(globalPct);
+              }
+            }
+
+            // Parse TotalFiles
+            const totalMatch = json.payload.match(/\[TotalFiles\]: (\d+)/);
+            if (totalMatch) {
+              totalFilesRef.current = parseInt(totalMatch[1], 10);
+              setLogs((p) => [...p, json.payload]);
+            }
+
+            // Track progress (Ingestion)
+            if (json.payload.includes('[Ingesting]:')) {
+              setLogs((p) => [...p, json.payload]);
+              setStatus(json.payload.split(']:')[1].trim() + '...');
+              processedFilesRef.current += 1;
+
+              // Ingestion phase: 30% to 100% of ingestion weight
+              const hasArchives = totalArchivesRef.current > 0;
+              const startOfPhase = hasArchives ? 0.3 : 0.0;
+              const sizeOfPhase = 1.0 - startOfPhase;
+
+              if (totalFilesRef.current > 0) {
+                const phaseProgress = processedFilesRef.current / totalFilesRef.current;
+                const phasePct = startOfPhase + phaseProgress * sizeOfPhase;
+                const globalPct = ingestOffset + Math.min(Math.round(phasePct * ingestWeight), 99);
+                setProgress(globalPct);
+              } else {
+                // Fallback bump
+                setProgress((prev) => Math.min(prev + 1, 99));
+              }
+            } else if (json.payload.includes('[Committed]:')) {
+              setLogs((p) => [...p, json.payload]);
+              setStatus(json.payload.split(']:')[1].trim());
+            } else {
+              // General status logs
+              if (!json.payload.startsWith('[')) {
+                setLogs((p) => [...p, json.payload]);
+              }
+            }
           }
-        }
 
-        if (json.type === 'done') {
-          const code = (json.payload as { code?: number })?.code;
-          if (code !== 0 && code !== undefined) {
-            setError(`Process exited with code ${code}`);
-            setStatus('Failed');
-          } else {
-            setIsComplete(true);
-            setStatus('Complete');
-            setProgress(100);
-            setLogs((p) => [...p, 'Done!']);
+          if (json.type === 'done') {
+            const code = (json.payload as { code?: number })?.code;
+            if (code !== 0 && code !== undefined) {
+              setError(`Process exited with code ${code}`);
+              setStatus('Failed');
+            } else {
+              setIsComplete(true);
+              setStatus('Complete');
+              setProgress(100);
+              setLogs((p) => [...p, 'Done!']);
+            }
+            setIsInstalling(false);
+            setActiveTransfers({});
           }
-          setIsInstalling(false);
-          setActiveTransfers({});
-          evtSource.close();
-        }
 
-        if (json.type === 'error') {
-          setError(json.payload);
-          setLogs((p) => [...p, `Error: ${json.payload}`]);
-          evtSource.close();
-          setIsInstalling(false);
-          setActiveTransfers({});
+          if (json.type === 'error') {
+            setError(json.payload);
+            setLogs((p) => [...p, `Error: ${json.payload}`]);
+            setIsInstalling(false);
+            setActiveTransfers({});
+          }
+        } catch (e) {
+          console.error('Failed to parse SSE message', e);
         }
-      } catch (e) {
-        console.error('Failed to parse SSE', e);
       }
-    };
-
-    evtSource.onerror = (err) => {
-      console.error('EventSource failed:', err);
-      evtSource.close();
-      if (!isComplete) {
-        setIsInstalling(false);
-        setError('Connection to session lost');
-        setLogs((p) => [...p, 'Connection lost.']);
-      }
-    };
+    }
   };
 
   return {

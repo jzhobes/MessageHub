@@ -1,5 +1,6 @@
-import { describe, it, expect, vi } from 'vitest';
 import { createMocks } from 'node-mocks-http';
+import { describe, expect, it, vi } from 'vitest';
+
 import handler from '@/pages/api/search';
 
 // We do NOT mock '@/lib/server/db' anymore, using real one.
@@ -7,7 +8,7 @@ import handler from '@/pages/api/search';
 // We still mock Identity because that depends on file permissions/user paths
 // that might vary even if workspace is fixed.
 vi.mock('@/lib/server/identity', () => ({
-  getMyNames: vi.fn().mockResolvedValue(['Me', 'John Doe', 'John Ho']),
+  getMyNames: vi.fn().mockResolvedValue(['Me', 'John Doe', 'Charlie Chen']),
 }));
 
 describe('/api/search (Integration)', () => {

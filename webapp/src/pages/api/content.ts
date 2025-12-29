@@ -1,9 +1,10 @@
-import type { NextApiRequest, NextApiResponse } from 'next';
 import path from 'path';
-import db from '@/lib/server/db';
 
-import { MediaItem, ContentRecord } from '@/lib/shared/types';
+import db from '@/lib/server/db';
 import { getMyNames } from '@/lib/server/identity';
+import { ContentRecord, MediaItem } from '@/lib/shared/types';
+
+import type { NextApiRequest, NextApiResponse } from 'next';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { threadId, page = '1' } = req.query;
@@ -21,6 +22,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const myNames = await getMyNames();
 
   try {
+    if (!db.exists()) {
+      return res.status(200).json([]);
+    }
+
     interface ContentRow {
       id: number;
       thread_id: string;
@@ -31,19 +36,63 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       reactions_json: string | null;
       share_json: string | null;
       annotations_json: string | null;
+      event_title?: string;
     }
 
-    const rows = db
-      .get()
-      .prepare(
-        `
+    let rows: ContentRow[] = [];
+
+    if (threadIdStr.startsWith('fb-event-') || threadIdStr === 'fb-post-all' || threadIdStr === 'fb-checkin-all') {
+      const catMap: Record<string, string | null> = {
+        'fb-event-owned': 'Created Event',
+        'fb-event-joined': 'Joined Event',
+        'fb-event-interested': 'Interested in Event',
+        'fb-event-declined': 'Declined Event',
+        'fb-post-all': null,
+        'fb-checkin-all': null,
+      };
+
+      const statusCondition = threadIdStr.startsWith('fb-event-') ? 'AND c.content = ?' : '';
+      const label = threadIdStr.includes('post') ? 'post' : threadIdStr.includes('checkin') ? 'checkin' : 'event';
+      const statusValue = catMap[threadIdStr];
+
+      const queryParams: (string | number)[] = [];
+      if (statusValue) {
+        queryParams.push(statusValue);
+      }
+      queryParams.push(PAGE_SIZE, offset);
+
+      rows = db
+        .get()
+        .prepare(
+          `
+        SELECT c.*, MAX(t.title) as event_title 
+        FROM content c
+        INNER JOIN threads t ON c.thread_id = t.id
+        INNER JOIN thread_labels tl ON t.id = tl.thread_id
+        WHERE tl.label = '${label}' ${statusCondition}
+        GROUP BY c.timestamp_ms
+        ORDER BY c.timestamp_ms DESC
+        LIMIT ? OFFSET ?
+      `,
+        )
+        .all(...queryParams) as ContentRow[];
+    } else {
+      const isFbEvent = threadIdStr.startsWith('fb_event_');
+      const groupBy = isFbEvent ? 'GROUP BY timestamp_ms' : '';
+
+      rows = db
+        .get()
+        .prepare(
+          `
         SELECT * FROM content 
         WHERE thread_id = ? 
+        ${groupBy}
         ORDER BY timestamp_ms DESC 
         LIMIT ? OFFSET ?
     `,
-      )
-      .all(threadIdStr, PAGE_SIZE, offset) as ContentRow[];
+        )
+        .all(threadIdStr, PAGE_SIZE, offset) as ContentRow[];
+    }
 
     // If page 1 and empty, check if thread exists?
 
@@ -93,12 +142,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       if (share) {
         if (share.quoted_message) {
-          // Map back to frontend expectation
           quoted_message_metadata = {
             creator:
               typeof share.quoted_message.creator === 'string'
-                ? { name: share.quoted_message.creator } // Handle naive case if ingest stored string?
-                : share.quoted_message.creator, // Proper object case
+                ? { name: share.quoted_message.creator }
+                : share.quoted_message.creator,
             text: share.quoted_message.text,
           };
         } else {
@@ -110,7 +158,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const isSender = myNames.includes(row.sender_name);
 
       const hasMedia = photos.length > 0 || videos.length > 0 || gifs.length > 0 || stickers.length > 0;
-      const hasText = !!row.content || !!quoted_message_metadata || !!shareObj;
+      let displayContent = row.content ?? undefined;
+
+      let eventMetadata: { location?: string; description?: string } | undefined = undefined;
+
+      if (row.event_title) {
+        if (threadIdStr.startsWith('fb-event-')) {
+          displayContent = row.event_title;
+          if (share && (share.location || share.description)) {
+            eventMetadata = {
+              location: share.location as string,
+              description: share.description as string,
+            };
+          }
+        } else if (threadIdStr.startsWith('fb-post-') || threadIdStr.startsWith('fb-checkin-')) {
+          // For posts and check-ins, prefer the actual content if available,
+          // otherwise fallback to the title (e.g. "Your Post" if no text)
+          displayContent = row.content || row.event_title;
+        } else {
+          displayContent = `${row.event_title}${row.content ? `: ${row.content}` : ''}`;
+        }
+      }
+      const hasText = !!displayContent || !!quoted_message_metadata || !!shareObj;
 
       const result: ContentRecord[] = [];
 
@@ -141,6 +210,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           gifs: gifs.length ? gifs : undefined,
           sticker: stickers.length > 0 ? stickers[0] : undefined,
           reactions: reactions, // Attach reactions to media preference
+          event_metadata: eventMetadata,
         });
 
         result.push({
@@ -148,11 +218,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           is_sender: isSender,
           sender_name: row.sender_name,
           timestamp_ms: row.timestamp_ms,
-          content: row.content ?? undefined,
+          content: displayContent,
           quoted_message_metadata,
           share: shareObj,
           attachments: otherFiles.length ? otherFiles : undefined,
           reactions: undefined, // Reactions attached to media
+          event_metadata: eventMetadata,
         });
       } else {
         // Unified Message (either single type, or merged preview)
@@ -161,7 +232,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           is_sender: isSender,
           sender_name: row.sender_name,
           timestamp_ms: row.timestamp_ms,
-          content: row.content ?? undefined,
+          content: displayContent,
           quoted_message_metadata,
           share: shareObj,
           photos: photos.length ? photos : undefined,
@@ -170,6 +241,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           attachments: otherFiles.length ? otherFiles : undefined,
           sticker: stickers.length > 0 ? stickers[0] : undefined,
           reactions: reactions,
+          event_metadata: eventMetadata,
         });
       }
 
@@ -180,7 +252,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           is_sender: isSender,
           sender_name: row.sender_name,
           timestamp_ms: row.timestamp_ms,
-          content: row.content || '',
+          content: displayContent,
+          event_metadata: eventMetadata,
         });
       }
 

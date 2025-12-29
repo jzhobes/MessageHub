@@ -1,6 +1,7 @@
 import { get_encoding } from 'tiktoken';
 
 import { ContentRecord } from '@/lib/shared/types';
+
 import db from './db';
 
 export interface DatasetEntry {
@@ -90,7 +91,7 @@ export class DatasetGenerator {
       const isGroup = !!thread.is_group;
 
       let query =
-        'SELECT sender_name, content, timestamp_ms, media_json, reactions_json FROM messages WHERE thread_id = ?';
+        'SELECT sender_name, content, timestamp_ms, media_json, reactions_json FROM content WHERE thread_id = ?';
       const params: (string | number)[] = [threadId];
 
       if (dateRange) {

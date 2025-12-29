@@ -1,23 +1,26 @@
 import React, { useState } from 'react';
+
 import { FaCaretDown } from 'react-icons/fa';
-import { Thread } from '@/lib/shared/types';
+
+import { Dropdown, DropdownDivider, DropdownItem } from '@/components/Dropdown';
+
 import { PlatformMap } from '@/lib/shared/platforms';
+import { Thread } from '@/lib/shared/types';
 import styles from '@/pages/studio.module.css';
-import { Dropdown, DropdownItem, DropdownDivider } from '@/components/Dropdown';
 
 interface StudioControlsProps {
   visibleThreads: Thread[];
   selectedIds: Set<string>;
-  onChange: (ids: Set<string>) => void;
   filterPlatforms: Set<string>;
+  onChange: (ids: Set<string>) => void;
   onFilterChange: (filters: Set<string>) => void;
 }
 
 export function StudioControls({
   visibleThreads,
   selectedIds,
-  onChange,
   filterPlatforms,
+  onChange,
   onFilterChange,
 }: StudioControlsProps) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -61,20 +64,19 @@ export function StudioControls({
       <div style={{ display: 'flex', alignItems: 'center', gap: '5px', width: '100%' }}>
         <Dropdown
           open={menuOpen}
-          onOpenChange={setMenuOpen}
           trigger={
             <button className={styles.checkboxDropdown}>
               <input
-                type="checkbox"
-                className={styles.checkbox}
-                style={{ margin: 0, cursor: 'pointer' }}
-                checked={visibleThreads.length > 0 && visibleThreads.every((t) => selectedIds.has(t.id))}
                 ref={(el) => {
                   const count = visibleThreads.filter((t) => selectedIds.has(t.id)).length;
                   if (el) {
                     el.indeterminate = count > 0 && count < visibleThreads.length;
                   }
                 }}
+                type="checkbox"
+                className={styles.checkbox}
+                style={{ margin: 0, cursor: 'pointer' }}
+                checked={visibleThreads.length > 0 && visibleThreads.every((t) => selectedIds.has(t.id))}
                 onChange={() => {
                   handleMasterToggle();
                 }}
@@ -85,6 +87,7 @@ export function StudioControls({
               </div>
             </button>
           }
+          onOpenChange={setMenuOpen}
         >
           <DropdownItem
             onClick={() => {
@@ -108,32 +111,22 @@ export function StudioControls({
           <Dropdown
             width={220}
             open={filterOpen}
-            onOpenChange={setFilterOpen}
             trigger={
               <button className={styles.platformDropdown}>
                 <span>Platforms</span>
                 <FaCaretDown size={12} />
               </button>
             }
+            onOpenChange={setFilterOpen}
           >
             <DropdownItem onClick={() => onFilterChange(new Set())}>
-              <input
-                type="checkbox"
-                checked={filterPlatforms.size === 0}
-                readOnly
-                style={{ marginRight: 8, pointerEvents: 'none' }}
-              />
+              <input type="checkbox" checked={filterPlatforms.size === 0} style={{ marginRight: 8 }} readOnly />
               All
             </DropdownItem>
             <DropdownDivider />
             {Object.values(PlatformMap).map((label) => (
               <DropdownItem key={label} onClick={() => toggleFilter(label)}>
-                <input
-                  type="checkbox"
-                  checked={filterPlatforms.has(label)}
-                  readOnly
-                  style={{ marginRight: 8, pointerEvents: 'none' }}
-                />
+                <input type="checkbox" checked={filterPlatforms.has(label)} style={{ marginRight: 8 }} readOnly />
                 {label}
               </DropdownItem>
             ))}

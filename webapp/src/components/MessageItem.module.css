@@ -1,34 +1,38 @@
 .messageRow {
   display: flex;
   align-items: flex-end;
-  padding-bottom: 2px;
+  padding-block-end: 2px;
   width: 100%;
-}
 
-.justifyRight {
-  justify-content: flex-end;
-}
+  &.justifyRight {
+    justify-content: flex-end;
+  }
 
-.justifyLeft {
-  justify-content: flex-start;
+  &.justifyLeft {
+    justify-content: flex-start;
+  }
 }
 
 .avatarArea {
   width: 32px;
   height: 32px;
-  margin-right: 8px;
+  margin-inline-end: 8px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
+
+  &.hasReactionsAvatar {
+    margin-block-end: 15px;
+  }
 }
 
 .profileImage {
   width: 32px;
   height: 32px;
   border-radius: var(--radius-circle);
-  background-color: #e1e1e1;
-  color: #666;
+  background-color: color-mix(in srgb, var(--border-color), white 10%);
+  color: var(--text-secondary);
   font-size: 12px;
   display: flex;
   align-items: center;
@@ -43,33 +47,30 @@
   max-width: 70%;
   position: relative;
   z-index: 1;
-}
 
-.alignRight {
-  align-items: flex-end;
-}
+  &.alignRight {
+    align-items: flex-end;
+  }
 
-.alignLeft {
-  align-items: flex-start;
-}
+  &.alignLeft {
+    align-items: flex-start;
+  }
 
-.hasReactions {
-  margin-bottom: 15px;
-}
-
-.hasReactionsAvatar {
-  margin-bottom: 15px;
+  &.hasReactions {
+    margin-block-end: 15px;
+  }
 }
 
 .senderNameOutside {
   font-size: 0.7rem;
-  color: #8e8e93;
-  margin-bottom: 2px;
-  margin-left: 4px;
+  color: var(--text-secondary);
+  margin-block-end: 2px;
+  margin-inline-start: 4px;
 }
 
 .messageBubble {
-  padding: 10px 16px;
+  padding-block: 10px;
+  padding-inline: 16px;
   line-height: 1.4;
   position: relative;
   font-size: 0.95rem;
@@ -78,23 +79,23 @@
   word-wrap: break-word;
   word-break: break-word;
   overflow: hidden;
-}
 
-.sentBubble {
-  background-color: var(--bubble-sent-bg);
-  color: var(--bubble-sent-text);
-}
+  &.sentBubble {
+    background-color: var(--bubble-sent-bg);
+    color: var(--bubble-sent-text);
+  }
 
-.receivedBubble {
-  background-color: var(--bubble-received-bg);
-  color: var(--bubble-received-text);
-}
+  &.receivedBubble {
+    background-color: var(--bubble-received-bg);
+    color: var(--bubble-received-text);
+  }
 
-.mediaBubble {
-  padding: 0 !important;
-  background-color: transparent !important;
-  overflow: hidden;
-  border-radius: inherit;
+  &.mediaBubble {
+    padding: 0 !important;
+    background-color: transparent !important;
+    overflow: hidden;
+    border-radius: inherit;
+  }
 }
 
 .msgImage,
@@ -113,15 +114,15 @@
 }
 
 .mediaMargin {
-  margin-top: 5px;
+  margin-block-start: 5px;
 }
 
 .quoteContainer {
-  margin-bottom: 8px;
-  margin-left: -10px;
-  margin-right: -10px;
-  margin-top: -5px;
-  padding: 8px 12px;
+  margin-block-end: 8px;
+  margin-inline: -10px;
+  margin-block-start: -5px;
+  padding-block: 8px;
+  padding-inline: 12px;
   background-color: var(--bg-quote);
   border-radius: var(--radius-2) var(--radius-2) 2px 2px;
   font-size: 0.9rem;
@@ -146,8 +147,8 @@
   width: 16px;
   height: 16px;
   border-radius: var(--radius-circle);
-  background-color: #888;
-  color: #fff;
+  background-color: var(--text-secondary);
+  color: var(--bg-primary);
   font-size: 10px;
   display: flex;
   align-items: center;
@@ -169,9 +170,9 @@
   display: flex;
   position: absolute;
   bottom: -15px;
-  right: 0;
+  inset-inline-end: 0;
   z-index: 999;
-  padding-right: 10px;
+  padding-inline-end: 10px;
   justify-content: flex-end;
 }
 
@@ -179,9 +180,10 @@
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-2);
-  padding: 2px 6px;
+  padding-block: 2px;
+  padding-inline: 6px;
   font-size: 0.8rem;
-  margin-right: 4px;
+  margin-inline-end: 4px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
   display: flex;
   align-items: center;
@@ -189,7 +191,6 @@
   color: var(--text-primary);
 }
 
-/* Links and Attachments */
 .messageLink {
   color: inherit;
   text-decoration: underline;
@@ -200,7 +201,7 @@
   align-items: center;
   gap: 8px;
   padding: 8px;
-  background: rgba(0, 0, 0, 0.1);
+  background: color-mix(in srgb, var(--text-primary), transparent 90%);
   border-radius: var(--radius-1);
   text-decoration: none;
   color: inherit;

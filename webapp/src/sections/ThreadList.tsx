@@ -1,19 +1,21 @@
 import React, { useMemo } from 'react';
+
 import {
   FaCalendarAlt,
   FaChevronDown,
   FaCommentAlt,
-  FaMapMarkerAlt,
   FaFileAlt,
-  FaSpinner,
   FaInbox,
+  FaMapMarkerAlt,
   FaPaperPlane,
+  FaSpinner,
   FaUser,
   FaUsers,
 } from 'react-icons/fa';
 import { Virtuoso } from 'react-virtuoso';
 
 import { Dropdown, DropdownItem } from '@/components/Dropdown';
+
 import { Thread } from '@/lib/shared/types';
 
 import styles from './ThreadList.module.css';
@@ -93,13 +95,14 @@ export default function ThreadList({
             className={styles.headerDropdown}
             menuClassName={styles.fullWidthMenu}
             align="left"
+            gap={0}
           >
             {filteredCategories.map((cat) => (
               <DropdownItem
                 key={cat.id}
-                onClick={() => onCategoryChange(cat.id)}
                 className={`${styles.categoryDropdownItem} ${activeCategory === cat.id ? styles.dropdownItemActive : ''}`}
                 disabled={categoryCounts[cat.id] === 0 && activeCategory !== cat.id}
+                onClick={() => onCategoryChange(cat.id)}
               >
                 <span className={styles.categoryIcon}>{cat.icon}</span>
                 <div style={{ flex: 1 }}>{cat.label}</div>
@@ -129,9 +132,9 @@ export default function ThreadList({
               <div
                 key={thread.id}
                 className={`${styles.threadItem} ${activeThread?.id === thread.id ? styles.threadItemActive : ''}`}
-                onClick={() => onThreadSelect(thread)}
                 role="button"
                 tabIndex={0}
+                onClick={() => onThreadSelect(thread)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
                     onThreadSelect(thread);

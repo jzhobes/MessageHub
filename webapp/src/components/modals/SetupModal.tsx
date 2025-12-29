@@ -1,20 +1,22 @@
-import React, { useState, useEffect } from 'react';
-import { FaCog, FaFileImport, FaDatabase, FaCheckCircle, FaTimes } from 'react-icons/fa';
+import React, { useEffect, useState } from 'react';
+
+import { FaCheckCircle, FaCog, FaDatabase, FaFileImport, FaTimes } from 'react-icons/fa';
+
+import styles from '@/components/modals/SetupModal.module.css';
 
 import { useIngestion } from '@/hooks/useIngestion';
+
 import BaseModal from './BaseModal';
 import DataPathStep from './setup/DataPathStep';
 import ImportStep from './setup/ImportStep';
 import ScanStep from './setup/ScanStep';
 
-import styles from '@/components/modals/SetupModal.module.css';
-
 interface SetupModalProps {
   isOpen: boolean;
-  onClose: () => void;
-  onCompleted: () => void;
   initialStep?: number;
   isFirstRun?: boolean;
+  onClose: () => void;
+  onCompleted: () => void;
 }
 
 const TAB_MAP: Record<number, 'path' | 'import' | 'scan'> = {
@@ -25,10 +27,10 @@ const TAB_MAP: Record<number, 'path' | 'import' | 'scan'> = {
 
 export default function SetupModal({
   isOpen,
-  onClose,
-  onCompleted,
   initialStep = 0,
   isFirstRun = false,
+  onClose,
+  onCompleted,
 }: SetupModalProps) {
   const steps: ('path' | 'import' | 'scan')[] = isFirstRun ? ['path', 'import', 'scan'] : ['scan', 'import', 'path'];
 
@@ -227,14 +229,14 @@ export default function SetupModal({
             status={status}
             error={error}
             remoteFiles={remoteFiles}
+            isFirstRun={isFirstRun}
+            activeTransfers={activeTransfers}
             onGoToImport={() => setActiveTab('import')}
             onFinish={() => {
               onCompleted?.();
               onClose();
             }}
             onQueueUpdate={setHasExistingArchives}
-            isFirstRun={isFirstRun}
-            activeTransfers={activeTransfers}
           />
         );
       case 'import':
@@ -254,10 +256,10 @@ export default function SetupModal({
             resolvedPath={resolvedPath}
             error={pathError}
             isInstalling={isInstalling}
+            isFirstRun={isFirstRun}
             onChange={handleUpdateWorkspacePath}
             onSave={saveConfig}
             onExistingWorkspaceDetected={setIsExistingWorkspace}
-            isFirstRun={isFirstRun}
           />
         );
       case 'welcome':
@@ -348,9 +350,9 @@ export default function SetupModal({
         <button
           key={isScanTab ? 'btn-scan' : 'btn-next'}
           className={`${styles.button} ${isFullyDone ? styles.primaryButton : ''}`}
-          onClick={handlePrimaryAction}
           disabled={isPrimaryDisabled}
           style={isScanTab ? { minWidth: 160 } : undefined}
+          onClick={handlePrimaryAction}
         >
           {getPrimaryButtonContent()}
         </button>
@@ -361,21 +363,20 @@ export default function SetupModal({
   return (
     <BaseModal
       isOpen={isOpen}
-      onClose={onClose}
       maxWidth={900}
       height="80vh"
       dismissible={false}
       className={styles.modal}
-      overlayClassName={styles.overlay}
+      onClose={onClose}
     >
       <div className={styles.setupContainerFull}>
         {!isFirstRun && (
           <button
             className={styles.closeButton}
-            onClick={onClose}
             disabled={isInstalling}
             title="Close"
             aria-label="Close"
+            onClick={onClose}
           >
             <FaTimes />
           </button>
@@ -402,8 +403,8 @@ export default function SetupModal({
                 <button
                   key={step}
                   className={`${styles.sidebarItem} ${activeTab === step ? styles.sidebarActive : ''}`}
-                  onClick={() => setActiveTab(step)}
                   disabled={isInstalling}
+                  onClick={() => setActiveTab(step)}
                 >
                   <div className={styles.sidebarIconWrapper}>
                     {step === 'scan' && <FaDatabase />}
@@ -421,14 +422,14 @@ export default function SetupModal({
 
               <div className={styles.sidebarFooter}>
                 <button
+                  disabled={isInstalling}
+                  className={`${styles.secondaryButton} ${styles.sidebarCloseBtn}`}
                   onClick={() => {
                     if (isComplete) {
                       onCompleted?.();
                     }
                     onClose();
                   }}
-                  disabled={isInstalling}
-                  className={`${styles.secondaryButton} ${styles.sidebarCloseBtn}`}
                 >
                   Close
                 </button>

@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useCallback } from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
+
 import styles from '@/pages/studio.module.css';
 
 interface TextareaAutoProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
@@ -45,10 +46,6 @@ export default function TextareaAuto({
       ref={textareaRef}
       className={`${styles.input} ${className || ''}`} // Compose base styles
       value={value}
-      onChange={(e) => {
-        onChange?.(e);
-        adjustHeight();
-      }}
       style={{
         resize: 'none',
         overflow: 'hidden',
@@ -56,6 +53,10 @@ export default function TextareaAuto({
         ...style,
       }}
       rows={minRows}
+      onChange={(e) => {
+        onChange?.(e);
+        adjustHeight();
+      }}
       {...props}
     />
   );

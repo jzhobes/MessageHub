@@ -29,21 +29,21 @@ export async function runStartupChecks() {
 
       try {
         // Create dir just in case
-        execSync(`sudo mkdir -p ${mountPoint}`, { stdio: 'inherit' });
+        execSync(`sudo mkdir -p "${mountPoint}"`, { stdio: 'inherit' });
         // Mount
-        execSync(`sudo mount -t drvfs ${driveLetter.toUpperCase()}: ${mountPoint}`, { stdio: 'inherit' });
+        execSync(`sudo mount -t drvfs ${driveLetter.toUpperCase()}: "${mountPoint}"`, { stdio: 'inherit' });
 
         if (fs.existsSync(dataDir)) {
           console.log(`✅ [Instrumentation] Auto-Mount SUCCESS! Drive is ready.`);
 
           // Register cleanup hook
           const cleanup = () => {
-            console.log(`\n🧹 [Instrumentation] Unmounting ${mountPoint}...`);
+            console.log(`\n🧹 [Instrumentation] Unmounting "${mountPoint}"...`);
             try {
-              execSync(`sudo umount ${mountPoint}`, { stdio: 'inherit' });
+              execSync(`sudo umount "${mountPoint}"`, { stdio: 'inherit' });
               // Try to remove the empty dir to keep things clean
-              execSync(`sudo rmdir ${mountPoint}`, { stdio: 'inherit' });
-              console.log(`✅ Unmounted and removed ${mountPoint}.`);
+              execSync(`sudo rmdir "${mountPoint}"`, { stdio: 'inherit' });
+              console.log(`✅ Unmounted and removed "${mountPoint}".`);
             } catch (e) {
               console.error(`❌ Failed to unmount/remove:`, e);
             }
@@ -55,8 +55,8 @@ export async function runStartupChecks() {
         } else {
           // Mount succeeded but data dir still not found? Bad mount. Cleanup.
           console.warn(`⚠️ [Instrumentation] Mount successful but ${dataDir} not found. Unmounting...`);
-          execSync(`sudo umount ${mountPoint}`, { stdio: 'inherit' });
-          execSync(`sudo rmdir ${mountPoint}`, { stdio: 'inherit' });
+          execSync(`sudo umount "${mountPoint}"`, { stdio: 'inherit' });
+          execSync(`sudo rmdir "${mountPoint}"`, { stdio: 'inherit' });
           throw new Error('Directory still missing after mount.');
         }
       } catch (e) {

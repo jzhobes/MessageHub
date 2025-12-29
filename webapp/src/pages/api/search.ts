@@ -1,8 +1,21 @@
-import type { NextApiRequest, NextApiResponse } from 'next';
 import db from '@/lib/server/db';
-import { PlatformMap, ReversePlatformMap } from '@/lib/shared/platforms';
 import { getMyNames } from '@/lib/server/identity';
+import { PlatformMap, ReversePlatformMap } from '@/lib/shared/platforms';
 import { parseSearchQuery } from '@/lib/shared/search';
+import { decodeHtmlEntities, generateContextSnippet, stripHtml } from '@/lib/shared/stringUtils';
+
+import type { NextApiRequest, NextApiResponse } from 'next';
+
+interface SearchRow {
+  id: number;
+  thread_id: string;
+  thread_title: string | null;
+  platform: string;
+  sender_name: string;
+  timestamp_ms: number;
+  content: string;
+  search_snippet?: string;
+}
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { q, page = '1', platform, threadId } = req.query;
@@ -17,48 +30,66 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const offset = (pageNum - 1) * PAGE_SIZE;
 
   try {
-    interface SearchRow {
-      id: number;
-      thread_id: string;
-      thread_title: string | null;
-      platform: string;
-      sender_name: string;
-      timestamp_ms: number;
-      content: string;
-      search_snippet?: string;
+    if (!db.exists()) {
+      return res.status(200).json({ data: [], total: 0, facets: { platforms: {}, categories: {}, senders: {} } });
     }
 
-    // Tokenize query
-    const tokens = parseSearchQuery(queryStr);
+    // Tokenize query with OR support
+    const parsedQuery = parseSearchQuery(queryStr);
+    const { orGroups } = parsedQuery;
 
-    // Build matching logic
-    const { matchTokens, likeConditions, likeParams } = tokens.reduce(
-      (acc, token) => {
-        const { clean, isStartOfWord, sqlPattern } = token;
+    // Build matching logic for each OR group
+    const orGroupConditions: string[] = [];
+    const orGroupFtsMatches: string[] = [];
+    const allLikeParams: (string | number)[] = [];
 
-        // Broad FTS filter
-        // Split by wildcards and add each part as a separate match token to avoid phrase match issues.
-        // We filter out parts shorter than 3 characters because FTS5 trigram doesn't support them efficiently/reliably for substrings.
-        const ftsParts = clean.split(/[*?^]/).filter((p) => p.trim().length >= 3);
-        ftsParts.forEach((part) => {
-          acc.matchTokens.push(`"${part.replace(/"/g, '""')}"`);
-        });
+    for (const tokens of orGroups) {
+      // Build conditions for this AND group
+      const { matchTokens, likeConditions, likeParams } = tokens.reduce(
+        (acc, token) => {
+          const { clean, isStartOfWord, sqlPattern } = token;
 
-        if (isStartOfWord) {
-          acc.likeConditions.push(
-            `(m.content LIKE ? ESCAPE '\\' OR m.content LIKE ? ESCAPE '\\' OR m.content LIKE ? ESCAPE '\\')`,
-          );
-          acc.likeParams.push(`${sqlPattern}%`, `% ${sqlPattern}%`, `%\n${sqlPattern}%`);
-        } else {
-          acc.likeConditions.push(`m.content LIKE ? ESCAPE '\\'`);
-          acc.likeParams.push(`%${sqlPattern}%`);
-        }
-        return acc;
-      },
-      { matchTokens: [] as string[], likeConditions: [] as string[], likeParams: [] as (string | number)[] },
-    );
+          const ftsParts = clean.split(/[*?^]/).filter((p) => p.trim().length >= 3);
+          ftsParts.forEach((part) => {
+            acc.matchTokens.push(`"${part.replace(/"/g, '""')}"`);
+          });
 
-    const ftsMatch = matchTokens.join(' AND ');
+          const contentLikes = isStartOfWord
+            ? `(m.content LIKE ? ESCAPE '\\' OR m.content LIKE ? ESCAPE '\\' OR m.content LIKE ? ESCAPE '\\')`
+            : `m.content LIKE ? ESCAPE '\\'`;
+          const titleLikes = isStartOfWord
+            ? `(t.title LIKE ? ESCAPE '\\' OR t.title LIKE ? ESCAPE '\\')`
+            : `t.title LIKE ? ESCAPE '\\'`;
+
+          acc.likeConditions.push(`(${contentLikes} OR ${titleLikes})`);
+
+          if (isStartOfWord) {
+            acc.likeParams.push(`${sqlPattern}%`, ` ${sqlPattern}%`, `\\n${sqlPattern}%`); // content
+            acc.likeParams.push(`${sqlPattern}%`, ` ${sqlPattern}%`); // title
+          } else {
+            acc.likeParams.push(`%${sqlPattern}%`, `%${sqlPattern}%`);
+          }
+          return acc;
+        },
+        { matchTokens: [] as string[], likeConditions: [] as string[], likeParams: [] as (string | number)[] },
+      );
+
+      // Combine this group's conditions with AND
+      if (likeConditions.length > 0) {
+        orGroupConditions.push(`(${likeConditions.join(' AND ')})`);
+        allLikeParams.push(...likeParams);
+      }
+
+      // Combine this group's FTS matches with AND
+      if (matchTokens.length > 0) {
+        orGroupFtsMatches.push(`(${matchTokens.join(' AND ')})`);
+      }
+    }
+
+    // Combine all OR groups
+    const ftsMatch = orGroupFtsMatches.length > 0 ? orGroupFtsMatches.join(' OR ') : '';
+    const likeConditions = orGroupConditions;
+    const likeParams = allLikeParams;
 
     // platform filter
     const platformInputs = platform ? (Array.isArray(platform) ? platform : [platform]) : [];
@@ -70,26 +101,57 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return acc;
     }, [] as string[]);
 
+    // category filter
+    const typeInputs = req.query.type ? (Array.isArray(req.query.type) ? req.query.type : [req.query.type]) : [];
+    const validCategories = typeInputs.filter(Boolean);
+
     const threadInputs = threadId ? (Array.isArray(threadId) ? threadId : [threadId]) : [];
     const validThreadIds = threadInputs.filter(Boolean);
 
     const dbInstance = db.get();
 
     // Construct combined where clause
-    const whereConditions = [
-      ftsMatch ? 'f.content MATCH ?' : '',
-      ...likeConditions,
-      validDbPlatforms.length > 0 ? `t.platform IN (${validDbPlatforms.map(() => '?').join(',')})` : '',
+    const matchAnyTitlePattern = `%${queryStr.replace(/[%_\\\\]/g, '\\\\$&')}%`;
+
+    // We search across BOTH content and thread title
+    // FTS MATCH cannot be easily used with OR in joined queries, so we use a subquery for the ID match
+    const ftsCondition = ftsMatch
+      ? `(m.id IN (SELECT rowid FROM content_fts WHERE content_fts MATCH ?) OR t.title LIKE ? ESCAPE '\\')`
+      : `t.title LIKE ? ESCAPE '\\'`;
+
+    // Combine FTS and LIKE conditions with OR (not AND!)
+    const searchConditions = [ftsCondition, ...likeConditions].filter(Boolean);
+    const combinedSearchCondition = searchConditions.length > 0 ? `(${searchConditions.join(' OR ')})` : '';
+
+    const baseConditions = [
+      combinedSearchCondition,
       validThreadIds.length > 0 ? `m.thread_id IN (${validThreadIds.map(() => '?').join(',')})` : '',
     ].filter(Boolean);
 
+    const platformCondition =
+      validDbPlatforms.length > 0 ? `t.platform IN (${validDbPlatforms.map(() => '?').join(',')})` : '';
+    const categoryCondition =
+      validCategories.length > 0
+        ? `t.id IN (SELECT thread_id FROM thread_labels WHERE label IN (${validCategories.map(() => '?').join(',')}))`
+        : '';
+
+    const whereConditions = [...baseConditions];
+    if (platformCondition) {
+      whereConditions.push(platformCondition);
+    }
+    if (categoryCondition) {
+      whereConditions.push(categoryCondition);
+    }
+
     const filteredBase = `
-      FROM ${ftsMatch ? 'content_fts f CROSS JOIN content m ON f.rowid = m.id' : 'content m'}
+      FROM content m
       JOIN threads t ON m.thread_id = t.id
       ${whereConditions.length > 0 ? 'WHERE ' + whereConditions.join(' AND ') : ''}
     `;
 
-    const finalParams = [...(ftsMatch ? [ftsMatch] : []), ...likeParams, ...validDbPlatforms, ...validThreadIds];
+    const ftsParams = ftsMatch ? [ftsMatch, matchAnyTitlePattern] : [matchAnyTitlePattern];
+    const baseParams = [...ftsParams, ...likeParams, ...validThreadIds];
+    const finalParams = [...baseParams, ...validDbPlatforms, ...validCategories];
 
     // 1. Get total count
     const countResult = dbInstance.prepare(`SELECT count(*) as total ${filteredBase}`).get(...finalParams) as {
@@ -97,13 +159,48 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     };
     const total = countResult ? countResult.total : 0;
 
-    // 2. Facets - platform
+    // 2. Facets - platform (Exclude platform filter from this count so counts don't disappear)
+    const platformFacetConditions = [...baseConditions];
+    if (categoryCondition) {
+      platformFacetConditions.push(categoryCondition);
+    }
+    const platformFacetBase = `
+      FROM content m
+      JOIN threads t ON m.thread_id = t.id
+      ${platformFacetConditions.length > 0 ? 'WHERE ' + platformFacetConditions.join(' AND ') : ''}
+    `;
+    const platformFacetParams = [...baseParams, ...validCategories];
     const platformRows = dbInstance
-      .prepare(`SELECT t.platform, count(*) as count ${filteredBase} GROUP BY t.platform`)
-      .all(...finalParams) as { platform: string; count: number }[];
+      .prepare(`SELECT t.platform, count(*) as count ${platformFacetBase} GROUP BY t.platform`)
+      .all(...platformFacetParams) as { platform: string; count: number }[];
     const platforms = platformRows.reduce(
       (acc, r) => {
         acc[r.platform] = r.count;
+        return acc;
+      },
+      {} as Record<string, number>,
+    );
+
+    // 3. Facets - category (Exclude category filter from this count so counts don't disappear)
+    const categoryFacetConditions = [...baseConditions];
+    if (platformCondition) {
+      categoryFacetConditions.push(platformCondition);
+    }
+    const categoryFacetBase = `
+      FROM content m
+      JOIN threads t ON m.thread_id = t.id
+      INNER JOIN thread_labels tl ON t.id = tl.thread_id
+      ${categoryFacetConditions.length > 0 ? 'WHERE ' + categoryFacetConditions.join(' AND ') : ''}
+    `;
+    const categoryFacetParams = [...baseParams, ...validDbPlatforms];
+    const categoryRows = dbInstance
+      .prepare(`SELECT tl.label, count(*) as count ${categoryFacetBase} GROUP BY tl.label`)
+      .all(...categoryFacetParams) as { label: string; count: number }[];
+    const categories = categoryRows.reduce(
+      (acc, r) => {
+        if (r.label) {
+          acc[r.label] = r.count;
+        }
         return acc;
       },
       {} as Record<string, number>,
@@ -117,9 +214,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       .all(...finalParams) as { sender_name: string; count: number }[];
 
     // 4. Data Results
-    const selectClause = `SELECT m.*, t.platform, t.title as thread_title${
-      ftsMatch ? ", snippet(content_fts, 0, '', '', '...', 25) as search_snippet" : ''
-    }`;
+    const selectClause = `SELECT m.*, t.platform, t.title as thread_title`;
 
     const dataSql = `${selectClause} ${filteredBase} ORDER BY m.timestamp_ms DESC LIMIT ? OFFSET ?`;
     const dataRows = dbInstance.prepare(dataSql).all(...finalParams, PAGE_SIZE, offset) as SearchRow[];
@@ -127,7 +222,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Process Senders (Me vs Others)
     const myNames = await getMyNames();
     const myNamesSet = new Set(myNames.map((n) => n.toLowerCase()));
-    const meDisplayName = [...myNames].sort((a, b) => b.length - a.length)[0] || 'Me';
+
+    // Prefer human-readable names over emails/phones for display
+    const humanReadableNames = myNames.filter((n) => !n.includes('@') && !n.startsWith('+'));
+    const meDisplayName =
+      (humanReadableNames.length > 0
+        ? [...humanReadableNames].sort((a, b) => b.length - a.length)[0]
+        : [...myNames].sort((a, b) => b.length - a.length)[0]) || 'Me';
 
     const senders: Record<string, number> = {};
     let meCount = 0;
@@ -145,19 +246,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const sortedSenders = Object.fromEntries(Object.entries(senders).sort((a, b) => b[1] - a[1]));
 
     const results = dataRows.map((row) => {
-      let snippet = row.search_snippet || row.content;
-      // If it looks like HTML (common for Gmail), strip tags for the snippet
-      if (row.platform === 'google_mail' || snippet.includes('<')) {
-        snippet = snippet
-          .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-          .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-          .replace(/<[^>]+>/g, ' ')
-          .replace(/\s+/g, ' ')
-          .trim();
+      let snippet = row.content || '';
+
+      // Clean HTML for Gmail and HTML-heavy content
+      if (row.platform === 'google_mail' || snippet.includes('<') || snippet.includes('&')) {
+        snippet = decodeHtmlEntities(stripHtml(snippet));
       }
 
+      // Generate context-aware snippet that centers on the search query
+      snippet = generateContextSnippet(snippet, queryStr, 300);
+
       return {
-        id: row.id,
+        message_id: row.id,
         thread_id: row.thread_id,
         thread_title: row.thread_title,
         platform: row.platform,
@@ -173,6 +273,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       total,
       facets: {
         platforms,
+        categories,
         senders: sortedSenders,
       },
     });

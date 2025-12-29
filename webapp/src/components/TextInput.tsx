@@ -1,4 +1,5 @@
-import React, { ReactNode, forwardRef } from 'react';
+import React, { forwardRef, ReactNode } from 'react';
+
 import styles from './TextInput.module.css';
 
 interface TextInputProps extends React.InputHTMLAttributes<HTMLInputElement> {

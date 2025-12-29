@@ -123,8 +123,6 @@ body {
   }
 }
 
-/* --- Baseline Interactive Elements --- */
-
 /* Reset for button elements to behave like clean boxes */
 .btn-reset,
 .btn,
@@ -153,7 +151,8 @@ body {
 .btn,
 .btn-primary,
 .btn-secondary {
-  padding: 8px 16px;
+  padding-block: 8px;
+  padding-inline: 16px;
   border-radius: var(--radius-1);
   font-weight: 600;
   white-space: nowrap;
@@ -167,11 +166,11 @@ body {
 }
 
 .btn-primary:not(:disabled):hover {
-  filter: brightness(1.1);
+  background-color: color-mix(in srgb, var(--bubble-sent-bg), white 10%);
 }
 
 .btn-primary:not(:disabled):active {
-  filter: brightness(0.9);
+  background-color: color-mix(in srgb, var(--bubble-sent-bg), black 10%);
 }
 
 .btn-primary:disabled {
@@ -185,7 +184,7 @@ body {
 }
 
 .btn-secondary:not(:disabled):hover {
-  background: var(--bg-primary);
+  background-color: var(--bg-primary);
   border-color: var(--bubble-sent-bg);
 }
 
@@ -200,5 +199,5 @@ body {
 }
 
 .btn-ghost:not(:disabled):hover {
-  background: var(--bg-sidebar-hover);
+  background-color: var(--bg-sidebar-hover);
 }

@@ -1,20 +1,21 @@
 import React, { useEffect, useState } from 'react';
+
 import {
-  FaEyeSlash,
-  FaFolder,
   FaCheckCircle,
   FaExclamationCircle,
   FaExclamationTriangle,
+  FaEyeSlash,
+  FaFolder,
   FaReply,
   FaSpinner,
   FaTrash,
 } from 'react-icons/fa';
 
 import FileExplorer from '@/components/FileExplorer';
-import TextInput from '@/components/TextInput';
-import { PathMetadata } from '@/lib/shared/types';
-
 import styles from '@/components/modals/SetupModal.module.css';
+import TextInput from '@/components/TextInput';
+
+import { PathMetadata } from '@/lib/shared/types';
 
 const WORKSPACE_SELECTION_FILE_FILTERS = [
   {
@@ -189,9 +190,6 @@ export default function DataPathStep({
           initialPath={dataPath ?? resolvedPath ?? ''}
           filters={WORKSPACE_SELECTION_FILE_FILTERS}
           allowSelectAll={false}
-          onPathChange={(p) => onChange(p)}
-          onMetadataChange={setMetadata}
-          onError={setExplorerError}
           height="100%"
           subheader={
             <div className={styles.subheaderRight}>
@@ -208,21 +206,21 @@ export default function DataPathStep({
             isFirstRun ? (
               <button
                 className={`${styles.button} ${styles.explorerActionBtn}`}
-                onClick={() => onChange(resolvedPath || '')}
                 title="Revert to default location"
                 disabled={(dataPath?.replace(/\/+$/, '') || '') === (resolvedPath?.replace(/\/+$/, '') || '')}
                 style={{
                   opacity:
                     (dataPath?.replace(/\/+$/, '') || '') === (resolvedPath?.replace(/\/+$/, '') || '') ? 0.4 : 1,
                 }}
+                onClick={() => onChange(resolvedPath || '')}
               >
                 <FaReply size={16} />
               </button>
             ) : (
               <button
                 className={`${styles.button} ${styles.explorerActionBtn}`}
-                onClick={onSave}
                 disabled={!canUseLocation || isResetting}
+                onClick={onSave}
               >
                 <FaFolder size={16} />
                 Use This Location
@@ -263,6 +261,9 @@ export default function DataPathStep({
               )}
             </div>
           }
+          onPathChange={(p) => onChange(p)}
+          onMetadataChange={setMetadata}
+          onError={setExplorerError}
         />
       </div>
 
@@ -283,18 +284,18 @@ export default function DataPathStep({
               <div className={styles.resetConfirmation}>
                 <div className={styles.dangerActions}>
                   <TextInput
-                    autoFocus
                     placeholder='Type "RESET" to confirm'
                     value={resetConfirm}
-                    onChange={(e) => setResetConfirm(e.target.value)}
                     className={styles.resetInput}
                     disabled={isResetting}
+                    autoFocus
+                    onChange={(e) => setResetConfirm(e.target.value)}
                   />
                   <button
                     className={`${styles.button} ${styles.resetButton}`}
-                    onClick={handleReset}
                     disabled={resetConfirm !== 'RESET' || isResetting}
                     style={{ flex: 1 }}
+                    onClick={handleReset}
                   >
                     {isResetting ? (
                       <>

@@ -1,7 +1,9 @@
-import type { NextApiRequest, NextApiResponse } from 'next';
-import { promises as fs } from 'fs';
+import { createReadStream, promises as fs } from 'fs';
 import path from 'path';
+
 import appConfig from '@/lib/shared/appConfig';
+
+import type { NextApiRequest, NextApiResponse } from 'next';
 
 /**
  * API Handler to serve media files (images, videos) from the local data directory.
@@ -28,27 +30,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const platformStr = Array.isArray(platform) ? platform[0] : platform;
 
   if (!pathStr) {
-    // Changed from !filePath to !pathStr
     return res.status(400).send('Missing path');
   }
 
   const baseDir = appConfig.WORKSPACE_PATH;
   let relativePath = pathStr;
 
-  // Platform-specific path adjustments
-  if (platformStr === 'Facebook') {
+  // Platform-specific path adjustments (case-insensitive)
+  const pLower = platformStr.toLowerCase();
+  if (pLower === 'facebook' || pLower === 'messenger') {
     relativePath = path.join(
       'Facebook',
       pathStr.startsWith('your_facebook_activity') ? '' : 'your_facebook_activity',
       pathStr,
     );
-  } else if (platformStr === 'Instagram') {
+  } else if (pLower === 'instagram') {
     relativePath = path.join(
       'Instagram',
       pathStr.startsWith('your_instagram_activity') ? '' : 'your_instagram_activity',
       pathStr,
     );
-  } else if (platformStr === 'Google Chat') {
+  } else if (pLower === 'google chat') {
     // Google Chat paths are usually in Groups subdirectory
     relativePath = path.join('Google Chat/Groups', pathStr);
   }
@@ -75,8 +77,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const fileBuffer = await fs.readFile(absolutePath);
-
+    const stats = await fs.stat(absolutePath);
     const ext = path.extname(absolutePath).toLowerCase();
     let contentType = 'application/octet-stream';
     let disposition = 'inline';
@@ -93,13 +94,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       contentType = 'video/quicktime';
     } else if (ext === '.pdf') {
       contentType = 'application/pdf';
-      disposition = 'inline';
     } else if (ext === '.csv') {
       contentType = 'text/plain';
-      disposition = 'inline';
     } else if (ext === '.txt') {
       contentType = 'text/plain';
-      disposition = 'inline';
     } else if (ext === '.xlsx') {
       contentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
       disposition = 'attachment';
@@ -110,15 +108,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       contentType = 'application/zip';
       disposition = 'attachment';
     } else {
-      // Fallback for other binary files
       disposition = 'attachment';
     }
 
-    res.setHeader('Content-Type', contentType);
     const fileName = path.basename(pathStr).replace(/^File-/, '');
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Length', stats.size);
     res.setHeader('Content-Disposition', `${disposition}; filename="${fileName}"`);
     res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-    res.send(fileBuffer);
+
+    const stream = createReadStream(absolutePath);
+    stream.pipe(res);
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code === 'ENOENT') {
       console.error('File not found:', absolutePath);

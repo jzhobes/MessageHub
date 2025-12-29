@@ -1,8 +1,11 @@
 import React from 'react';
-import { FaFacebook, FaInstagram, FaPhone } from 'react-icons/fa';
-import { SiGooglechat, SiGmail } from 'react-icons/si';
-import styles from './SearchModal.module.css';
+
+import { FaCommentDots, FaFacebook, FaInstagram, FaPhone } from 'react-icons/fa';
+import { SiGmail, SiGooglechat } from 'react-icons/si';
+
 import { parseSearchQuery } from '@/lib/shared/search';
+
+import styles from './SearchModal.module.css';
 
 interface SearchResultItemProps {
   result: {
@@ -13,11 +16,11 @@ interface SearchResultItemProps {
     snippet: string;
     thread_title: string;
   };
-  onClick: () => void;
   searchQuery: string;
+  onClick: () => void;
 }
 
-export default function SearchResultItem({ result, onClick, searchQuery }: SearchResultItemProps) {
+export default function SearchResultItem({ result, searchQuery, onClick }: SearchResultItemProps) {
   const getIcon = (p: string) => {
     const lower = p ? p.toLowerCase() : '';
     if (lower === 'facebook') {
@@ -29,10 +32,13 @@ export default function SearchResultItem({ result, onClick, searchQuery }: Searc
     if (lower.includes('gmail') || lower.includes('mail')) {
       return <SiGmail size={20} color="#EA4335" />;
     }
-    if (lower.includes('google chat')) {
+    if (lower === 'google_chat') {
       return <SiGooglechat size={20} color="#00AC47" />;
     }
-    return <FaPhone size={20} color="#666" />;
+    if (lower === 'google_voice') {
+      return <FaPhone size={20} color="#00AC47" />;
+    }
+    return <FaCommentDots size={20} color="#666" />;
   };
 
   const dateStr = new Date(result.timestamp).toLocaleDateString(undefined, {
@@ -49,25 +55,66 @@ export default function SearchResultItem({ result, onClick, searchQuery }: Searc
       return text;
     }
 
-    const tokens = parseSearchQuery(query);
-    if (tokens.length === 0) {
+    const parsedQuery = parseSearchQuery(query);
+    const { orGroups } = parsedQuery;
+
+    // Flatten all tokens from all OR groups for highlighting
+    const allTokens = orGroups.flat();
+
+    if (allTokens.length === 0) {
       return text;
     }
 
-    // Build regex pattern for all tokens using the shared regexPattern logic
-    const combinedPattern = `(${tokens.map((t) => t.regexPattern).join('|')})`;
-    const parts = text.split(new RegExp(combinedPattern, 'gi'));
-
-    return parts.map((part, i) => {
-      const isMatch = new RegExp(`^${combinedPattern}$`, 'i').test(part);
-      return isMatch ? (
-        <span key={i} className={styles.highlight}>
-          {part}
-        </span>
-      ) : (
-        part
-      );
+    // Build regex pattern using the CLEAN terms (without wildcards)
+    // This highlights just the literal search terms, not the wildcard matches
+    const cleanTerms = allTokens.map((t) => {
+      // Remove wildcards and escape regex special chars
+      const term = t.clean.replace(/[*?]/g, '').replace(/[.+^${}()|[\]\\]/g, '\\$&');
+      return term;
     });
+
+    const combinedPattern = `(${cleanTerms.filter((t) => t.length > 0).join('|')})`;
+    const regex = new RegExp(combinedPattern, 'gi');
+
+    // Find all matches
+    const matches: { start: number; end: number; text: string }[] = [];
+    let match;
+    while ((match = regex.exec(text)) !== null) {
+      matches.push({
+        start: match.index,
+        end: match.index + match[0].length,
+        text: match[0],
+      });
+    }
+
+    if (matches.length === 0) {
+      return text;
+    }
+
+    // Build result with highlighted matches
+    const result: (string | React.ReactElement)[] = [];
+    let lastIndex = 0;
+
+    matches.forEach((m, i) => {
+      // Add text before match
+      if (m.start > lastIndex) {
+        result.push(text.substring(lastIndex, m.start));
+      }
+      // Add highlighted match
+      result.push(
+        <span key={i} className={styles.highlight}>
+          {m.text}
+        </span>,
+      );
+      lastIndex = m.end;
+    });
+
+    // Add remaining text
+    if (lastIndex < text.length) {
+      result.push(text.substring(lastIndex));
+    }
+
+    return result;
   };
 
   return (
@@ -78,7 +125,9 @@ export default function SearchResultItem({ result, onClick, searchQuery }: Searc
           <div className={styles.headerLeft}>
             <span className={styles.sender}>{result.sender_name}</span>
             <span className={styles.separator}>|</span>
-            <span className={styles.threadTitle}>{result.thread_title || 'Unknown Thread'}</span>
+            <span className={styles.threadTitle}>
+              {highlightText(result.thread_title || 'Unknown Thread', searchQuery)}
+            </span>
           </div>
           <div className={styles.timestamp}>{dateStr}</div>
         </div>

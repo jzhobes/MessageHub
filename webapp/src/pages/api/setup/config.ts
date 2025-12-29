@@ -1,10 +1,11 @@
 import fs from 'fs';
-import type { NextApiRequest, NextApiResponse } from 'next';
 
-import appConfig from '@/lib/shared/appConfig';
 import db from '@/lib/server/db';
-import fileSystem from '@/lib/server/fileSystem';
 import { persistWorkspacePath } from '@/lib/server/env';
+import fileSystem from '@/lib/server/fileSystem';
+import appConfig from '@/lib/shared/appConfig';
+
+import type { NextApiRequest, NextApiResponse } from 'next';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === 'GET') {
@@ -46,8 +47,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(403).json({ error: 'This location is inside another workspace.' });
     }
 
-    // 2. Active path check (redundant but safe)
-    // if (meta.isActive) ... normally we just let them "re-apply" the same path.
+    // 2. Active path check
+    // If user re-sets the same path, we allow it to refresh state and persist.
 
     // 3. Writability check
     if (meta.exists && !meta.isWritable) {

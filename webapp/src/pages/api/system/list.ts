@@ -1,8 +1,9 @@
 import fs from 'fs';
-import type { NextApiRequest, NextApiResponse } from 'next';
 
 import fileSystem from '@/lib/server/fileSystem';
 import { getMyNames } from '@/lib/server/identity';
+
+import type { NextApiRequest, NextApiResponse } from 'next';
 
 /**
  * API Handler to list directory contents for the file explorer.

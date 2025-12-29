@@ -1,7 +1,10 @@
 import React from 'react';
-import { render, screen, cleanup } from '@testing-library/react';
-import { vi, describe, it, expect, beforeEach, afterEach, type Mock } from 'vitest';
+
+import { cleanup, render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from 'vitest';
+
 import SetupModal from '@/components/modals/SetupModal';
+
 import { useIngestion } from '@/hooks/useIngestion';
 
 // Mock the ingestion hook

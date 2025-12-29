@@ -44,6 +44,10 @@ export interface ContentRecord {
     link?: string;
     [key: string]: unknown;
   };
+  event_metadata?: {
+    location?: string;
+    description?: string;
+  };
   // DB Fields (used in DatasetGenerator/Ingestion)
   media_json?: string;
   reactions_json?: string;

@@ -1,22 +1,24 @@
 import React, { useEffect, useMemo, useState } from 'react';
+
 import Head from 'next/head';
 import Link from 'next/link';
 import { FaArrowLeft, FaCog, FaRobot } from 'react-icons/fa';
 import { FiMoon, FiSun } from 'react-icons/fi';
 
 import Checkbox from '@/components/Checkbox';
-import TextInput from '@/components/TextInput';
-import TextareaAuto from '@/components/TextareaAuto';
+import layoutStyles from '@/components/Layout.module.css';
 import SetupModal from '@/components/modals/SetupModal';
 import ThreadPreviewModal from '@/components/modals/ThreadPreviewModal';
+import TextareaAuto from '@/components/TextareaAuto';
+import TextInput from '@/components/TextInput';
+
 import { useForm } from '@/hooks/useForm';
 import { useTheme } from '@/hooks/useTheme';
-import { ContentRecord, Thread } from '@/lib/shared/types';
+
+import { Thread } from '@/lib/shared/types';
+import styles from '@/pages/studio.module.css';
 import { StudioControls } from '@/sections/StudioControls';
 import { StudioThreadList } from '@/sections/StudioThreadList';
-
-import layoutStyles from '@/components/Layout.module.css';
-import styles from '@/pages/studio.module.css';
 
 const initialState = {
   identityNames: '',
@@ -218,10 +220,10 @@ export default function Studio() {
 
       <SetupModal
         isOpen={showSetup}
-        onClose={() => setShowSetup(false)}
-        onCompleted={() => window.location.reload()}
         initialStep={2}
         isFirstRun={false}
+        onClose={() => setShowSetup(false)}
+        onCompleted={() => window.location.reload()}
       />
       <div className={layoutStyles.topBar}>
         <div className={layoutStyles.leftSection}>
@@ -251,16 +253,16 @@ export default function Studio() {
         <div className={layoutStyles.themeToggleWrapper}>
           <button
             className={`${layoutStyles.iconButton} ${layoutStyles.headerIconBtn}`}
-            onClick={() => setShowSetup(true)}
             title="Setup"
             style={{ marginRight: 8 }}
+            onClick={() => setShowSetup(true)}
           >
             <FaCog size={20} />
           </button>
           <button
             className={`${layoutStyles.iconButton} ${layoutStyles.headerIconBtn}`}
-            onClick={toggleTheme}
             title={theme === 'light' ? 'Switch to Dark Mode' : 'Switch to Light Mode'}
+            onClick={toggleTheme}
           >
             {!mounted || theme === 'light' ? <FiMoon size={20} /> : <FiSun size={20} />}
           </button>
@@ -276,8 +278,8 @@ export default function Studio() {
             <StudioControls
               visibleThreads={visibleThreads}
               selectedIds={selectedIds}
-              onChange={setSelectedIds}
               filterPlatforms={filterPlatforms}
+              onChange={setSelectedIds}
               onFilterChange={setFilterPlatforms}
             />
 
@@ -351,9 +353,9 @@ export default function Studio() {
                       <TextareaAuto
                         placeholder="Additional instructions..."
                         value={config.customInstructions}
-                        onChange={(e) => setField('customInstructions', e.target.value)}
                         minRows={3}
                         maxRows={8}
+                        onChange={(e) => setField('customInstructions', e.target.value)}
                       />
                       <div className={styles.templateContainer}>
                         <span className={styles.templateLabel}>Templates:</span>
@@ -380,44 +382,44 @@ export default function Studio() {
                       id="chkGroup"
                       label="Include Speaker Names (Group Chats)"
                       checked={config.includeGroupNames}
-                      onChange={(c) => setField('includeGroupNames', c)}
                       description='Required for the model to understand group dynamics. Example: "[Alice]: How are you?" instead of just "How are you?".'
+                      onChange={(c) => setField('includeGroupNames', c)}
                     />
 
                     <Checkbox
                       id="chkMerge"
                       label="Merge Sequential Messages (Recommended)"
                       checked={config.mergeSequential}
-                      onChange={(c) => setField('mergeSequential', c)}
                       description="Combines rapid-fire messages into a single turn to ensure cleaner User → Assistant patterns."
                       style={{ marginTop: 12 }}
+                      onChange={(c) => setField('mergeSequential', c)}
                     />
 
                     <Checkbox
                       id="chkReactions"
                       label="Convert Reactions to Text (Highly Recommended)"
                       checked={config.imputeReactions}
-                      onChange={(c) => setField('imputeReactions', c)}
                       description="Treats your reactions (👍, ❤️) as replies. Saves thousands of sessions where you acknowledged but didn't type."
                       style={{ marginTop: 12 }}
+                      onChange={(c) => setField('imputeReactions', c)}
                     />
 
                     <Checkbox
                       id="chkPII"
                       label="Redact PII (Emails & Phone #s)"
                       checked={config.redactPII}
-                      onChange={(c) => setField('redactPII', c)}
                       description="Scrubs personally identifiable information by replacing detected emails and phone numbers with [REDACTED_EMAIL] and [REDACTED_PHONE] placeholders."
                       style={{ marginTop: 12 }}
+                      onChange={(c) => setField('redactPII', c)}
                     />
 
                     <Checkbox
                       id="chkSystem"
                       label="Remove System/Admin Messages"
                       checked={config.removeSystemMessages}
-                      onChange={(c) => setField('removeSystemMessages', c)}
                       description='Filters out platform noise like "You missed a call", "Alice named the group", etc.'
                       style={{ marginTop: 12 }}
+                      onChange={(c) => setField('removeSystemMessages', c)}
                     />
                   </div>
                 </div>
@@ -467,8 +469,8 @@ export default function Studio() {
 
                   <button
                     className={styles.generateBtn}
-                    onClick={handleGenerate}
                     disabled={generating || selectedIds.size === 0}
+                    onClick={handleGenerate}
                   >
                     {generating
                       ? `Processing... ${progress.total > 0 ? Math.round((progress.current / progress.total) * 100) + '%' : ''}`
@@ -487,9 +489,9 @@ export default function Studio() {
       </div>
       <ThreadPreviewModal
         isOpen={isPreviewThreadOpen}
+        thread={activePreviewThread}
         onClose={() => setIsPreviewThreadOpen(false)}
         onAfterClose={() => setActivePreviewThread(null)}
-        thread={activePreviewThread}
       />
     </div>
   );

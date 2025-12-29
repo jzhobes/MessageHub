@@ -1,12 +1,14 @@
-import type { NextApiRequest, NextApiResponse } from 'next';
 import { spawn } from 'child_process';
+
+import { getIngestScriptPath, getPythonPath } from '@/lib/server/python';
 import { setupSSE } from '@/lib/server/sse';
 import appConfig from '@/lib/shared/appConfig';
-import { getPythonPath, getIngestScriptPath } from '@/lib/server/python';
+
+import type { NextApiRequest, NextApiResponse } from 'next';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== 'POST' && req.method !== 'GET') {
-    res.setHeader('Allow', ['POST', 'GET']);
+  if (req.method !== 'POST') {
+    res.setHeader('Allow', ['POST']);
     return res.status(405).end(`Method ${req.method} Not Allowed`);
   }
 

@@ -1,16 +1,16 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 
-import BaseModal, { BaseModalProps, ModalHeader } from './BaseModal';
 import { ContentRecord, Thread } from '@/lib/shared/types';
 import ThreadContent from '@/sections/ThreadContent';
 
+import BaseModal, { BaseModalProps, ModalHeader } from './BaseModal';
 import styles from './ThreadPreviewModal.module.css';
 
 interface ThreadPreviewModalProps extends Pick<BaseModalProps, 'isOpen' | 'onClose' | 'onAfterClose'> {
   thread: Thread | null;
 }
 
-export default function ThreadPreviewModal({ isOpen, onClose, onAfterClose, thread }: ThreadPreviewModalProps) {
+export default function ThreadPreviewModal({ isOpen, thread, onClose, onAfterClose }: ThreadPreviewModalProps) {
   // State matching Home page usage of ChatWindow
   const [messages, setMessages] = useState<ContentRecord[] | null>(null);
   const [loading, setLoading] = useState(false);
@@ -122,13 +122,13 @@ export default function ThreadPreviewModal({ isOpen, onClose, onAfterClose, thre
   return (
     <BaseModal
       isOpen={isOpen}
+      maxWidth={900}
+      height="85vh"
       onClose={onClose}
       onAfterClose={() => {
         setMessages(null);
         onAfterClose?.();
       }}
-      maxWidth={900}
-      height="85vh"
     >
       <ModalHeader onClose={onClose}>
         <h2 style={{ margin: 0, fontSize: '1.2rem', color: 'var(--text-primary)' }}>
@@ -143,18 +143,18 @@ export default function ThreadPreviewModal({ isOpen, onClose, onAfterClose, thre
       </ModalHeader>
       <div className={styles.messageList}>
         <ThreadContent
-          hideHeader
           activeThread={thread}
           messages={messages}
           loading={loading}
           hasMoreOld={hasMoreOld}
           hasMoreNew={hasMoreNew}
           pageRange={pageRange}
-          onStartReached={handleLoadOld}
-          onEndReached={handleLoadNew}
           targetMessageId={null}
           highlightToken={0}
           initializing={loading && messages === null}
+          hideHeader
+          onStartReached={handleLoadOld}
+          onEndReached={handleLoadNew}
           onPageChange={setVisiblePage}
         />
       </div>

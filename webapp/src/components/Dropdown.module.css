@@ -1,19 +1,62 @@
 .dropdownMenu {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  width: 160px;
-  background: var(--bg-card);
+  /* Popover Reset */
+  margin: 0;
+  padding: 4px 0;
   border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  color: var(--text-primary);
   border-radius: var(--radius-1);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  z-index: 200;
-  padding: 4px 0;
-  color: var(--text-primary);
-  animation: dropdownIn 0.15s ease-out;
-  transform-origin: top left;
-  max-height: 400px;
   overflow-y: auto;
+
+  /* Initial state for Popover API */
+  position: fixed;
+  inset: auto;
+  z-index: 10000; /* Though top-layer handles this, it doesn't hurt */
+
+  /* Transition setup */
+  transition:
+    opacity 0.2s ease-out,
+    transform 0.2s ease-out,
+    overlay 0.2s ease-out allow-discrete,
+    display 0.2s ease-out allow-discrete;
+
+  opacity: 1;
+  transform: scale(1);
+
+  /* JS Fallback / Non-anchor support */
+  top: var(--dropdown-top);
+  left: var(--dropdown-left);
+}
+
+.dropdownMenu:not(:popover-open) {
+  display: none;
+  opacity: 0;
+  transform: scale(0.98);
+}
+
+@starting-style {
+  .dropdownMenu:popover-open {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+}
+
+/* Progressive Enhancement: Native CSS Anchoring */
+@supports (anchor-name: --test) {
+  .dropdownMenu {
+    top: anchor(bottom);
+    bottom: auto;
+    left: anchor(left);
+    right: auto;
+    margin-top: 4px;
+  }
+
+  .dropdownMenu[data-align='right'] {
+    left: auto;
+    right: anchor(right);
+    transform-origin: top right;
+  }
 }
 
 @keyframes dropdownIn {

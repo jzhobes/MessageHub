@@ -1,9 +1,12 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+
 import { FaSpinner } from 'react-icons/fa';
 import { IndexLocationWithAlign, Virtuoso, VirtuosoHandle } from 'react-virtuoso';
 
 import EmailItem from '@/components/EmailItem';
+import EventItem from '@/components/EventItem';
 import MessageItem from '@/components/MessageItem';
+
 import { ContentRecord, QuotedMessageMetadata, Thread } from '@/lib/shared/types';
 
 import styles from './ThreadContent.module.css';
@@ -15,12 +18,13 @@ interface ThreadContentProps {
   hasMoreOld: boolean;
   hasMoreNew: boolean;
   pageRange: { min: number; max: number };
-  onStartReached: () => void;
-  onEndReached: () => void;
   targetMessageId: string | null;
+  targetTimestamp?: number | null;
   highlightToken: number;
   initializing?: boolean;
   hideHeader?: boolean;
+  onStartReached: () => void;
+  onEndReached: () => void;
   onPageChange?: (page: number) => void;
 }
 
@@ -33,12 +37,13 @@ export default function ThreadContent({
   hasMoreOld,
   hasMoreNew,
   pageRange,
-  onStartReached,
-  onEndReached,
   targetMessageId,
+  targetTimestamp,
   highlightToken,
   initializing,
   hideHeader,
+  onStartReached,
+  onEndReached,
   onPageChange,
 }: ThreadContentProps) {
   // Refs
@@ -351,7 +356,8 @@ export default function ThreadContent({
             const showName = !isMyMsg && isTop;
 
             const msgId = msg.id || msg.timestamp_ms.toString();
-            const isGlobalTarget = msgId === targetMessageId;
+            const isGlobalTarget =
+              msgId === targetMessageId || (!!targetTimestamp && msg.timestamp_ms === targetTimestamp);
             const isLocalTarget = msgId === localTargetId;
             const isTarget = isGlobalTarget || isLocalTarget;
             const highlightKey = isGlobalTarget ? highlightToken : isLocalTarget ? localHighlightToken : 0;
@@ -373,6 +379,7 @@ export default function ThreadContent({
             ].filter(Boolean);
 
             const isEmail = activeThread?.platform === 'Gmail';
+            const isEvent = activeThread?.id.startsWith('fb-event-');
 
             return (
               <div
@@ -381,7 +388,23 @@ export default function ThreadContent({
               >
                 {showTimestamp && <div className={styles.timestampLabel}>{timestampStr}</div>}
                 {isEmail ? (
-                  <EmailItem key={msgId} msg={msg} isMyMsg={isMyMsg} showAvatar={showAvatar} showName={showName} />
+                  <EmailItem
+                    key={msgId}
+                    msg={msg}
+                    isMyMsg={isMyMsg}
+                    showAvatar={showAvatar}
+                    showName={showName}
+                    isTarget={isTarget}
+                    highlightToken={highlightKey}
+                  />
+                ) : isEvent ? (
+                  <EventItem
+                    key={msgId}
+                    msg={msg}
+                    isMyMsg={isMyMsg}
+                    isTarget={isTarget}
+                    highlightToken={highlightKey}
+                  />
                 ) : (
                   <MessageItem
                     key={msgId}

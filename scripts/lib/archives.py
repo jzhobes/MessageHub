@@ -76,8 +76,12 @@ def extract_archives_found_with_opts(search_dirs, target_root, platform_filter="
             has_voice = any(f.startswith("Takeout/Voice/") for f in file_list)
             has_chat = any(f.startswith("Takeout/Google Chat/") for f in file_list)
             has_mail = any(f.startswith("Takeout/Mail/") for f in file_list)
-            is_insta = any(f.startswith("your_instagram_activity") for f in file_list)
-            is_fb = any(f.startswith("your_facebook_activity") for f in file_list)
+            is_insta = any(f.startswith("your_instagram_activity") for f in file_list) or any(
+                "instagram_profile_information.json" in f for f in file_list
+            )
+            is_fb = any(f.startswith("your_facebook_activity") for f in file_list) or any(
+                "personal_information/profile_information/" in f for f in file_list
+            )
 
             # Filter Check
             if platform_filter != "all":
@@ -137,13 +141,24 @@ def extract_archives_found_with_opts(search_dirs, target_root, platform_filter="
             members = archive_obj.namelist() if is_zip else archive_obj.getmembers()
             total_members = len(members)
             print(f"[ArchiveStarted]: {archive_path.name}|{total_members}")
+
+            dest_dir_real = os.path.realpath(dest_dir)
+
             for i, member in enumerate(members):
                 try:
+                    # Security Check: Prevent Zip Slip (path traversal)
+                    member_name = member if is_zip else member.name
+                    target_path = os.path.realpath(os.path.join(dest_dir_real, member_name))
+                    if not target_path.startswith(dest_dir_real):
+                        print(f"  [Security] Skipping unsafe member (potential Zip Slip): {member_name}")
+                        continue
+
                     archive_obj.extract(member, dest_dir)
                     if (i + 1) % 50 == 0 or (i + 1) == total_members:
                         print(f"[ArchiveProgress]: {archive_path.name}|{i + 1}|{total_members}")
                 except Exception as e:
-                    print(f"  Warning: Failed to extract {member} from {archive_path.name}: {e}")
+                    member_name = member if is_zip else member.name
+                    print(f"  Warning: Failed to extract {member_name} from {archive_path.name}: {e}")
 
             archive_obj.close()
             print(f"[ArchiveExtracted]: {archive_path.name}")

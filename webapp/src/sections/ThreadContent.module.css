@@ -11,11 +11,11 @@
 
 .contentHeader {
   height: 60px;
-  border-bottom: 1px solid var(--border-color);
+  border-block-end: 1px solid var(--border-color);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 20px;
+  padding-inline: 20px;
   font-weight: 600;
   font-size: 1.1rem;
   color: var(--text-primary);
@@ -36,7 +36,7 @@
 .pageIndicator {
   font-size: 0.8rem;
   color: var(--text-secondary);
-  margin-left: 10px;
+  margin-inline-start: 10px;
 }
 
 .messagesContainer {
@@ -50,7 +50,7 @@
   justify-content: center;
   padding: 10px;
   align-items: center;
-  color: #6b7280;
+  color: var(--text-secondary);
 }
 
 .loadingText {
@@ -62,8 +62,8 @@
   width: 100%;
   text-align: center;
   font-size: 0.75rem;
-  color: #8e8e93;
-  padding: 16px 0 8px 0;
+  color: var(--text-secondary);
+  padding-block: 16px 8px;
   font-weight: 500;
   user-select: none;
 }
@@ -77,34 +77,53 @@
   font-size: 1.2rem;
 }
 
-.messageAlignLeft :global(.messageBubble),
-.messageAlignLeft :global(.linkPreview),
-.messageAlignLeft :global(.previewContainer) > img {
-  border-radius: var(--radius-1) var(--radius-3) var(--radius-3) var(--radius-1);
+/* Bubble Grouping Logic via Nesting */
+.messageAlignLeft {
+  :global(.messageBubble),
+  :global(.eventContainer),
+  :global(.linkPreview),
+  :global(.previewContainer) > img {
+    border-radius: var(--radius-1) var(--radius-3) var(--radius-3) var(--radius-1);
+  }
+
+  &.firstMessage {
+    :global(.messageBubble),
+    :global(.eventContainer) {
+      border-start-start-radius: var(--radius-3);
+    }
+  }
+
+  &.lastMessage {
+    &:not(:has(:global(.previewContainer))) :global(.messageBubble),
+    :global(.eventContainer),
+    :global(.linkPreview),
+    :global(.previewContainer) > img {
+      border-start-end-radius: var(--radius-3);
+    }
+  }
 }
 
-.messageAlignLeft.firstMessage :global(.messageBubble) {
-  border-top-left-radius: var(--radius-3);
-}
+.messageAlignRight {
+  :global(.messageBubble),
+  :global(.eventContainer),
+  :global(.linkPreview),
+  :global(.previewContainer) > img {
+    border-radius: var(--radius-3) var(--radius-1) var(--radius-1) var(--radius-3);
+  }
 
-.messageAlignLeft.lastMessage:not(:has(:global(.previewContainer))) :global(.messageBubble),
-.messageAlignLeft.lastMessage :global(.linkPreview),
-.messageAlignLeft.lastMessage :global(.previewContainer) > img {
-  border-bottom-left-radius: var(--radius-3);
-}
+  &.firstMessage {
+    :global(.messageBubble),
+    :global(.eventContainer) {
+      border-start-end-radius: var(--radius-3);
+    }
+  }
 
-.messageAlignRight :global(.messageBubble),
-.messageAlignRight :global(.linkPreview),
-.messageAlignRight :global(.previewContainer) > img {
-  border-radius: var(--radius-3) var(--radius-1) var(--radius-1) var(--radius-3);
-}
-
-.messageAlignRight.firstMessage :global(.messageBubble) {
-  border-top-right-radius: var(--radius-3);
-}
-
-.messageAlignRight.lastMessage:not(:has(:global(.previewContainer))) :global(.messageBubble),
-.messageAlignRight.lastMessage :global(.linkPreview),
-.messageAlignRight.lastMessage :global(.previewContainer) > img {
-  border-bottom-right-radius: var(--radius-3);
+  &.lastMessage {
+    &:not(:has(:global(.previewContainer))) :global(.messageBubble),
+    :global(.eventContainer),
+    :global(.linkPreview),
+    :global(.previewContainer) > img {
+      border-end-start-radius: var(--radius-3);
+    }
+  }
 }

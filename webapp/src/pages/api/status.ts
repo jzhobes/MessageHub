@@ -1,6 +1,7 @@
-import type { NextApiRequest, NextApiResponse } from 'next';
 import db from '@/lib/server/db';
 import { PlatformMap } from '@/lib/shared/platforms';
+
+import type { NextApiRequest, NextApiResponse } from 'next';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {

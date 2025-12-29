@@ -73,10 +73,10 @@
 }
 
 .fullWidthMenu {
-  top: 100% !important;
   border-radius: 0 0 var(--radius-1) var(--radius-1) !important;
   border-left: none !important;
   border-right: none !important;
+  border-top: none !important;
   box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1) !important;
 }
 

@@ -1,10 +1,11 @@
 import React from 'react';
+
 import { FaSpinner } from 'react-icons/fa';
 import { Virtuoso } from 'react-virtuoso';
 
 import { useRangeSelection } from '@/hooks/useRangeSelection';
-import { Thread } from '@/lib/shared/types';
 
+import { Thread } from '@/lib/shared/types';
 import styles from '@/pages/studio.module.css';
 
 interface StudioThreadListProps {

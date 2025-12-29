@@ -1,22 +1,25 @@
 # MessageHub
 
-MessageHub is a unified local viewer for your personal chat archives. It aggregates and displays message history from **Facebook**, **Instagram**, **Google Chat**, **Google Voice**, and **Google Mail (Gmail)** exports in a single, modern web interface.
+MessageHub is a unified **fully local** viewer for your personal content archives. It aggregates and displays history from **Facebook**, **Instagram**, **Google Chat**, **Google Voice**, and **Gmail** exports in a single hub, ensuring your sensitive data never leaves your machine.
 
 It also features **DataForge AI**, a built-in studio for curating high-quality datasets to fine-tune Large Language Models (LLMs) on your authentic voice.
 
 ## Features
 
-- **Integrated Setup Wizard:** Automatically configure your workspace, import archives, and build your database with zero command-line interaction.
-- **Unified Dashboard:** Toggle between Facebook Messenger, Instagram DMs, Google Chat, Google Voice, and Gmail histories.
-- **Global Search:** Search all archives with support for **glob-like syntax** in queries and **selection filtering**. Click any result to **jump** to that message in its original context.
-- **Smart Ingestion:** Automatically handles duplicate messages across overlapping exports and supports incremental updates.
+- **Integrated setup wizard:** Automatically configure your workspace, import archives, and build your database with zero command-line interaction.
+- **Unified dashboard:** Toggle between Facebook, Instagram, Google Chat, Google Voice, and Gmail content history.
+- **Facebook social activity:** View your Facebook **Events**, **Posts**, and **Check-ins** formatted as native timeline events, separate from private messages.
+- **Global search:** Search all archives with support for **glob-like syntax** in queries and **selection filtering**. Click any result to **jump** to that item in its original context.
+- **Rich URL previews:** Instant metadata generation for links (title, description, image) from **Reddit**, **Instagram**, and **Facebook**, including a custom proxy to resolve gated Facebook "lookaside" images.
+- **Smart ingestion:** Automatically handles duplicate content across overlapping exports and supports incremental updates.
 - **DataForge AI Studio:** Select specific threads, filter system noise, and generate formatted JSONL datasets for OpenAI fine-tuning.
+- **Privacy by design:** Everything—from indexing to AI dataset generation—happens locally inside your workspace. No data is uploaded to any cloud service.
 
 ---
 
 ## 🚀 Quick Start (Run & Setup)
 
-Run the start script to automatically initialize the environment, build the application, and launch the **Setup Wizard**.
+Run the start script to automatically initialize the environment, build the application, and launch the **setup wizard**.
 
 **Mac / Linux / WSL** (Windows requires WSL):
 
@@ -47,18 +50,20 @@ Before running the start script, ensure you have:
 
 ### 2. Exporting Your Data
 
+> [!IMPORTANT] > **Profile Information:** You **must** include your Profile/Personal information in your exports. Without this, MessageHub cannot differentiate between your own messages and those of other senders.
+
 #### Facebook
 
 1.  Go to [**Accounts Center** > **Export your information**](https://accountscenter.facebook.com/info_and_permissions/dyi).
 2.  **Create export** > **Facebook** > **Export to device**.
-3.  **Customize information**: Select **Messages** and **Profile information** (Required for "You" detection).
+3.  **Customize information**: Select **Messages** and **Profile information** (**REQUIRED** for identity detection).
 4.  **Format**: **JSON**.
 
 #### Instagram
 
 1.  Go to [**Accounts Center** > **Export your information**](https://accountscenter.facebook.com/info_and_permissions/dyi).
 2.  **Create export** > **Instagram** > **Export to device**.
-3.  **Customize information**: Select **Messages** and **Personal information**.
+3.  **Customize information**: Select **Messages** and **Personal information** (**REQUIRED** for identity detection).
 4.  **Format**: **JSON**.
 
 #### Google (Chat, Voice, Gmail)
@@ -76,7 +81,7 @@ Before running the start script, ensure you have:
 2.  **Workspace**: Select the folder where your database and settings will live.
 3.  **Import**: Select your exported `.zip` / `.tar.gz` files using the in-app file explorer to stage them.
 4.  **Confirm & Process**: MessageHub handles extraction, merging, and indexing automatically.
-5.  **Review**: Once complete, enter your dashboard to search and browse your messages.
+5.  **Review**: Once complete, enter your dashboard to search and browse your content history.
 
 ---
 
@@ -131,9 +136,10 @@ MessageHub/
 
 ### Technical Details
 
-- **Interface:** Next.js, React, Vanilla CSS.
-- **Database:** SQLite with **FTS5 Trigram** indexing for sub-second global search.
-- **Ingestion:** Python 3.10+ (multithreaded).
+- **Interface:** Next.js 16, React 19, Vanilla CSS.
+- **Modern Web Platform:** Leverages **CSS Anchor Positioning**, **Popover API**, **Native CSS Nesting**, and **@starting-style** for high-performance, native-feeling interactions.
+- **Database:** SQLite with **FTS5 Trigram** indexing for sub-second global search. Everything is stored in an encrypted-at-rest-ready local `.db` file.
+- **Ingestion:** Python 3.10+ (high-speed parsers with SQLite WAL mode). Processing is 100% offline.
 
 ### Configuration (.env)
 

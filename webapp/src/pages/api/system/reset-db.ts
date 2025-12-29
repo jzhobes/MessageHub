@@ -1,8 +1,10 @@
-import type { NextApiRequest, NextApiResponse } from 'next';
 import fs from 'fs';
 import path from 'path';
+
 import db from '@/lib/server/db';
 import appConfig from '@/lib/shared/appConfig';
+
+import type { NextApiRequest, NextApiResponse } from 'next';
 
 /**
  * API Handler to reset (delete) the message database.
