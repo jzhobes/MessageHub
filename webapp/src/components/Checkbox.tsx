@@ -3,16 +3,16 @@ import React from 'react';
 import styles from './Checkbox.module.css';
 
 interface CheckboxProps {
-  label: React.ReactNode;
   checked: boolean;
-  onChange: (checked: boolean) => void;
+  label: React.ReactNode;
+  description?: string;
   id?: string;
   className?: string;
-  description?: string;
   style?: React.CSSProperties;
+  onChange: (checked: boolean) => void;
 }
 
-export default function Checkbox({ label, checked, onChange, id, className, description, style }: CheckboxProps) {
+export default function Checkbox({ checked, label, description, id, className, style, onChange }: CheckboxProps) {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     onChange(e.target.checked);
   };

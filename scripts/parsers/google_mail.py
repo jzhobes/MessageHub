@@ -1,9 +1,9 @@
-from email.header import decode_header
-from email.utils import getaddresses, parseaddr, parsedate_to_datetime
 import json
 import mailbox
-from pathlib import Path
 import re
+from email.header import decode_header
+from email.utils import getaddresses, parseaddr, parsedate_to_datetime
+from pathlib import Path
 
 from bs4 import BeautifulSoup
 
@@ -232,12 +232,29 @@ def strip_html_quotes(html):
         return ""
     try:
         soup = BeautifulSoup(html, "html.parser")
-        # Gmail specific
+        # 1. Standard Gmail/Container specific
         for quote in soup.find_all("div", class_="gmail_quote"):
             quote.decompose()
-        # Other common patterns
+        # 2. Other common patterns
         for blockquote in soup.find_all("blockquote"):
             blockquote.decompose()
+
+        # 3. Enterprise/Outlook style "From:" blocks and "On ... wrote:" tails.
+        # These often lack a wrapper div and just appear as text blocks in the middle of the body.
+        header_pattern = re.compile(r"^\s*(From|Sent|To|Subject):", re.IGNORECASE)
+        wrote_pattern = re.compile(r"^\s*On .* wrote:", re.IGNORECASE)
+
+        # Check all potential block-level elements for quote markers
+        for element in soup.find_all(["div", "p", "span", "b", "font"]):
+            text = element.get_text().strip()
+            # If we find a line starting with From: or On [Date] wrote:, it's likely the start of a quote session
+            if header_pattern.match(text) or wrote_pattern.match(text):
+                # We've found the start of the quote. Decompose this element and everything that follows.
+                for sibling in element.find_all_next():
+                    sibling.decompose()
+                element.decompose()
+                break
+
         return str(soup)
     except Exception:
         return html

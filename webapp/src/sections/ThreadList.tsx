@@ -23,11 +23,11 @@ import styles from './ThreadList.module.css';
 interface ThreadListProps {
   activePlatform: string;
   activeCategory: string;
-  onCategoryChange: (category: string) => void;
   categoryCounts?: Record<string, number>;
   threads: Thread[];
   activeThread: Thread | null;
   loading: boolean;
+  onCategoryChange: (category: string) => void;
   onThreadSelect: (thread: Thread) => void;
 }
 
@@ -45,11 +45,11 @@ const ALL_CATEGORIES = [
 export default function ThreadList({
   activePlatform,
   activeCategory,
-  onCategoryChange,
   categoryCounts = {},
   threads,
   activeThread,
   loading,
+  onCategoryChange,
   onThreadSelect,
 }: ThreadListProps) {
   const filteredCategories = useMemo(() => {

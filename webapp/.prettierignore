@@ -3,6 +3,8 @@ node_modules
 out
 build
 coverage
-public
+public/*
+!public/workers/
+!public/workers/**
 .DS_Store
 *.lock

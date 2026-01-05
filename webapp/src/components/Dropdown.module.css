@@ -80,6 +80,8 @@
   gap: 12px;
 }
 
-.dropdownItem:hover {
+.dropdownItem:hover,
+.dropdownItem:focus {
   background: var(--bg-sidebar-hover);
+  outline: none;
 }

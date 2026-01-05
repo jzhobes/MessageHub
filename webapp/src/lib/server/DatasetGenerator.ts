@@ -1,61 +1,70 @@
-import { get_encoding } from 'tiktoken';
+import Database from 'better-sqlite3';
+import { encoding_for_model, Tiktoken, TiktokenModel } from 'tiktoken';
 
+// Builders
+import EmailPairBuilder, { Msg } from '@/lib/server/dataset/builders/EmailPairBuilder';
+import { EventRecordBuilder } from '@/lib/server/dataset/builders/EventRecordBuilder';
+import { MessageSessionBuilder } from '@/lib/server/dataset/builders/MessageSessionBuilder';
+// Utilities & Shared
+import { redactPII } from '@/lib/server/piiUtils';
+import { inferThreadTitle } from '@/lib/server/threadUtils';
 import { PlatformMap } from '@/lib/shared/platforms';
-import { ContentRecord } from '@/lib/shared/types';
+import { containsHtmlOrEntities, decodeHtmlEntities, stripHtml } from '@/lib/shared/stringUtils';
+import { ContentRecord, DatasetEntry } from '@/lib/shared/types';
 
-import db from './db';
-
-export interface DatasetEntry {
-  messages: {
-    role: 'system' | 'user' | 'assistant';
-    content: string;
-  }[];
-}
-
-export interface DatasetOptions {
+export interface GeneratorOptions {
   includeGroupSpeakerNames: boolean;
-  mergeSequential?: boolean;
-  removeSystemMessages?: boolean;
-  imputeReactions?: boolean;
-  redactPII?: boolean;
-  personaTag?: string; // e.g. "Professional"
-  customInstructions?: string; // e.g. "Do not use emojis"
-  maxTokensPerFile?: number; // Default 1.9M
-}
-
-export interface DatasetCheckResult {
-  fileCount: number;
-  totalTokens: number;
-  totalSessions: number;
+  mergeSequential: boolean;
+  removeSystemMessages: boolean;
+  imputeReactions: boolean;
+  redactPII: boolean;
+  maxTokensPerSession: number;
+  maxTokensPerFile: number;
+  personaTag?: string;
+  customInstructions?: string;
+  skipSystemMessages: boolean;
+  datasetName?: string;
 }
 
 interface BatchState {
+  fileIndex: number;
   sessions: DatasetEntry[];
   tokens: number;
-  fileIndex: number;
 }
 
 export class DatasetGenerator {
-  private _dbInstance = db.get();
-  private _maxTokensPerFile: number;
+  private _dbInstance: Database.Database | null = null;
+  private _encoder: Tiktoken;
   private _includeGroupSpeakerNames: boolean;
   private _mergeSequential: boolean;
   private _removeSystemMessages: boolean;
   private _imputeReactions: boolean;
   private _redactPII: boolean;
+  private _maxTokensPerSession: number;
+  private _maxTokensPerFile: number;
   private _personaTag?: string;
   private _customInstructions?: string;
-  private _encoder = get_encoding('cl100k_base'); // GPT-4/3.5 standard
+  private _skipSystemMessages: boolean;
+  private _datasetName: string;
 
-  constructor(options: DatasetOptions) {
-    this._includeGroupSpeakerNames = options.includeGroupSpeakerNames;
-    this._mergeSequential = options.mergeSequential ?? false;
-    this._removeSystemMessages = options.removeSystemMessages ?? false;
-    this._imputeReactions = options.imputeReactions ?? false;
-    this._redactPII = options.redactPII ?? false;
-    this._personaTag = options.personaTag;
-    this._customInstructions = options.customInstructions;
-    this._maxTokensPerFile = options.maxTokensPerFile ?? 1900000; // Safety buffer below 2M
+  constructor(opts: GeneratorOptions) {
+    // Database instance is provided after instantiation via setDb()
+    this._encoder = encoding_for_model('gpt-4' as TiktokenModel);
+    this._includeGroupSpeakerNames = opts.includeGroupSpeakerNames;
+    this._mergeSequential = opts.mergeSequential;
+    this._removeSystemMessages = opts.removeSystemMessages;
+    this._imputeReactions = opts.imputeReactions;
+    this._redactPII = opts.redactPII;
+    this._maxTokensPerSession = opts.maxTokensPerSession;
+    this._maxTokensPerFile = opts.maxTokensPerFile;
+    this._personaTag = opts.personaTag;
+    this._customInstructions = opts.customInstructions;
+    this._skipSystemMessages = opts.skipSystemMessages;
+    this._datasetName = opts.datasetName || 'dataset';
+  }
+
+  public setDb(db: Database.Database) {
+    this._dbInstance = db;
   }
 
   public async *generateStream(
@@ -64,36 +73,79 @@ export class DatasetGenerator {
     dateRange?: { start: number; end: number },
     onProgress?: (current: number, total: number) => void,
   ): AsyncGenerator<{ fileName: string; content: string; tokenCount: number }> {
-    const batchState: BatchState = {
-      sessions: [],
-      tokens: 0,
-      fileIndex: 1,
-    };
+    const batchState: BatchState = { fileIndex: 1, sessions: [], tokens: 0 };
+    const myNamesLower = new Set(identityNames.map((n) => n.toLowerCase().trim()));
+    const myNamesList = Array.from(myNamesLower);
 
-    const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
-    let processedCount = 0;
+    const historyBuilder = this._skipSystemMessages ? new EventRecordBuilder({ identityName: identityNames[0] }) : null;
 
-    for (const threadId of threadIds) {
-      processedCount++;
+    if (!this._dbInstance) {
+      throw new Error('Database instance not set in DatasetGenerator');
+    }
+
+    for (let threadIdx = 0; threadIdx < threadIds.length; threadIdx++) {
+      const threadId = threadIds[threadIdx];
       if (onProgress) {
-        onProgress(processedCount, threadIds.length);
+        onProgress(threadIdx, threadIds.length);
       }
 
       // Yield to event loop AFTER EVERY THREAD to keep server responsive
       await new Promise((resolve) => setImmediate(resolve));
 
-      const thread = this._dbInstance
-        .prepare('SELECT is_group, platform, title FROM threads WHERE id = ?')
-        .get(threadId) as { is_group: number; platform: string; title: string } | undefined;
+      let query = '';
+      const params: (string | number)[] = [];
+      let isGroup = false;
+      let platform = 'facebook';
+      let title = '';
+      let contextType = 'Chat';
 
-      if (!thread) {
-        continue;
+      if (threadId === 'fb-post-all') {
+        title = 'My Posts';
+        contextType = 'Wall Posts';
+        query = `
+          SELECT t.title as thread_title, m.sender_name, m.content, m.timestamp_ms, m.media_json, m.reactions_json 
+          FROM content m
+          JOIN threads t ON m.thread_id = t.id
+          JOIN thread_labels tl ON m.thread_id = tl.thread_id
+          WHERE tl.label = 'post'
+        `;
+      } else if (threadId.startsWith('fb-event-')) {
+        const cat = threadId.replace('fb-event-', '');
+        const statuses = cat === 'owned' ? ['Created Event'] : ['Joined Event', 'Interested in Event'];
+        title = cat === 'owned' ? 'Your Events' : 'Joined Events';
+        contextType = 'Event Activity';
+
+        const placeholders = statuses.map(() => '?').join(',');
+        query = `
+          SELECT t.title as thread_title, m.sender_name, m.content, m.timestamp_ms, m.media_json, m.reactions_json 
+          FROM content m
+          JOIN threads t ON m.thread_id = t.id
+          JOIN thread_labels tl ON m.thread_id = tl.thread_id
+          WHERE tl.label = 'event' AND m.content IN (${placeholders})
+        `;
+        params.push(...statuses);
+      } else {
+        const thread = this._dbInstance
+          .prepare('SELECT is_group, platform, title, participants_json FROM threads WHERE id = ?')
+          .get(threadId) as
+          | { is_group: number; platform: string; title: string; participants_json: string }
+          | undefined;
+
+        if (!thread) {
+          continue;
+        }
+
+        isGroup = !!thread.is_group;
+        platform = thread.platform;
+        contextType = isGroup ? 'Group chat' : 'Chat';
+
+        const participants = JSON.parse(thread.participants_json || '[]');
+        title = inferThreadTitle(thread.title, participants, identityNames);
+
+        query =
+          'SELECT sender_name, content, timestamp_ms, media_json, reactions_json FROM content WHERE thread_id = ?';
+        params.push(threadId);
       }
-      const isGroup = !!thread.is_group;
-
-      let query =
-        'SELECT sender_name, content, timestamp_ms, media_json, reactions_json FROM content WHERE thread_id = ?';
-      const params: (string | number)[] = [threadId];
 
       if (dateRange) {
         query += ' AND timestamp_ms BETWEEN ? AND ?';
@@ -106,80 +158,195 @@ export class DatasetGenerator {
         continue;
       }
 
-      let currentSession: { role: 'system' | 'user' | 'assistant'; content: string }[] = [];
-      const contextType = isGroup ? 'Group chat' : 'Chat';
+      const displayPlatform = PlatformMap[platform] || platform;
+      const isVirtual = threadId === 'fb-post-all' || threadId.startsWith('fb-event-');
+      const isPost = threadId === 'fb-post-all';
+      const isEvent = threadId.startsWith('fb-event-');
 
-      const displayPlatform = PlatformMap[thread.platform] || thread.platform;
-
-      let systemContent = `Context: ${contextType} with "${thread.title || 'Unknown'}" on "${displayPlatform}".`;
-      if (this._personaTag) {
-        systemContent += ` [Persona: ${this._personaTag}]`;
-      }
-      if (this._customInstructions) {
-        systemContent += ` ${this._customInstructions}`;
-      }
-
+      const sessionTimeout = platform === 'google_mail' ? 7 * 24 * 60 * 60 * 1000 : 4 * 60 * 60 * 1000;
+      const systemContent = this._buildSystemMessage(identityNames, title, contextType, displayPlatform);
       const systemMsg = { role: 'system' as const, content: systemContent };
 
+      const emailBuilder =
+        platform === 'google_mail'
+          ? new EmailPairBuilder({
+              userName: identityNames[0],
+              injectSubjectOnce: true,
+              subject: title && title !== 'Unknown' ? title : undefined,
+              dropOutboundOnly: true,
+              includeSenderNamePrefix: true,
+              redactPII: this._redactPII,
+              redactTrackingNumbers: true,
+            })
+          : null;
+
+      const chatBuilder =
+        platform !== 'google_mail'
+          ? new MessageSessionBuilder({
+              maxTokensPerSession: this._maxTokensPerSession,
+              mergeSequential: this._mergeSequential,
+              includeGroupSpeakerNames: this._includeGroupSpeakerNames,
+              imputeReactions: this._imputeReactions,
+              identityNames,
+              systemMsg,
+              skipSystemMessages: this._skipSystemMessages,
+              tokenizer: (p) => this._encoder.encode(p).length,
+              threadTitle: isVirtual ? undefined : title,
+              isGroup,
+              platform: isPost ? 'Facebook Post' : isEvent ? 'Facebook Event' : platform,
+            })
+          : null;
+
       for (let i = 0; i < messages.length; i++) {
-        // Yield inside massive threads (every 500 msgs)
         if (i > 0 && i % 500 === 0) {
           await new Promise((resolve) => setImmediate(resolve));
         }
-
         const msg = messages[i];
         const prevMsg = i > 0 ? messages[i - 1] : null;
 
-        if (prevMsg && msg.timestamp_ms - prevMsg.timestamp_ms > TWO_HOURS_MS) {
-          yield* this._finalizeSession(currentSession, systemMsg, batchState);
-          currentSession = [];
+        if (!isVirtual && prevMsg && msg.timestamp_ms - prevMsg.timestamp_ms > sessionTimeout) {
+          if (chatBuilder) {
+            const session = chatBuilder.finalize();
+            if (session) {
+              yield* this._emitSession(session, batchState);
+            }
+          }
+        } else if (isVirtual && prevMsg) {
+          if (chatBuilder) {
+            const session = chatBuilder.finalize();
+            if (session) {
+              yield* this._emitSession(session, batchState);
+            }
+          }
         }
 
-        const isMe = identityNames.includes(msg.sender_name);
-        const cleanedContent = this._cleanContent(msg);
+        const normalizedSender = msg.sender_name?.toLowerCase().trim() || '';
+        let isMe = normalizedSender && myNamesLower.has(normalizedSender);
+        if (!isMe && normalizedSender) {
+          isMe = myNamesList.some((name) => normalizedSender.includes(name) || name.includes(normalizedSender));
+        }
 
+        const cleanedContent = this._cleanContent(msg, platform, { isPost });
         if (!cleanedContent || (this._removeSystemMessages && this._isSystemMessage(cleanedContent))) {
           continue;
         }
 
-        const role = isMe ? 'assistant' : 'user';
-        let content = cleanedContent;
-
-        if (isGroup && !isMe && this._includeGroupSpeakerNames) {
-          content = `[${msg.sender_name}]: ${content}`;
+        let role: 'user' | 'assistant' = isMe ? 'assistant' : 'user';
+        if (!isMe && isVirtual) {
+          role = 'assistant';
         }
 
-        // Merge Sequential Logic
-        let merged = false;
-        if (this._mergeSequential && currentSession.length > 0) {
-          const last = currentSession[currentSession.length - 1];
-          if (last.role === role) {
-            last.content += `\n${content}`;
-            merged = true;
+        let content: string = cleanedContent;
+        if (isVirtual) {
+          const dateStr = new Date(msg.timestamp_ms).toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+          });
+          if (msg.thread_title) {
+            if (threadId.startsWith('fb-event-')) {
+              content = `${content}: ${msg.thread_title}${this._skipSystemMessages ? '' : ` (${dateStr})`}`;
+            } else if (content === 'Post' || !content) {
+              content = `${msg.thread_title}${this._skipSystemMessages ? '' : ` (${dateStr})`}`;
+            } else {
+              content = `${content}${this._skipSystemMessages ? '' : ` (${dateStr})`}`;
+            }
+          } else {
+            content = `${content}${this._skipSystemMessages ? '' : ` (${dateStr})`}`;
+          }
+
+          if (!isEvent && chatBuilder && !this._skipSystemMessages) {
+            const userPrompt =
+              threadId === 'fb-post-all' ? 'Share a post from your wall.' : 'Update us on your event activity.';
+            chatBuilder.addMessage(userPrompt, 'user', 'User', msg.timestamp_ms);
           }
         }
 
-        if (!merged) {
-          currentSession.push({ role, content });
+        // KNOWLEDGE MODE: Events go to history.md
+        if (isEvent && historyBuilder) {
+          historyBuilder.addLine(cleanedContent, msg.timestamp_ms, platform, msg.thread_title);
+          continue;
         }
 
-        // Impute Reactions
-        if (this._imputeReactions && msg.reactions_json) {
-          const reactionReply = this._getReactionReply(msg.reactions_json, identityNames);
-          if (reactionReply && !isMe) {
-            currentSession.push({ role: 'assistant', content: reactionReply });
+        // Gmail path
+        if (platform === 'google_mail') {
+          if (role === 'user') {
+            emailBuilder!.addInbound(content, msg.sender_name);
+          } else {
+            const pair = emailBuilder!.addOutbound(content);
+            if (pair) {
+              let session: DatasetEntry;
+              if (this._skipSystemMessages) {
+                const dateHeader = new Date(msg.timestamp_ms).toLocaleDateString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                  year: 'numeric',
+                });
+                const header = `[Gmail · ${dateHeader}]`;
+                const combined = pair
+                  .map((m: Msg) => (m.role === 'assistant' ? m.content : `[Sender]: ${m.content}`))
+                  .join('\n');
+                session = { messages: [{ role: 'assistant', content: `${header}\n${combined}` }] };
+              } else {
+                session = { messages: [systemMsg, ...pair] };
+              }
+              yield* this._emitSession(session, batchState);
+            }
+          }
+          continue;
+        }
+
+        // Chat path
+        if (chatBuilder) {
+          const session = chatBuilder.addMessage(content, role, msg.sender_name, msg.timestamp_ms, msg.reactions_json);
+          if (session) {
+            yield* this._emitSession(session, batchState);
           }
         }
       }
 
-      yield* this._finalizeSession(currentSession, systemMsg, batchState);
+      if (chatBuilder) {
+        const session = chatBuilder.finalize();
+        if (session) {
+          yield* this._emitSession(session, batchState);
+        }
+      }
     }
 
-    // Yield remainder
+    // Yield Remainder JSONL
     if (batchState.sessions.length > 0) {
       const content = batchState.sessions.map((s) => JSON.stringify(s)).join('\n');
-      yield { fileName: `virtual_me_part${batchState.fileIndex}.jsonl`, content, tokenCount: batchState.tokens };
+      const suffix = batchState.fileIndex === 1 ? '' : `.part${batchState.fileIndex}`;
+      yield { fileName: `${this._datasetName}${suffix}.jsonl`, content, tokenCount: batchState.tokens };
     }
+
+    // Yield Final Markdown History (Events)
+    if (historyBuilder) {
+      const mdContent = historyBuilder.finalize();
+      if (mdContent) {
+        yield {
+          fileName: `${this._datasetName}-history.md`,
+          content: mdContent,
+          tokenCount: this._encoder.encode(mdContent).length,
+        };
+      }
+    }
+  }
+
+  private _buildSystemMessage(identityNames: string[], title: string, contextType: string, platform: string): string {
+    const names = identityNames.join(', ');
+    let base = `You are ${names}. This is a ${contextType} from ${platform}`;
+    if (title && title !== 'Unknown') {
+      base += ` titled "${title}"`;
+    }
+    base += ". Speak naturally in the user's style.";
+    if (this._personaTag) {
+      base += ` Context: ${this._personaTag}`;
+    }
+    if (this._customInstructions) {
+      base += ` Instructions: ${this._customInstructions}`;
+    }
+    return base;
   }
 
   private _isSystemMessage(content: string): boolean {
@@ -193,96 +360,98 @@ export class DatasetGenerator {
       /^.* changed the theme to .*$/i,
       /^You missed a call from .*$/i,
       /^You called .*$/i,
+      /^.* shared a link\.$/i,
+      /^.* updated (his|her|their) status\.$/i,
+      /^.* is interested in an event: .*$/i,
+      /^.* joined the event: .*$/i,
+      /^.* created the event: .*$/i,
     ];
     return patterns.some((regex) => regex.test(content));
   }
 
-  private _cleanContent(msg: ContentRecord): string | null {
+  private _cleanContent(msg: ContentRecord, platform?: string, opts: { isPost?: boolean } = {}): string | null {
     let content = msg.content || '';
-
     if (content === 'MMS Sent') {
       return null;
     }
     if (content === 'You sent an attachment.' || content.endsWith(' sent an attachment.')) {
+      if (opts.isPost || this._skipSystemMessages) {
+        return null;
+      }
       content = '[Sent an attachment]';
     }
-
+    if (containsHtmlOrEntities(content)) {
+      content = decodeHtmlEntities(stripHtml(content));
+    }
     if (!content) {
       if (msg.media_json && msg.media_json !== '[]') {
+        if (opts.isPost || this._skipSystemMessages) {
+          return null;
+        }
         content = '[Sent a photo/video]';
       } else {
         return null;
       }
     }
-
     const urlOnlyRegex = /^(https?:\/\/[^\s]+)\s*$/i;
-    if (urlOnlyRegex.test(content)) {
+    if (urlOnlyRegex.test(content) && platform !== 'google_mail') {
       return null;
     }
 
-    if (this._redactPII) {
-      const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g;
-      const phoneRegex = /\b\+?1?\s*\(?-?\d{3}\)?\s*-?\d{3}\s*-?\d{4}\b/g;
-      content = content.replace(emailRegex, '[REDACTED_EMAIL]').replace(phoneRegex, '[REDACTED_PHONE]');
+    const lowSignalLabels = ['Joined Event', 'Interested in Event', 'Created Event'];
+    const isEventLabel = lowSignalLabels.includes(content.trim());
+    if ((content.trim() === 'Post' || isEventLabel) && (!msg.media_json || msg.media_json === '[]')) {
+      if (this._skipSystemMessages && isEventLabel) {
+      } else {
+        return null;
+      }
     }
 
+    if (platform !== 'google_mail' && content.trim().length < 2) {
+      return null;
+    }
+    if (opts.isPost) {
+      const birthdayHeuristic = /^(happy birthday|hbd|happy bday|feliz cumple)/i;
+      if (birthdayHeuristic.test(content.trim()) && content.trim().length < 20) {
+        return null;
+      }
+    }
+    if (this._redactPII) {
+      content = redactPII(content);
+    }
     return content;
   }
 
-  private _getReactionReply(reactionsJson: string, identityNames: string[]): string | null {
-    try {
-      const reactions = JSON.parse(reactionsJson);
-      if (Array.isArray(reactions)) {
-        const myReaction = reactions.find((r) => identityNames.includes(r.actor));
-        if (myReaction) {
-          return `[Reacted "${myReaction.reaction}"]`;
-        }
-      }
-    } catch {
-      // Ignore
-    }
-    return null;
+  private *_emitSession(
+    session: DatasetEntry,
+    state: BatchState,
+  ): Generator<{ fileName: string; content: string; tokenCount: number }> {
+    yield* this._emitRawRecord(session, state);
   }
 
-  private *_finalizeSession(
-    sessionRaw: { role: 'system' | 'user' | 'assistant'; content: string }[],
-    systemMsg: { role: 'system'; content: string },
+  private *_emitRawRecord(
+    record: DatasetEntry,
     state: BatchState,
-  ) {
-    if (sessionRaw.length === 0) {
-      return;
-    }
-
-    let validEndIndex = sessionRaw.length - 1;
-    while (validEndIndex >= 0 && sessionRaw[validEndIndex].role !== 'assistant') {
-      validEndIndex--;
-    }
-
-    if (validEndIndex < 0) {
-      return;
-    }
-
-    const finalSession = sessionRaw.slice(0, validEndIndex + 1);
-    const sessionData: DatasetEntry = {
-      messages: [systemMsg, ...finalSession],
-    };
-
-    let tokens = 3; // Reply overhead
-    for (const m of sessionData.messages) {
-      tokens += 4; // per-message overhead
-      tokens += this._encoder.encode(m.content).length;
-      tokens += this._encoder.encode(m.role).length;
+  ): Generator<{ fileName: string; content: string; tokenCount: number }> {
+    const json = JSON.stringify(record);
+    let tokens = 0;
+    if (record.messages) {
+      tokens = 3;
+      for (const m of record.messages) {
+        tokens += 4 + this._encoder.encode(m.content).length + this._encoder.encode(m.role).length;
+      }
+    } else {
+      tokens = this._encoder.encode(json).length;
     }
 
     if (state.tokens + tokens > this._maxTokensPerFile) {
       const content = state.sessions.map((s) => JSON.stringify(s)).join('\n');
-      yield { fileName: `virtual_me_part${state.fileIndex}.jsonl`, content, tokenCount: state.tokens };
+      yield { fileName: `${this._datasetName}.part${state.fileIndex}.jsonl`, content, tokenCount: state.tokens };
       state.fileIndex++;
       state.sessions = [];
       state.tokens = 0;
     }
-
-    state.sessions.push(sessionData);
+    state.sessions.push(record);
     state.tokens += tokens;
   }
 }

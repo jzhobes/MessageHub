@@ -1,5 +1,6 @@
 import db from '@/lib/server/db';
 import { getMyNames } from '@/lib/server/identity';
+import { inferThreadTitle } from '@/lib/server/threadUtils';
 import { getPlatformDbValue } from '@/lib/shared/platforms';
 
 import type { NextApiRequest, NextApiResponse } from 'next';
@@ -90,18 +91,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const threads = rows.map((row) => {
       const participants = JSON.parse(row.participants_json || '[]');
-      let title = row.title;
-
-      // Fallback title generation with filtering
-      if (!title || title.trim() === '') {
-        const others = participants.filter((p: string) => !myNames.includes(p));
-        if (others.length === 0) {
-          // Talking to self or only me in list
-          title = `${myNames[0] || 'Me'} (You)`;
-        } else {
-          title = others.join(', ');
-        }
-      }
+      const title = inferThreadTitle(row.title, participants, myNames);
 
       return {
         id: row.id,

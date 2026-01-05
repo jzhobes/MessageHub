@@ -1,159 +1,66 @@
 # MessageHub
 
-MessageHub is a unified **fully local** viewer for your personal content archives. It aggregates and displays history from **Facebook**, **Instagram**, **Google Chat**, **Google Voice**, and **Gmail** exports in a single hub, ensuring your sensitive data never leaves your machine.
+**MessageHub** is a unified, fully local viewer for personal communication archives. It consolidates message history from Facebook, Instagram, Google Chat, Google Voice, and Gmail into a single, searchable interface without uploading or syncing data to the cloud.
 
-It also features **DataForge AI**, a built-in studio for curating high-quality datasets to fine-tune Large Language Models (LLMs) on your authentic voice.
-
-## Features
-
-- **Integrated setup wizard:** Automatically configure your workspace, import archives, and build your database with zero command-line interaction.
-- **Unified dashboard:** Toggle between Facebook, Instagram, Google Chat, Google Voice, and Gmail content history.
-- **Facebook social activity:** View your Facebook **Events**, **Posts**, and **Check-ins** formatted as native timeline events, separate from private messages.
-- **Global search:** Search all archives with support for **glob-like syntax** in queries and **selection filtering**. Click any result to **jump** to that item in its original context.
-- **Rich URL previews:** Instant metadata generation for links (title, description, image) from **Reddit**, **Instagram**, and **Facebook**, including a custom proxy to resolve gated Facebook "lookaside" images.
-- **Smart ingestion:** Automatically handles duplicate content across overlapping exports and supports incremental updates.
-- **DataForge AI Studio:** Select specific threads, filter system noise, and generate formatted JSONL datasets for OpenAI fine-tuning.
-- **Privacy by design:** Everything—from indexing to AI dataset generation—happens locally inside your workspace. No data is uploaded to any cloud service.
+MessageHub also includes **DataForge AI**, a dataset curation studio designed to prepare high-quality training data for fine-tuning language models on an individual’s authentic voice, while keeping all data strictly offline.
 
 ---
 
-## 🚀 Quick Start (Run & Setup)
+## 🏁 Getting Started
 
-Run the start script to automatically initialize the environment, build the application, and launch the **setup wizard**.
+### Requirements
 
-**Mac / Linux / WSL** (Windows requires WSL):
+- Node.js 20+
+- Python 3.10+
+- macOS, Linux, or WSL
+  > **Note for non-developers:**  
+  > In practice, this means installing **Node.js** on macOS, or installing **Linux (Ubuntu recommended)** on Windows and then installing Node.js there.  
+  > Python is already included on most macOS and Linux systems.
+
+### Quick Start
+
+Run the startup script to initialize the environment and launch the guided setup wizard.
 
 ```bash
 ./start.sh
 ```
 
-- **To Stop**: Press `Ctrl+C` in your terminal to shut down the server.
-- _Note: The first run includes an automated production build; subsequent starts are significantly faster._
+**Stopping the App**
+
+- Press `Command+C` / `Ctrl+C` in the terminal running the process.
 
 ---
 
-## 🛠 Setup & Workflow
+## 📦 Data Export & Import
 
-### 1. Requirements & Troubleshooting
+MessageHub ingests data from official platform exports. All data should be exported in **JSON** format where available.
 
-Before running the start script, ensure you have:
+Supported export sources:
 
-- **Node.js 20+**
-- **Python 3.10+**
-- **Supported Environments**: Mac, Linux, and **WSL**. (Native Windows CMD/PowerShell is not supported).
+- **Facebook** & **Instagram** — Select **Messages** and **Profile Information**. (Posts and Events are optional but supported for Facebook). Format must be **JSON**.
+  [Download Your Information](https://accountscenter.facebook.com/info_and_permissions/dyi)
+- **Google Takeout** — Select **Chat**, **Voice**, and **Mail** (ensure the **Sent** folder is included).
+  [Google Takeout](https://takeout.google.com/)
 
-#### Troubleshooting
-
-- **Linux/WSL users**: If the script fails to create a virtual environment, run: `sudo apt install python3-venv`.
-- **"Module did not self-register"**: If you change Node versions or upgrade your OS, run: `cd webapp && npm rebuild better-sqlite3`.
-- **SQLite "trigram" error**: Ensure your system SQLite is 3.34+ (Ubuntu 22.04+).
-
-### 2. Exporting Your Data
-
-> [!IMPORTANT] > **Profile Information:** You **must** include your Profile/Personal information in your exports. Without this, MessageHub cannot differentiate between your own messages and those of other senders.
-
-#### Facebook
-
-1.  Go to [**Accounts Center** > **Export your information**](https://accountscenter.facebook.com/info_and_permissions/dyi).
-2.  **Create export** > **Facebook** > **Export to device**.
-3.  **Customize information**: Select **Messages** and **Profile information** (**REQUIRED** for identity detection).
-4.  **Format**: **JSON**.
-
-#### Instagram
-
-1.  Go to [**Accounts Center** > **Export your information**](https://accountscenter.facebook.com/info_and_permissions/dyi).
-2.  **Create export** > **Instagram** > **Export to device**.
-3.  **Customize information**: Select **Messages** and **Personal information** (**REQUIRED** for identity detection).
-4.  **Format**: **JSON**.
-
-#### Google (Chat, Voice, Gmail)
-
-1.  Go to [Google Takeout](https://takeout.google.com/).
-2.  Select **Google Chat**, **Voice**, and **Mail**.
-3.  For **Mail**: Ensure the **"Sent"** folder is included.
-4.  **Format**: Both **.zip** and **.tgz** are supported.
-
-> [!TIP] > **Incremental Exports**: MessageHub automatically handles duplicate messages, so it is safe to import overlapping date ranges.
-
-### 3. Setup Wizard Flow
-
-1.  **Welcome**: Click **"Get Started"** on the splash screen.
-2.  **Workspace**: Select the folder where your database and settings will live.
-3.  **Import**: Select your exported `.zip` / `.tar.gz` files using the in-app file explorer to stage them.
-4.  **Confirm & Process**: MessageHub handles extraction, merging, and indexing automatically.
-5.  **Review**: Once complete, enter your dashboard to search and browse your content history.
+> [!TIP]
+> Including _Profile Information_ is critical. This allows MessageHub to reliably distinguish your own messages from other participants during analysis.
 
 ---
 
-## 🤖 DataForge AI (Fine-Tuning Studio)
+## 🔧 Maintenance & Utilities
 
-Create **"Virtual You"** datasets for training AI models from your local message history.
+Run the following commands from the `webapp/` directory:
 
-1.  **Enter the Studio**: Click the **Robot Icon (🤖)** in the top header.
-2.  **Filter & Select**: Choose threads that represent your best writing. You can filter by platform to help find specific conversations.
-3.  **Analyze Your Style (Optional)**: Click the **"Analyze Style"** button inside the Persona field. This uses **Transformers.js** to run a local AI model (MobileBERT) in your browser that scans your messages and suggests persona tags (e.g., _Professional_, _Casual_, _Concise_).
-4.  **Configure Strategy**:
-    - **Identity**: Specify all names you use across different platforms so the system can identify "You".
-    - **Cleanup**: Auto-filter platform noise (e.g., "You missed a call").
-    - **Redact PII**: Scrub emails and phone numbers from the dataset.
-    - **Impute Reactions**: Convert your reactions (👍, ❤️) into conversational turns to thicken your training data.
-5.  **Live Preview**: Click **"Preview"** to see an instant sample of your generated data. This lets you verify your persona tags and PII redaction rules before initiating a full export.
-6.  **Generate**: MessageHub produces a `.zip` containing optimized `.jsonl` files ready for OpenAI fine-tuning.
+- `npm run validate`
+  Runs linting, formatting, and type checks.
+- `npm run clean:all`
+  Performs a full reset by deleting the local database and Python virtual environment.
 
 ---
 
-## 🔧 Maintenance & Advanced Usage
+## 🧩 Architecture Overview
 
-### Maintenance Scripts (from `webapp/`)
-
-- `npm run validate`: Runs linting (with auto-fix), formatting, type-checking, and tests.
-- `npm run clean`: Deletes the `.next` production build to force a fresh build.
-- `npm run clean:all`: Factory reset. Deletes build, `venv`, and `data_samples`.
-
-### Manual Ingestion (CLI)
-
-Ensure `WORKSPACE_PATH` is set in your `.env`, then run:
-
-```bash
-./venv/bin/python3 scripts/ingest.py
-```
-
-### Development & Testing
-
-Build a sample workspace using the **"Golden Archives"**:
-
-```bash
-./build_samples.sh
-```
-
----
-
-## 📝 Technical Overview
-
-### Project Structure
-
-```
-MessageHub/
-├── data/                  # Default workspace location
-├── scripts/               # Python processing scripts (Parsers & Ingestion)
-├── webapp/                # Next.js frontend application
-└── README.md
-```
-
-### Technical Details
-
-- **Interface:** Next.js 16, React 19, Vanilla CSS.
-- **Modern Web Platform:** Leverages **CSS Anchor Positioning**, **Popover API**, **Native CSS Nesting**, and **@starting-style** for high-performance, native-feeling interactions.
-- **Database:** SQLite with **FTS5 Trigram** indexing for sub-second global search. Everything is stored in an encrypted-at-rest-ready local `.db` file.
-- **Ingestion:** Python 3.10+ (high-speed parsers with SQLite WAL mode). Processing is 100% offline.
-
-### Configuration (.env)
-
-Managed automatically by the **Setup Wizard**.
-
-```bash
-WORKSPACE_PATH="/path/to/your/data"
-ROOT_IMPORT_PATH="/Users/yourname"
-ROOT_WORKSPACE_PATH="/Users/yourname"
-INSTAGRAM_AUTH={"sessionid":"...","csrftoken":"..."}
-```
+- **Next.js / React** - Local web interface and application server
+- **Python** - High-throughput data ingestion and preprocessing
+- **SQLite** - Embedded database with full-text search
+- **Transformers.js** - In-browser AI for persona and language analysis

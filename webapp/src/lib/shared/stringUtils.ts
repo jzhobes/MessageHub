@@ -22,18 +22,38 @@ export const stripHtml = (html: string): string => {
   }
   return (
     html
+      // Remove style/script entirely
       .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, ' ')
       .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, ' ')
-      // Complete tags: < then letter, /, or !
+      // Convert block breaks to newlines to preserve structure
+      .replace(/<(br|p|div|li|tr|h[1-6])[^>]*>/gi, '\n')
+      // Strip all other tags
       .replace(/<[a-z!/][^>]*>/gi, ' ')
-      // Partial tag at start (e.g. "class='foo'>") - only if it ends with >
-      // and doesn't contain a start < (heuristic for "is a tag residue")
+      // Partial tag residues
       .replace(/^[^<]*>/, (match) => (match.includes('<') ? match : ' '))
-      // Partial tag at end (e.g. "<div class='foo") - only if it starts with <tag
       .replace(/<[a-z!/][^>]*$/gi, ' ')
-      .replace(/\s+/g, ' ')
+      // Collapse horizontal whitespace but preserve newlines
+      .replace(/[ \t]+/g, ' ')
+      .replace(/[ \t]*\n[ \t]*/g, '\n')
+      .replace(/\n+/g, '\n')
       .trim()
   );
+};
+
+/**
+ * Heuristic check to see if a string likely contains HTML tags or entities.
+ * Used to avoid running heavy strip/decode logic on plain text.
+ */
+export const containsHtmlOrEntities = (str: string): boolean => {
+  return /<[a-z!/][^>]*>/i.test(str) || /&([a-z0-9]+|#[0-9]+|#x[0-9a-f]+);/i.test(str);
+};
+
+/**
+ * Removes URLs from a string.
+ */
+export const stripUrls = (str: string): string => {
+  const urlRegex = /https?:\/\/[^\s]+/gi;
+  return str.replace(urlRegex, ' ').replace(/\s+/g, ' ').trim();
 };
 
 /**

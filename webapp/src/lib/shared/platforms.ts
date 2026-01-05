@@ -1,10 +1,9 @@
 export const PlatformMap: Record<string, string> = {
-  // DB Value -> Display Label
-  google_voice: 'Google Voice',
-  google_chat: 'Google Chat',
-  google_mail: 'Gmail',
   facebook: 'Facebook',
   instagram: 'Instagram',
+  google_chat: 'Google Chat',
+  google_voice: 'Google Voice',
+  google_mail: 'Gmail',
 };
 
 export const ReversePlatformMap: Record<string, string> = Object.entries(PlatformMap).reduce(

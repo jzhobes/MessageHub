@@ -12,23 +12,6 @@ import { ContentRecord, QuotedMessageMetadata, Thread } from '@/lib/shared/types
 
 import styles from './ThreadContent.module.css';
 
-interface ThreadContentProps {
-  activeThread: Thread | null;
-  messages: ContentRecord[] | null;
-  loading: boolean;
-  hasMoreOld: boolean;
-  hasMoreNew: boolean;
-  pageRange: { min: number; max: number };
-  targetMessageId: string | null;
-  targetTimestamp?: number | null;
-  highlightToken: number;
-  initializing?: boolean;
-  hideHeader?: boolean;
-  onStartReached: () => void;
-  onEndReached: () => void;
-  onPageChange?: (page: number) => void;
-}
-
 const START_INDEX = 10000;
 
 // Thread Header Dropdown Component
@@ -112,10 +95,10 @@ interface ThreadContentProps {
   highlightToken: number;
   initializing?: boolean;
   hideHeader?: boolean;
+  showMedia?: boolean;
   onStartReached: () => void;
   onEndReached: () => void;
   onPageChange?: (page: number) => void;
-  showMedia?: boolean;
   onShowMediaChange?: (show: boolean) => void;
 }
 
@@ -131,10 +114,10 @@ export default function ThreadContent({
   highlightToken,
   initializing,
   hideHeader,
+  showMedia,
   onStartReached,
   onEndReached,
   onPageChange,
-  showMedia,
   onShowMediaChange,
 }: ThreadContentProps) {
   // Refs

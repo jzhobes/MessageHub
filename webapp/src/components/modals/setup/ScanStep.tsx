@@ -15,11 +15,11 @@ interface ScanStepProps {
   status: string;
   error: string | null;
   remoteFiles: string[];
+  activeTransfers?: Record<string, ArchiveProgress>;
   runInstall: () => void;
   onGoToImport: () => void;
   onFinish: () => void;
   onQueueUpdate?: (hasItems: boolean) => void;
-  activeTransfers?: Record<string, ArchiveProgress>;
 }
 
 export default function ScanStep({
@@ -31,11 +31,11 @@ export default function ScanStep({
   status,
   error,
   remoteFiles,
+  activeTransfers = {},
   runInstall,
   onGoToImport,
   onFinish,
   onQueueUpdate,
-  activeTransfers = {},
 }: ScanStepProps) {
   const logsEndRef = useRef<HTMLDivElement>(null);
   const [existingArchives, setExistingArchives] = useState<string[]>([]);

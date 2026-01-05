@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 
+import { getPlatformLabel } from '@/lib/shared/platforms';
 import { ContentRecord, Thread } from '@/lib/shared/types';
 import ThreadContent from '@/sections/ThreadContent';
 
@@ -135,7 +136,7 @@ export default function ThreadPreviewModal({ isOpen, thread, onClose, onAfterClo
           {thread?.title || 'Thread Preview'}
         </h2>
         <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
-          {thread?.platform && <span>{thread.platform} </span>}
+          {thread?.platform && <span>{getPlatformLabel(thread.platform)} </span>}
           <span style={{ opacity: 0.7 }}>
             • Page {visiblePage?.toLocaleString()} of {totalPages.toLocaleString()}
           </span>

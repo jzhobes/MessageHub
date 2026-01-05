@@ -7,6 +7,7 @@ import archiver from 'archiver';
 
 import { jobStore } from '@/lib/jobStore';
 import { DatasetGenerator } from '@/lib/server/DatasetGenerator';
+import db from '@/lib/server/db';
 
 import type { NextApiRequest, NextApiResponse } from 'next';
 
@@ -34,8 +35,13 @@ interface GenerateDatasetBody {
   removeSystemMessages?: boolean;
   imputeReactions?: boolean;
   redactPII?: boolean;
+  maxTokensPerSession?: number;
+  maxTokensPerFile?: number;
+  splitDataset?: boolean;
   personaTag?: string;
   customInstructions?: string;
+  skipSystemMessages?: boolean;
+  datasetName?: string;
   dateRange?: { start: number; end: number };
 }
 
@@ -47,16 +53,27 @@ async function processJob(jobId: string, body: GenerateDatasetBody) {
 
     const {
       threadIds,
-      identityNames,
+      identityNames: uiNames,
       includeGroupSpeakerNames,
       mergeSequential,
       removeSystemMessages,
       imputeReactions,
       redactPII,
+      maxTokensPerSession,
+      maxTokensPerFile,
+      splitDataset,
       personaTag,
       customInstructions,
+      skipSystemMessages,
+      datasetName,
       dateRange,
     } = body;
+
+    // FAIL-SAFE: Automatically fetch all known identity names/emails from DB
+    // to ensure 'isMe' logic works even if UI config is incomplete.
+    const { getMyNames } = await import('@/lib/server/identity');
+    const dbNames = await getMyNames();
+    const identityNames = [...new Set([...uiNames, ...dbNames])];
 
     // Prepare Output Stream
     const tmpDir = os.tmpdir();
@@ -83,9 +100,15 @@ async function processJob(jobId: string, body: GenerateDatasetBody) {
       removeSystemMessages: !!removeSystemMessages,
       imputeReactions: !!imputeReactions,
       redactPII: !!redactPII,
+      maxTokensPerSession: maxTokensPerSession || Infinity,
+      maxTokensPerFile: maxTokensPerFile || (splitDataset ? 1900000 : Number.MAX_SAFE_INTEGER),
       personaTag: personaTag || undefined,
       customInstructions: customInstructions || undefined,
+      skipSystemMessages: !!skipSystemMessages,
+      datasetName: datasetName || undefined,
     });
+
+    generator.setDb(db.get());
 
     // Pass progress callback
     const generatorStream = generator.generateStream(threadIds, identityNames, dateRange, (current, total) => {

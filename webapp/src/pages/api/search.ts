@@ -60,14 +60,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           const titleLikes = isStartOfWord
             ? `(t.title LIKE ? ESCAPE '\\' OR t.title LIKE ? ESCAPE '\\')`
             : `t.title LIKE ? ESCAPE '\\'`;
+          const senderLikes = isStartOfWord
+            ? `(m.sender_name LIKE ? ESCAPE '\\' OR m.sender_name LIKE ? ESCAPE '\\')`
+            : `m.sender_name LIKE ? ESCAPE '\\'`;
 
-          acc.likeConditions.push(`(${contentLikes} OR ${titleLikes})`);
+          acc.likeConditions.push(`(${contentLikes} OR ${titleLikes} OR ${senderLikes})`);
 
           if (isStartOfWord) {
             acc.likeParams.push(`${sqlPattern}%`, ` ${sqlPattern}%`, `\\n${sqlPattern}%`); // content
             acc.likeParams.push(`${sqlPattern}%`, ` ${sqlPattern}%`); // title
+            acc.likeParams.push(`${sqlPattern}%`, ` ${sqlPattern}%`); // sender
           } else {
-            acc.likeParams.push(`%${sqlPattern}%`, `%${sqlPattern}%`);
+            acc.likeParams.push(`%${sqlPattern}%`, `%${sqlPattern}%`, `%${sqlPattern}%`);
           }
           return acc;
         },
@@ -113,11 +117,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Construct combined where clause
     const matchAnyTitlePattern = `%${queryStr.replace(/[%_\\\\]/g, '\\\\$&')}%`;
 
-    // We search across BOTH content and thread title
+    // We search across BOTH content and thread title + sender
     // FTS MATCH cannot be easily used with OR in joined queries, so we use a subquery for the ID match
     const ftsCondition = ftsMatch
-      ? `(m.id IN (SELECT rowid FROM content_fts WHERE content_fts MATCH ?) OR t.title LIKE ? ESCAPE '\\')`
-      : `t.title LIKE ? ESCAPE '\\'`;
+      ? `(m.id IN (SELECT rowid FROM content_fts WHERE content_fts MATCH ?) OR t.title LIKE ? ESCAPE '\\' OR m.sender_name LIKE ? ESCAPE '\\')`
+      : `(t.title LIKE ? ESCAPE '\\' OR m.sender_name LIKE ? ESCAPE '\\')`;
 
     // Combine FTS and LIKE conditions with OR (not AND!)
     const searchConditions = [ftsCondition, ...likeConditions].filter(Boolean);
@@ -149,7 +153,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       ${whereConditions.length > 0 ? 'WHERE ' + whereConditions.join(' AND ') : ''}
     `;
 
-    const ftsParams = ftsMatch ? [ftsMatch, matchAnyTitlePattern] : [matchAnyTitlePattern];
+    const ftsParams = ftsMatch
+      ? [ftsMatch, matchAnyTitlePattern, matchAnyTitlePattern]
+      : [matchAnyTitlePattern, matchAnyTitlePattern];
     const baseParams = [...ftsParams, ...likeParams, ...validThreadIds];
     const finalParams = [...baseParams, ...validDbPlatforms, ...validCategories];
 

@@ -51,6 +51,7 @@ export interface ContentRecord {
   // DB Fields (used in DatasetGenerator/Ingestion)
   media_json?: string;
   reactions_json?: string;
+  thread_title?: string;
 }
 
 export interface Thread {
@@ -65,6 +66,7 @@ export interface Thread {
   platform?: string;
   platform_source?: string;
   is_group?: boolean;
+  type?: 'message' | 'post' | 'event';
 
   // Studio / Extended Stats
   messageCount?: number;

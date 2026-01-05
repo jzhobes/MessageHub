@@ -21,16 +21,16 @@ const IMPORT_ITEM_FILTERS = [
 
 interface ImportStepProps {
   isFirstRun?: boolean;
-  setRemoteFiles: (files: string[], totalSize: number) => void;
   transferMode: 'copy' | 'move';
+  setRemoteFiles: (files: string[], totalSize: number) => void;
   setTransferMode: (m: 'copy' | 'move') => void;
   onConfirm?: () => void;
 }
 
 export default function ImportStep({
   isFirstRun,
-  setRemoteFiles,
   transferMode,
+  setRemoteFiles,
   setTransferMode,
   onConfirm,
 }: ImportStepProps) {
