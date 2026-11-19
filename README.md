@@ -37,9 +37,9 @@ MessageHub ingests data from official platform exports. All data should be expor
 
 Supported export sources:
 
-- **Facebook** & **Instagram** — Select **Messages** and **Profile Information**. (Posts and Events are optional but supported for Facebook). Format must be **JSON**.
+- **Facebook** & **Instagram**: Select **Messages** and **Profile Information**. (Posts and Events are optional but supported for Facebook). Format must be **JSON**.
   [Download Your Information](https://accountscenter.facebook.com/info_and_permissions/dyi)
-- **Google Takeout** — Select **Chat**, **Voice**, and **Mail** (ensure the **Sent** folder is included).
+- **Google Takeout**: Select **Chat**, **Voice**, and **Mail** (ensure the **Sent** folder is included).
   [Google Takeout](https://takeout.google.com/)
 
 > [!TIP]
@@ -63,7 +63,7 @@ INSTAGRAM_AUTH='{"sessionid":"...","csrftoken":"..."}'
 INSTAGRAM_AUTH="sessionid=...; csrftoken=..."
 ```
 
-`.env` is loaded at startup, so restart `./start.sh` after editing `.env`—startup logs will indicate whether the credentials appear valid.
+`.env` is loaded at startup, so restart `./start.sh` after editing `.env`; startup logs will indicate whether the credentials appear valid.
 
 ---
 

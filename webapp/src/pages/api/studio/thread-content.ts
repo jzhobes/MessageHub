@@ -6,7 +6,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 
 /**
  * Batch-fetches cleaned, URL-stripped message samples (`POST`) keyed by thread ID for client-side
- * persona classification — up to 15 user messages per real thread and up to 20 context-prefixed items
+ * persona classification: up to 15 user messages per real thread and up to 20 context-prefixed items
  * for virtual Facebook post/event IDs.
  */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {

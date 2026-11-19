@@ -1,21 +1,159 @@
+import { formatDateKey } from '@/lib/server/dataset/builders/MarkdownExportBuilder';
 import db from '@/lib/server/db';
 
 import type { NextApiRequest, NextApiResponse } from 'next';
 
+const PAGE_SIZE = 100; // Must match api/content.ts
+
 /**
- * Resolves a `messageId` into its navigation target (`threadId`, `platform`, `page`, `timestamp`,
- * `category`) by computing its 1-based descending rank using `PAGE_SIZE = 100` (must match
- * `/api/content`). Maps Facebook post, check-in, and event records to their virtual aggregated thread
- * IDs and distinct-timestamp rankings.
+ * Resolves either:
+ * - `?messageId=...` into its navigation target (`threadId`, `platform`, `page`, `timestamp`, `category`), or
+ * - `?threadId=...&date=YYYY-MM-DD[&timeZone=...]` into the page containing the first message on that
+ *   local calendar day (or the nearest active day in that thread).
  */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const { messageId } = req.query;
+  const { messageId, threadId: queryThreadId, date: queryDate, timeZone: queryTimeZone } = req.query;
+
+  const dbInstance = db.get();
+
+  // Mode B: Jump by threadId + date (YYYY-MM-DD)
+  if (!messageId && queryThreadId && queryDate) {
+    const tid = Array.isArray(queryThreadId) ? queryThreadId[0] : queryThreadId;
+    const dateStr = Array.isArray(queryDate) ? queryDate[0] : queryDate;
+    const tz = Array.isArray(queryTimeZone) ? queryTimeZone[0] : queryTimeZone;
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      return res.status(400).json({ error: 'Invalid date format. Expected YYYY-MM-DD.' });
+    }
+
+    try {
+      const approxCenterMs = Date.parse(`${dateStr}T12:00:00Z`);
+      const windowStart = approxCenterMs - 36 * 60 * 60 * 1000;
+      const windowEnd = approxCenterMs + 36 * 60 * 60 * 1000;
+
+      interface JumpRow {
+        id: number;
+        timestamp_ms: number;
+      }
+
+      let target: JumpRow | undefined;
+
+      if (tid === 'fb-post-all') {
+        const candidates = dbInstance
+          .prepare(
+            `
+          SELECT c.id, c.timestamp_ms
+          FROM content c
+          INNER JOIN thread_labels tl ON c.thread_id = tl.thread_id
+          WHERE tl.label = 'post' AND c.timestamp_ms BETWEEN ? AND ?
+          ORDER BY c.timestamp_ms ASC
+        `,
+          )
+          .all(windowStart, windowEnd) as JumpRow[];
+
+        target = candidates.find((c) => formatDateKey(c.timestamp_ms, tz) === dateStr);
+        if (!target) {
+          target = dbInstance
+            .prepare(
+              `
+            SELECT c.id, c.timestamp_ms
+            FROM content c
+            INNER JOIN thread_labels tl ON c.thread_id = tl.thread_id
+            WHERE tl.label = 'post'
+            ORDER BY ABS(c.timestamp_ms - ?) ASC
+            LIMIT 1
+          `,
+            )
+            .get(approxCenterMs) as JumpRow | undefined;
+        }
+        if (!target) {
+          return res.status(404).json({ error: 'No messages found in thread' });
+        }
+
+        const postRow = dbInstance
+          .prepare(
+            `
+          SELECT COUNT(DISTINCT timestamp_ms) as count
+          FROM content c
+          INNER JOIN thread_labels tl ON c.thread_id = tl.thread_id
+          WHERE tl.label = 'post' AND c.timestamp_ms > ?
+        `,
+          )
+          .get(target.timestamp_ms) as { count: number };
+
+        const page = Math.ceil((postRow.count + 1) / PAGE_SIZE);
+        return res.status(200).json({
+          threadId: tid,
+          platform: 'facebook',
+          page,
+          timestamp: target.timestamp_ms,
+          messageId: target.id,
+          matchedDate: formatDateKey(target.timestamp_ms, tz),
+        });
+      }
+
+      const candidates = dbInstance
+        .prepare(
+          `
+        SELECT id, timestamp_ms
+        FROM content
+        WHERE thread_id = ? AND timestamp_ms BETWEEN ? AND ?
+        ORDER BY timestamp_ms ASC, id ASC
+      `,
+        )
+        .all(tid, windowStart, windowEnd) as JumpRow[];
+
+      target = candidates.find((c) => formatDateKey(c.timestamp_ms, tz) === dateStr);
+      if (!target) {
+        target = dbInstance
+          .prepare(
+            `
+          SELECT id, timestamp_ms
+          FROM content
+          WHERE thread_id = ?
+          ORDER BY ABS(timestamp_ms - ?) ASC
+          LIMIT 1
+        `,
+          )
+          .get(tid, approxCenterMs) as JumpRow | undefined;
+      }
+
+      if (!target) {
+        return res.status(404).json({ error: 'No messages found in thread' });
+      }
+
+      const countRow = dbInstance
+        .prepare(
+          `
+        SELECT COUNT(*) as count
+        FROM content
+        WHERE thread_id = ?
+        AND (timestamp_ms > ? OR (timestamp_ms = ? AND id > ?))
+      `,
+        )
+        .get(tid, target.timestamp_ms, target.timestamp_ms, target.id) as { count: number };
+
+      const threadRow = dbInstance.prepare('SELECT platform FROM threads WHERE id = ?').get(tid) as
+        { platform: string } | undefined;
+      const page = Math.ceil((countRow.count + 1) / PAGE_SIZE);
+
+      return res.status(200).json({
+        threadId: tid,
+        platform: threadRow?.platform || '',
+        page,
+        timestamp: target.timestamp_ms,
+        messageId: target.id,
+        matchedDate: formatDateKey(target.timestamp_ms, tz),
+      });
+    } catch (e) {
+      console.error('Error in jump by date:', e);
+      return res.status(500).json({ error: 'Internal Server Error' });
+    }
+  }
 
   if (!messageId) {
     return res.status(400).json({ error: 'Missing messageId' });
   }
-
-  const dbInstance = db.get();
 
   try {
     // 1. Get the target content record details
@@ -132,7 +270,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     }
 
-    const PAGE_SIZE = 100; // Must match api/content.ts
     const page = Math.ceil(rank / PAGE_SIZE);
 
     return res.status(200).json({

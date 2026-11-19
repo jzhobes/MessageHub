@@ -191,11 +191,12 @@ export function StudioConfig({
             >
               <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.5 }}>
                 <strong style={{ color: 'var(--text-primary)', display: 'block', marginBottom: '4px' }}>
-                  Note: Custom GPT Formatting
+                  Note: ChatGPT Project Formatting
                 </strong>
-                For Knowledge Base files, persona and system instructions are omitted to save tokens. You should paste
-                your persona and custom instructions directly into the <strong>&quot;Instructions&quot;</strong> field
-                of your Custom GPT in the ChatGPT UI.
+                Exports are formatted as Markdown conversation samples split into <strong>Group Chats</strong> and{' '}
+                <strong>DMs</strong> (recommended: select up to ~5 group chats and ~5 DMs). Persona and system
+                instructions are omitted from the files. Paste those directly into the{' '}
+                <strong>&quot;Instructions&quot;</strong> field of your ChatGPT Project.
               </p>
             </div>
           )}
@@ -203,49 +204,81 @@ export function StudioConfig({
 
         <div className={styles.section}>
           <h3 className={styles.sectionTitle}>Content Strategy</h3>
-          <Checkbox
-            id="chkGroup"
-            label="Include Speaker Names (Group Chats)"
-            checked={config.includeGroupNames}
-            description='Required for the model to understand group dynamics. Example: "[Alice]: How are you?" instead of just "How are you?".'
-            onChange={(c) => onFieldChange('includeGroupNames', c)}
-          />
+          {config.exportTarget === 'customgpt' ? (
+            <>
+              <Checkbox
+                id="chkReactions"
+                label="Include Message Reactions"
+                checked={config.imputeReactions}
+                description='Annotates reactions inline (e.g. "[Reactions: Alex 😂, John (self) ❤️]") to preserve social context without turning them into fake replies.'
+                onChange={(c) => onFieldChange('imputeReactions', c)}
+              />
 
-          <Checkbox
-            id="chkMerge"
-            label="Merge Sequential Messages (Recommended)"
-            checked={config.mergeSequential}
-            description="Combines rapid-fire messages into a single turn to ensure cleaner User → Assistant patterns."
-            style={{ marginTop: 12 }}
-            onChange={(c) => onFieldChange('mergeSequential', c)}
-          />
+              <Checkbox
+                id="chkSystem"
+                label="Remove System Messages"
+                checked={config.removeSystemMessages}
+                description='Excludes automated system notices like "Alice added Bob to the group", "You pinned a message.", or call logs.'
+                style={{ marginTop: 12 }}
+                onChange={(c) => onFieldChange('removeSystemMessages', c)}
+              />
 
-          <Checkbox
-            id="chkReactions"
-            label="Convert Reactions to Text (Highly Recommended)"
-            checked={config.imputeReactions}
-            description="Treats your reactions (👍, ❤️) as replies. Saves thousands of sessions where you acknowledged but didn't type."
-            style={{ marginTop: 12 }}
-            onChange={(c) => onFieldChange('imputeReactions', c)}
-          />
+              <Checkbox
+                id="chkPII"
+                label="Redact PII (Credit Cards, Phones, Emails)"
+                checked={config.redactPII}
+                description="Automatically detects and masks sensitive personally identifiable information with [REDACTED] placeholders."
+                style={{ marginTop: 12 }}
+                onChange={(c) => onFieldChange('redactPII', c)}
+              />
+            </>
+          ) : (
+            <>
+              <Checkbox
+                id="chkGroup"
+                label="Include Speaker Names (Group Chats)"
+                checked={config.includeGroupNames}
+                description='Required for the model to understand group dynamics. Example: "[Alice]: How are you?" instead of just "How are you?".'
+                onChange={(c) => onFieldChange('includeGroupNames', c)}
+              />
 
-          <Checkbox
-            id="chkSystem"
-            label="Remove System Messages"
-            checked={config.removeSystemMessages}
-            description='Excludes automated system messages like "Alice added Bob to the group" or "Only admins can send messages".'
-            style={{ marginTop: 12 }}
-            onChange={(c) => onFieldChange('removeSystemMessages', c)}
-          />
+              <Checkbox
+                id="chkMerge"
+                label="Merge Sequential Messages (Recommended)"
+                checked={config.mergeSequential}
+                description="Combines rapid-fire messages into a single turn to ensure cleaner User → Assistant patterns."
+                style={{ marginTop: 12 }}
+                onChange={(c) => onFieldChange('mergeSequential', c)}
+              />
 
-          <Checkbox
-            id="chkPII"
-            label="Redact PII (Credit Cards, Phones, Emails)"
-            checked={config.redactPII}
-            description="Automatically detects and masks sensitive personally identifiable information using regex patterns."
-            style={{ marginTop: 12 }}
-            onChange={(c) => onFieldChange('redactPII', c)}
-          />
+              <Checkbox
+                id="chkReactions"
+                label="Convert Reactions to Text (Highly Recommended)"
+                checked={config.imputeReactions}
+                description="Treats your reactions (👍, ❤️) as replies. Saves thousands of sessions where you acknowledged but didn't type."
+                style={{ marginTop: 12 }}
+                onChange={(c) => onFieldChange('imputeReactions', c)}
+              />
+
+              <Checkbox
+                id="chkSystem"
+                label="Remove System Messages"
+                checked={config.removeSystemMessages}
+                description='Excludes automated system messages like "Alice added Bob to the group" or "Only admins can send messages".'
+                style={{ marginTop: 12 }}
+                onChange={(c) => onFieldChange('removeSystemMessages', c)}
+              />
+
+              <Checkbox
+                id="chkPII"
+                label="Redact PII (Credit Cards, Phones, Emails)"
+                checked={config.redactPII}
+                description="Automatically detects and masks sensitive personally identifiable information using regex patterns."
+                style={{ marginTop: 12 }}
+                onChange={(c) => onFieldChange('redactPII', c)}
+              />
+            </>
+          )}
         </div>
       </div>
     </div>

@@ -43,6 +43,9 @@ interface GenerateDatasetBody {
   skipSystemMessages?: boolean;
   datasetName?: string;
   dateRange?: { start: number; end: number };
+  outputFormat?: 'jsonl' | 'markdown';
+  selectedDaysByThread?: Record<string, string[]>;
+  timeZone?: string;
 }
 
 /**
@@ -72,6 +75,9 @@ async function processJob(jobId: string, body: GenerateDatasetBody) {
       skipSystemMessages,
       datasetName,
       dateRange,
+      outputFormat,
+      selectedDaysByThread,
+      timeZone,
     } = body;
 
     // FAIL-SAFE: Automatically fetch all known identity names/emails from DB
@@ -111,6 +117,9 @@ async function processJob(jobId: string, body: GenerateDatasetBody) {
       customInstructions: customInstructions || undefined,
       skipSystemMessages: !!skipSystemMessages,
       datasetName: datasetName || undefined,
+      outputFormat: outputFormat || 'jsonl',
+      selectedDaysByThread,
+      timeZone,
     });
 
     generator.setDb(db.get());

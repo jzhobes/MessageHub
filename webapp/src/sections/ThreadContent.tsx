@@ -100,6 +100,9 @@ interface ThreadContentProps {
   onEndReached: () => void;
   onPageChange?: (page: number) => void;
   onShowMediaChange?: (show: boolean) => void;
+  selectedDays?: Set<string>;
+  dayStats?: Record<string, { totalMsgs: number; myMsgs: number }>;
+  onToggleDay?: (dayKey: string) => void;
 }
 
 /**
@@ -125,6 +128,9 @@ export default function ThreadContent({
   onEndReached,
   onPageChange,
   onShowMediaChange,
+  selectedDays,
+  dayStats,
+  onToggleDay,
 }: ThreadContentProps) {
   const threadId = activeThread?.id ?? null;
 
@@ -162,11 +168,15 @@ export default function ThreadContent({
   }, [messages]);
 
   const targetIndex = useMemo(() => {
-    if (!targetMessageId || !virtuosoData.length) {
+    if ((!targetMessageId && !targetTimestamp) || !virtuosoData.length) {
       return -1;
     }
-    return virtuosoData.findIndex((m) => (m.id || m.timestamp_ms.toString()) === targetMessageId);
-  }, [targetMessageId, virtuosoData]);
+    return virtuosoData.findIndex(
+      (m) =>
+        (!!targetMessageId && (m.id || m.timestamp_ms.toString()) === targetMessageId) ||
+        (!!targetTimestamp && m.timestamp_ms === targetTimestamp),
+    );
+  }, [targetMessageId, targetTimestamp, virtuosoData]);
 
   const initialTopIndex = useMemo<IndexLocationWithAlign>(() => {
     if (targetIndex !== -1) {
@@ -412,17 +422,33 @@ export default function ThreadContent({
             const prevMsg = virtuosoData[dataIndex - 1]; // Above
             const nextMsg = virtuosoData[dataIndex + 1]; // Below
 
+            // Day Change Logic (for optional Studio Project day-selection header bar)
+            const currentDateObj = new Date(msg.timestamp_ms);
+            const prevDateObj = prevMsg ? new Date(prevMsg.timestamp_ms) : null;
+            const isDayChange =
+              !prevDateObj ||
+              currentDateObj.getDate() !== prevDateObj.getDate() ||
+              currentDateObj.getMonth() !== prevDateObj.getMonth() ||
+              currentDateObj.getFullYear() !== prevDateObj.getFullYear();
+
+            const dayKey = `${currentDateObj.getFullYear()}-${String(currentDateObj.getMonth() + 1).padStart(
+              2,
+              '0',
+            )}-${String(currentDateObj.getDate()).padStart(2, '0')}`;
+            const dayHeaderLabel = currentDateObj.toLocaleDateString('en-US', {
+              weekday: 'long',
+              month: 'short',
+              day: 'numeric',
+              year: 'numeric',
+            });
+            const showDayHeader = !!onToggleDay && isDayChange;
+            const isDaySelected = !!selectedDays?.has(dayKey);
+            const statsForDay = dayStats?.[dayKey];
+
             // Timestamp Logic: Show if day changed or > 1 hour gap
             let showTimestamp = false;
-            if (prevMsg) {
-              const currentDate = new Date(msg.timestamp_ms);
-              const prevDate = new Date(prevMsg.timestamp_ms);
-              if (
-                currentDate.getDate() !== prevDate.getDate() ||
-                currentDate.getMonth() !== prevDate.getMonth() ||
-                currentDate.getFullYear() !== prevDate.getFullYear() ||
-                currentDate.getHours() !== prevDate.getHours()
-              ) {
+            if (prevDateObj) {
+              if (isDayChange || currentDateObj.getHours() !== prevDateObj.getHours()) {
                 showTimestamp = true;
               }
             } else {
@@ -485,6 +511,28 @@ export default function ThreadContent({
                 className={classNames.join(' ')}
                 style={{ paddingBottom: isBottom ? 16 : 4, paddingLeft: 20, paddingRight: 20 }}
               >
+                {showDayHeader && (
+                  <div
+                    className={`${styles.dayHeaderBar} ${isDaySelected ? styles.dayHeaderSelected : ''}`}
+                    onClick={() => onToggleDay?.(dayKey)}
+                  >
+                    <div className={styles.dayHeaderLeft}>
+                      <input
+                        type="checkbox"
+                        className={styles.dayHeaderCheckbox}
+                        checked={isDaySelected}
+                        onChange={() => onToggleDay?.(dayKey)}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                      <span>{dayHeaderLabel}</span>
+                    </div>
+                    {statsForDay && (
+                      <span className={styles.dayHeaderMeta}>
+                        {statsForDay.totalMsgs} msgs · {statsForDay.myMsgs} you
+                      </span>
+                    )}
+                  </div>
+                )}
                 {showTimestamp && <div className={styles.timestampLabel}>{timestampStr}</div>}
                 {isEmail ? (
                   <EmailItem

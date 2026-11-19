@@ -3,7 +3,7 @@ import React from 'react';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import LinkPreview from '@/components/LinkPreview';
+import LinkPreview, { clearLinkPreviewCache } from '@/components/LinkPreview';
 
 describe('LinkPreview', () => {
   beforeEach(() => {
@@ -30,6 +30,7 @@ describe('LinkPreview', () => {
 
   afterEach(() => {
     cleanup();
+    clearLinkPreviewCache();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
@@ -92,5 +93,30 @@ describe('LinkPreview', () => {
     unmount();
 
     expect(signals[0].aborted).toBe(true);
+  });
+
+  it('reuses cached preview synchronously on remount without refetching', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          url: 'https://example.com/cached',
+          title: 'Cached Title',
+        }),
+        { status: 200 },
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { unmount } = render(<LinkPreview url="https://example.com/cached" />);
+    expect(await screen.findByText('Cached Title')).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    unmount();
+
+    // Remounting the same URL should render synchronously with zero extra fetch
+    render(<LinkPreview url="https://example.com/cached" />);
+    expect(screen.getByText('Cached Title')).toBeTruthy();
+    expect(screen.queryByText('Loading preview...')).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

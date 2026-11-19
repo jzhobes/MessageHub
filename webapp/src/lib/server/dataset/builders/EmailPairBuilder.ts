@@ -173,4 +173,5 @@ function stripCommonEmailBoilerplate(s: string): string {
 }
 
 export default EmailPairBuilder;
+export { stripQuotedHistory, stripCommonEmailBoilerplate };
 export type { Msg, Role, EmailBuilderOptions };

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import Head from 'next/head';
 import Link from 'next/link';
@@ -95,13 +95,30 @@ export default function Studio() {
   const [showSetup, setShowSetup] = useState(false);
   const [previewing, setPreviewing] = useState(false);
   const [previewData, setPreviewData] = useState<DatasetEntry[] | null>(null);
+  const [previewMarkdownFiles, setPreviewMarkdownFiles] = useState<{ fileName: string; content: string }[] | null>(
+    null,
+  );
   const [analyzingStyle, setAnalyzingStyle] = useState(false);
+
+  // --- ChatGPT Project Day-Selection State ---
+  const [selectedDaysByThread, setSelectedDaysByThread] = useState<Record<string, string[]>>({});
+  const [dayStatsByThread, setDayStatsByThread] = useState<
+    Record<string, Record<string, { totalMsgs: number; myMsgs: number }>>
+  >({});
+  const [eventCountsByThread, setEventCountsByThread] = useState<Record<string, number>>({});
+  const [scanningThreadIds, setScanningThreadIds] = useState<Set<string>>(new Set());
+  const manuallyEditedThreadsRef = useRef<Set<string>>(new Set());
+  const scannedRecencyByThreadRef = useRef<Record<string, string>>({});
+  const inFlightScanRecencyRef = useRef<Record<string, string>>({});
+  const scanAbortRef = useRef<AbortController | null>(null);
 
   // --- Custom Hooks ---
   const { generating, progress, generate: startDatasetGeneration } = useDatasetGeneration();
   const { theme, toggleTheme, mounted } = useTheme();
   const { values: config, setField } = useForm(initialState);
   const { values: filters, setField: setFilterField } = useForm(initialFilterState);
+
+  const isProjectMode = config.exportTarget === 'customgpt';
 
   const analyzeWorkerRef = useRef<Worker | null>(null);
 
@@ -265,8 +282,264 @@ export default function Studio() {
     [visibleThreads, selectedIds],
   );
 
+  // Auto-scan best days for newly selected threads (or on recency change for non-edited threads) in Project mode.
+  // Waits while persona scanning is actively streaming selections, debounces rapid clicks,
+  // deduplicates in-flight IDs, and sends sequential chunks so bulk selection never floods the server.
+  useEffect(() => {
+    if (!isProjectMode || selectedIds.size === 0 || scanningLabels.size > 0) {
+      return;
+    }
+
+    const recency = config.recencyFilter;
+    const toScan = Array.from(selectedIds).filter((id) => {
+      if (inFlightScanRecencyRef.current[id] === recency) {
+        return false;
+      }
+      const prevRecency = scannedRecencyByThreadRef.current[id];
+      if (!prevRecency) {
+        return true;
+      }
+      if (prevRecency !== recency && !manuallyEditedThreadsRef.current.has(id)) {
+        return true;
+      }
+      return false;
+    });
+
+    if (toScan.length === 0) {
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      const CHUNK_SIZE = 15;
+      const names = config.identityNames
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
+      const dateRange = calculateDateRange(recency);
+
+      // Re-filter at fire time so we never duplicate an ID that started scanning during debounce
+      const pendingIds = toScan.filter((id) => {
+        if (inFlightScanRecencyRef.current[id] === recency) {
+          return false;
+        }
+        const prevRecency = scannedRecencyByThreadRef.current[id];
+        return !prevRecency || (prevRecency !== recency && !manuallyEditedThreadsRef.current.has(id));
+      });
+
+      if (pendingIds.length === 0) {
+        return;
+      }
+
+      pendingIds.forEach((id) => {
+        inFlightScanRecencyRef.current[id] = recency;
+      });
+      setScanningThreadIds((prev) => {
+        const next = new Set(prev);
+        pendingIds.forEach((id) => next.add(id));
+        return next;
+      });
+
+      const controller = new AbortController();
+      scanAbortRef.current = controller;
+
+      (async () => {
+        try {
+          for (let i = 0; i < pendingIds.length; i += CHUNK_SIZE) {
+            if (controller.signal.aborted) {
+              break;
+            }
+            const chunk = pendingIds.slice(i, i + CHUNK_SIZE);
+            try {
+              const res = await fetch('/api/studio/scan-days', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  threadIds: chunk,
+                  identityNames: names,
+                  dateRange,
+                  timeZone,
+                }),
+                signal: controller.signal,
+              });
+              if (!res.ok || controller.signal.aborted) {
+                continue;
+              }
+              const data = await res.json();
+              if (controller.signal.aborted || !data?.results) {
+                continue;
+              }
+
+              const results = data.results as Record<
+                string,
+                {
+                  selectedDays: string[];
+                  dayStats: Record<string, { totalMsgs: number; myMsgs: number }>;
+                  totalSelectedMsgs: number;
+                  isEvent?: boolean;
+                }
+              >;
+
+              setSelectedDaysByThread((prev) => {
+                const next = { ...prev };
+                for (const id of chunk) {
+                  if (results[id] && !manuallyEditedThreadsRef.current.has(id)) {
+                    next[id] = results[id].selectedDays || [];
+                  }
+                }
+                return next;
+              });
+
+              setDayStatsByThread((prev) => {
+                const next = { ...prev };
+                for (const id of chunk) {
+                  if (results[id]) {
+                    next[id] = results[id].dayStats || {};
+                  }
+                }
+                return next;
+              });
+
+              setEventCountsByThread((prev) => {
+                const next = { ...prev };
+                for (const id of chunk) {
+                  if (results[id]?.isEvent) {
+                    next[id] = results[id].totalSelectedMsgs || 0;
+                  }
+                }
+                return next;
+              });
+
+              for (const id of chunk) {
+                scannedRecencyByThreadRef.current[id] = recency;
+              }
+            } catch (e) {
+              if (e instanceof Error && e.name === 'AbortError') {
+                break;
+              }
+              console.error('Failed to scan thread days:', e);
+            } finally {
+              chunk.forEach((id) => {
+                if (inFlightScanRecencyRef.current[id] === recency) {
+                  delete inFlightScanRecencyRef.current[id];
+                }
+              });
+              setScanningThreadIds((prev) => {
+                const next = new Set(prev);
+                chunk.forEach((id) => next.delete(id));
+                return next;
+              });
+            }
+          }
+        } finally {
+          pendingIds.forEach((id) => {
+            if (inFlightScanRecencyRef.current[id] === recency) {
+              delete inFlightScanRecencyRef.current[id];
+            }
+          });
+          setScanningThreadIds((prev) => {
+            const next = new Set(prev);
+            pendingIds.forEach((id) => next.delete(id));
+            return next;
+          });
+        }
+      })();
+    }, 250);
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [isProjectMode, selectedIds, scanningLabels.size, config.recencyFilter, config.identityNames]);
+
+  // Abort any in-flight scan-days requests on unmount or when recency/mode changes
+  useEffect(() => {
+    return () => {
+      scanAbortRef.current?.abort();
+      scanAbortRef.current = null;
+      inFlightScanRecencyRef.current = {};
+    };
+  }, [isProjectMode, config.recencyFilter]);
+
+  const handleToggleDay = useCallback((threadId: string, dayKey: string) => {
+    manuallyEditedThreadsRef.current.add(threadId);
+    setSelectedDaysByThread((prev) => {
+      const current = new Set(prev[threadId] || []);
+      const willAdd = !current.has(dayKey);
+      if (willAdd) {
+        current.add(dayKey);
+      } else {
+        current.delete(dayKey);
+      }
+      if (willAdd) {
+        setSelectedIds((prevIds) => {
+          if (prevIds.has(threadId)) {
+            return prevIds;
+          }
+          const nextIds = new Set(prevIds);
+          nextIds.add(threadId);
+          return nextIds;
+        });
+      }
+      return { ...prev, [threadId]: Array.from(current).sort() };
+    });
+  }, []);
+
+  const handleClearDays = useCallback((threadId: string) => {
+    manuallyEditedThreadsRef.current.delete(threadId);
+    delete scannedRecencyByThreadRef.current[threadId];
+    setSelectedDaysByThread((prev) => ({ ...prev, [threadId]: [] }));
+    setSelectedIds((prevIds) => {
+      if (!prevIds.has(threadId)) {
+        return prevIds;
+      }
+      const nextIds = new Set(prevIds);
+      nextIds.delete(threadId);
+      return nextIds;
+    });
+  }, []);
+
+  const handleOpenThreadPreview = useCallback(
+    (id: string) => {
+      const found = threads.find((t) => t.id === id);
+      if (!found) {
+        return;
+      }
+      setActivePreviewThread(found);
+      setIsPreviewThreadOpen(true);
+
+      // Populate dayStats for unselected threads opened in Project mode so Day Header counts render
+      if (isProjectMode && !dayStatsByThread[id] && !id.startsWith('fb-event-')) {
+        const names = config.identityNames
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean);
+        const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
+        fetch('/api/studio/scan-days', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            threadIds: [id],
+            identityNames: names,
+            timeZone,
+          }),
+        })
+          .then((res) => (res.ok ? res.json() : null))
+          .then((data) => {
+            if (data?.results?.[id]) {
+              setDayStatsByThread((prev) => ({
+                ...prev,
+                [id]: data.results[id].dayStats || {},
+              }));
+            }
+          })
+          .catch(() => {});
+      }
+    },
+    [threads, isProjectMode, dayStatsByThread, config.identityNames],
+  );
+
   async function handlePreview() {
-    if (selectedIds.size === 0) {
+    if (visibleSelectedThreads.length === 0) {
       alert('Select some threads first to preview the dataset.');
       return;
     }
@@ -277,12 +550,13 @@ export default function Studio() {
         .split(',')
         .map((s) => s.trim())
         .filter(Boolean);
+      const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
 
       const res = await fetch('/api/studio/preview-dataset', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          threadIds: Array.from(selectedIds),
+          threadIds: visibleSelectedThreads.map((t) => t.id),
           identityNames: names,
           includeGroupSpeakerNames: config.includeGroupNames,
           mergeSequential: config.mergeSequential,
@@ -291,7 +565,11 @@ export default function Studio() {
           redactPII: config.redactPII,
           personaTag: config.personaTag.trim(),
           customInstructions: config.customInstructions.trim(),
-          skipSystemMessages: config.exportTarget === 'customgpt',
+          skipSystemMessages: isProjectMode,
+          outputFormat: isProjectMode ? 'markdown' : 'jsonl',
+          selectedDaysByThread: isProjectMode ? selectedDaysByThread : undefined,
+          datasetName: config.datasetName.trim() || 'virtual_me',
+          timeZone,
           dateRange: calculateDateRange(config.recencyFilter),
         }),
       });
@@ -300,7 +578,13 @@ export default function Studio() {
         throw new Error('Failed to generate preview');
       }
       const data = await res.json();
-      setPreviewData(data.sessions);
+      if (data.format === 'markdown') {
+        setPreviewMarkdownFiles(data.files || []);
+        setPreviewData(null);
+      } else {
+        setPreviewData(data.sessions);
+        setPreviewMarkdownFiles(null);
+      }
     } catch (e) {
       console.error(e);
       alert('Preview failed');
@@ -396,6 +680,7 @@ export default function Studio() {
       .split(',')
       .map((s) => s.trim())
       .filter(Boolean);
+    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
 
     await startDatasetGeneration(
       {
@@ -406,22 +691,25 @@ export default function Studio() {
         removeSystemMessages: config.removeSystemMessages,
         imputeReactions: config.imputeReactions,
         redactPII: config.redactPII,
-        splitDataset: config.exportTarget === 'custom' ? config.customSplit : config.exportTarget === 'customgpt',
+        splitDataset: config.exportTarget === 'custom' ? config.customSplit : isProjectMode,
         maxTokensPerFile:
           config.exportTarget === 'custom' && config.customSplit
             ? parseInt(config.customFileLimit) || 2000000
-            : config.exportTarget === 'customgpt'
+            : isProjectMode
               ? 1900000
               : undefined,
         maxTokensPerSession:
           config.exportTarget === 'custom'
             ? parseInt(config.customSessionLimit) || Infinity
-            : config.exportTarget === 'customgpt'
+            : isProjectMode
               ? 2000 // Increased from 800 for better email/long-thread support
               : 12000, // Increased from 8k for modern GPT-4o style fine-tuning
         personaTag: config.personaTag.trim(),
         customInstructions: config.customInstructions.trim(),
-        skipSystemMessages: config.exportTarget === 'customgpt',
+        skipSystemMessages: isProjectMode,
+        outputFormat: isProjectMode ? 'markdown' : 'jsonl',
+        selectedDaysByThread: isProjectMode ? selectedDaysByThread : undefined,
+        timeZone,
         datasetName: config.datasetName.trim(),
         dateRange: calculateDateRange(config.recencyFilter),
       },
@@ -488,11 +776,23 @@ export default function Studio() {
     return Math.round(total);
   }, [visibleSelectedThreads, config.exportTarget, config.personaTag, config.customInstructions, config.recencyFilter]);
 
-  const showTokenBar = config.exportTarget === 'customgpt';
-  const tokenLimit = 2000000;
-  const tokenPercent = (estimatedTokens / tokenLimit) * 100;
-  const tokenBarColor = tokenPercent > 100 ? '#ef4444' : '#10b981';
-  const tokenBarWidth = Math.min(tokenPercent, 100);
+  const projectStats = useMemo(() => {
+    let totalDays = 0;
+    let totalMessages = 0;
+    for (const t of visibleSelectedThreads) {
+      if (t.id.startsWith('fb-event-')) {
+        totalMessages += eventCountsByThread[t.id] ?? t.messageCount ?? 0;
+        continue;
+      }
+      const days = selectedDaysByThread[t.id] || [];
+      totalDays += days.length;
+      const stats = dayStatsByThread[t.id] || {};
+      for (const d of days) {
+        totalMessages += stats[d]?.totalMsgs || 0;
+      }
+    }
+    return { totalDays, totalMessages };
+  }, [visibleSelectedThreads, selectedDaysByThread, dayStatsByThread, eventCountsByThread]);
 
   // Validity Calculation
   const avgSelectedScore = useMemo(() => {
@@ -609,14 +909,12 @@ export default function Studio() {
               loading={loading}
               threads={visibleThreads}
               selectedIds={selectedIds}
+              isProjectMode={isProjectMode}
+              selectedDaysByThread={selectedDaysByThread}
+              dayStatsByThread={dayStatsByThread}
+              scanningThreadIds={scanningThreadIds}
               onChange={setSelectedIds}
-              onPreview={(id) => {
-                const t = threads.find((th) => th.id === id);
-                if (t) {
-                  setActivePreviewThread(t);
-                  setIsPreviewThreadOpen(true);
-                }
-              }}
+              onPreview={handleOpenThreadPreview}
             />
           </div>
 
@@ -654,8 +952,8 @@ export default function Studio() {
                       <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
                         {config.exportTarget === 'finetune'
                           ? 'Single File (Max Context)'
-                          : config.exportTarget === 'customgpt'
-                            ? '2M Token File Limit (Knowledge)'
+                          : isProjectMode
+                            ? 'Markdown Reference Files'
                             : 'Manual Setup'}
                       </span>
                     </div>
@@ -666,11 +964,11 @@ export default function Studio() {
                       }}
                     >
                       <button
-                        className={`btn-reset ${styles.segmentedBtn} ${config.exportTarget === 'customgpt' ? styles.active : ''}`}
+                        className={`btn-reset ${styles.segmentedBtn} ${isProjectMode ? styles.active : ''}`}
                         onClick={() => setField('exportTarget', 'customgpt')}
                       >
                         <span style={{ fontSize: 13, fontWeight: 600 }}>ChatGPT</span>
-                        <span style={{ fontSize: 11, fontWeight: 400, opacity: 0.7 }}>Custom GPT</span>
+                        <span style={{ fontSize: 11, fontWeight: 400, opacity: 0.7 }}>Project</span>
                       </button>
                       <button
                         className={`btn-reset ${styles.segmentedBtn} ${config.exportTarget === 'finetune' ? styles.active : ''}`}
@@ -695,11 +993,17 @@ export default function Studio() {
                     <TextInput
                       value={config.datasetName}
                       placeholder="e.g. virtual_me"
-                      suffix={<span style={{ color: 'var(--text-secondary)', paddingRight: 12 }}>.jsonl</span>}
+                      suffix={
+                        <span style={{ color: 'var(--text-secondary)', paddingRight: 12 }}>
+                          {isProjectMode ? '.md' : '.jsonl'}
+                        </span>
+                      }
                       onChange={(e) => setField('datasetName', e.target.value)}
                     />
                     <p style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>
-                      Used as the base name for exported files.
+                      {isProjectMode
+                        ? `Base name for exported files (e.g. ${config.datasetName.trim() || 'virtual_me'}-group-messages.md).`
+                        : 'Used as the base name for exported files.'}
                     </p>
                   </div>
 
@@ -725,14 +1029,16 @@ export default function Studio() {
                         </ul>
                       </div>
                     )}
-                    {config.exportTarget === 'customgpt' && (
+                    {isProjectMode && (
                       <div>
                         <strong style={{ color: 'var(--text-primary)', display: 'block', marginBottom: 4 }}>
-                          Profile: ChatGPT Custom GPT Knowledge
+                          Profile: ChatGPT Project Reference Files
                         </strong>
                         <ul style={{ paddingLeft: 16, margin: 0, lineHeight: 1.5 }}>
-                          <li>Omit redundant system messages to save tokens.</li>
-                          <li>Automatically splits files at 2M tokens for RAG compatibility.</li>
+                          <li>Exports verbatim Markdown samples split by type (Groups, DMs, Posts, Emails, Events).</li>
+                          <li>
+                            Auto-selects ~100 representative messages per thread; click any thread to adjust days.
+                          </li>
                         </ul>
                       </div>
                     )}
@@ -797,59 +1103,66 @@ export default function Studio() {
                     >
                       <strong>Quick Tip:</strong>
                       <br />
-                      Use <strong>Knowledge / Search</strong> (800) to help AI find specific facts in your history. Use{' '}
-                      <strong>Fine-Tuning</strong> (8k) to teach the AI your overall writing style.
+                      {isProjectMode ? (
+                        <>
+                          Select up to <strong>~5 group chats</strong> and <strong>~5 DMs</strong> (~1,000 total
+                          messages) for balanced voice coverage, then upload the generated <code>.md</code> files to
+                          your ChatGPT Project.
+                        </>
+                      ) : (
+                        <>
+                          Use <strong>Knowledge / Search</strong> (800) to help AI find specific facts in your history.
+                          Use <strong>Fine-Tuning</strong> (8k) to teach the AI your overall writing style.
+                        </>
+                      )}
                     </div>
                   </div>
 
-                  <div style={{ marginBottom: 16, marginTop: 24 }}>
+                  <div style={{ marginBottom: 20, marginTop: 24 }}>
                     <span className={styles.label}>Selected Statistics:</span>
-                    <div className={styles.statsGroup}>
-                      <div>
-                        <div className={styles.statValue}>{visibleSelectedThreads.length.toLocaleString()}</div>
-                        <div className={styles.statLabel}>Threads</div>
-                      </div>
-                      <div>
-                        <div className={styles.statValue}>~{estimatedTokens.toLocaleString()}</div>
-                        <div className={styles.statLabel}>Est. Tokens</div>
-                      </div>
-                      <div>
-                        <div className={styles.statValue} style={{ color: validity.color }}>
-                          {avgSelectedScore}
+                    {isProjectMode ? (
+                      <div className={styles.statsGroup}>
+                        <div>
+                          <div className={styles.statValue}>{visibleSelectedThreads.length.toLocaleString()}</div>
+                          <div className={styles.statLabel}>Threads</div>
                         </div>
-                        <div className={styles.statLabel}>Avg Quality ({validity.label})</div>
+                        <div>
+                          <div className={styles.statValue}>{projectStats.totalDays.toLocaleString()}</div>
+                          <div className={styles.statLabel}>Days</div>
+                        </div>
+                        <div>
+                          <div className={styles.statValue}>
+                            {scanningThreadIds.size > 0 ? '...' : projectStats.totalMessages.toLocaleString()}
+                          </div>
+                          <div className={styles.statLabel}>Messages</div>
+                        </div>
                       </div>
-                    </div>
+                    ) : (
+                      <div className={styles.statsGroup}>
+                        <div>
+                          <div className={styles.statValue}>{visibleSelectedThreads.length.toLocaleString()}</div>
+                          <div className={styles.statLabel}>Threads</div>
+                        </div>
+                        <div>
+                          <div className={styles.statValue}>~{estimatedTokens.toLocaleString()}</div>
+                          <div className={styles.statLabel}>Est. Tokens</div>
+                        </div>
+                        <div>
+                          <div className={styles.statValue} style={{ color: validity.color }}>
+                            {avgSelectedScore}
+                          </div>
+                          <div className={styles.statLabel}>Avg Quality ({validity.label})</div>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
-                  <div style={{ marginBottom: 20, opacity: showTokenBar ? 1 : 0.4, transition: 'opacity 0.2s' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                      <span className={styles.label}>
-                        {showTokenBar ? 'Token Limit (2M Cap)' : 'Token Limit (Disabled)'}
-                      </span>
-                      <span className={styles.label}>{showTokenBar ? `${Math.round(tokenPercent)}% Full` : 'N/A'}</span>
-                    </div>
-                    <div className={styles.tokenBarContainer}>
-                      <div
-                        className={styles.tokenBarFill}
-                        style={{
-                          width: `${showTokenBar ? tokenBarWidth : 0}%`,
-                          backgroundColor: showTokenBar ? tokenBarColor : 'var(--border-color)',
-                        }}
-                      />
-                    </div>
-                    <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: 4 }}>
-                      {showTokenBar ? 'Hard limit for Custom GPT Knowledge files.' : 'No platform-imposed token limit.'}
-                    </p>
-                  </div>
-
-                  {hasMixedEvents && (
+                  {!isProjectMode && hasMixedEvents && (
                     <div className={styles.warningHint}>
                       <span style={{ fontSize: 16 }}>⚠️</span>
                       <span>
                         <strong>Mixed Formats Detected:</strong> Facebook Events use a specialized flat JSON format. It
-                        is recommended to export Events as a dedicated dataset for optimal knowledge retrieval in Custom
-                        GPTs.
+                        is recommended to export Events as a dedicated dataset for optimal knowledge retrieval.
                       </span>
                     </div>
                   )}
@@ -888,9 +1201,45 @@ export default function Studio() {
       <ThreadPreviewModal
         isOpen={isPreviewThreadOpen}
         thread={activePreviewThread}
+        selectionEnabled={isProjectMode}
+        selectedDays={activePreviewThread ? new Set(selectedDaysByThread[activePreviewThread.id] || []) : undefined}
+        dayStats={activePreviewThread ? dayStatsByThread[activePreviewThread.id] : undefined}
+        onToggleDay={activePreviewThread ? (dayKey) => handleToggleDay(activePreviewThread.id, dayKey) : undefined}
+        onClearDays={activePreviewThread ? () => handleClearDays(activePreviewThread.id) : undefined}
         onClose={() => setIsPreviewThreadOpen(false)}
         onAfterClose={() => setActivePreviewThread(null)}
       />
+
+      {/* Markdown Project Preview Modal */}
+      {previewMarkdownFiles && (
+        <div className={styles.modalOverlay} onClick={() => setPreviewMarkdownFiles(null)}>
+          <div className={styles.previewModal} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.previewModalHeader}>
+              <h3>ChatGPT Project Markdown Preview</h3>
+              <button className={styles.closeBtn} onClick={() => setPreviewMarkdownFiles(null)}>
+                &times;
+              </button>
+            </div>
+            <div className={styles.previewModalBody}>
+              <p className={styles.helperText} style={{ marginBottom: 16 }}>
+                Sample Markdown output from up to your first 3 selected threads.
+              </p>
+              {previewMarkdownFiles.length === 0 ? (
+                <p className={styles.helperText}>No exportable messages found for the selected days.</p>
+              ) : (
+                previewMarkdownFiles.map((file, i) => (
+                  <div key={i} className={styles.previewSession}>
+                    <div className={styles.sessionBadge}>{file.fileName}</div>
+                    <pre className={styles.messageContent} style={{ padding: '12px', margin: 0 }}>
+                      {file.content}
+                    </pre>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Dataset Preview Modal */}
       {previewData && (

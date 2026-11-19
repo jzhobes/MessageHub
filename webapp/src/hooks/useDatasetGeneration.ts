@@ -16,6 +16,9 @@ export interface DatasetGenerationPayload {
   skipSystemMessages: boolean;
   datasetName: string;
   dateRange?: { start: number; end: number };
+  outputFormat?: 'jsonl' | 'markdown';
+  selectedDaysByThread?: Record<string, string[]>;
+  timeZone?: string;
 }
 
 function waitWithAbort(ms: number, signal: AbortSignal): Promise<void> {

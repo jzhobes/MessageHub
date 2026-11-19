@@ -149,7 +149,7 @@ describe('checkInstagram', () => {
 
     expect(result).toBe('inconclusive');
     expect(warnSpy).toHaveBeenCalledWith(
-      `⚠️  [Instrumentation] Instagram credential check inconclusive (Status: ${status} — rate-limited or unavailable).`,
+      `⚠️  [Instrumentation] Instagram credential check inconclusive (Status: ${status} - rate-limited or unavailable).`,
     );
     expect(warnSpy.mock.calls[0][0]).not.toContain('INVALID or EXPIRED');
   });

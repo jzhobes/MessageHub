@@ -156,7 +156,7 @@ export async function checkInstagram(authEnv: string): Promise<InstagramCheckRes
 
     if (res.status === 429 || res.status >= 500) {
       console.warn(
-        `⚠️  [Instrumentation] Instagram credential check inconclusive (Status: ${res.status} — rate-limited or unavailable).`,
+        `⚠️  [Instrumentation] Instagram credential check inconclusive (Status: ${res.status} - rate-limited or unavailable).`,
       );
       return 'inconclusive';
     }

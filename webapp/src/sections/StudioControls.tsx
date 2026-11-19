@@ -4,6 +4,7 @@ import { FaBroom, FaCaretDown, FaMagic, FaSpinner } from 'react-icons/fa';
 
 import { Dropdown, DropdownItem } from '@/components/Dropdown';
 import PlatformSelectionDropdown from '@/components/PlatformSelectionDropdown';
+import Tooltip from '@/components/Tooltip';
 
 import { Thread } from '@/lib/shared/types';
 import styles from '@/pages/studio.module.css';
@@ -195,83 +196,101 @@ export function StudioControls({
         </span>
 
         <div style={{ display: 'flex', alignItems: 'center', height: '100%' }}>
-          <button
-            className={styles.controlDropdown}
-            style={{
-              height: '100%',
-              padding: '0 8px',
-              gap: 8,
-              border: 'none',
-              borderLeft: '1px solid var(--border-color)',
-              borderRadius: 0,
-            }}
-            title="Exclude automated messages and idle threads"
-            onClick={() => onControlChange('excludeNoise', !excludeNoise)}
+          <Tooltip
+            align="start"
+            content={
+              <div>
+                <div className={styles.tooltipTitle}>Clean Filter</div>
+                <div>Hides zero-participation threads and automated/spam senders (OTPs, delivery alerts, noreply).</div>
+              </div>
+            }
           >
-            <FaBroom
-              size={16}
-              color={excludeNoise ? 'var(--bubble-sent-bg)' : 'var(--text-secondary)'}
-              style={{ transition: 'color 0.2s' }}
-            />
-            <span
+            <button
+              className={styles.controlDropdown}
               style={{
-                fontSize: 'var(--studio-header-font-size)',
-                fontWeight: 500,
-                color: excludeNoise ? 'var(--bubble-sent-bg)' : 'inherit',
-              }}
-            >
-              Clean
-            </span>
-          </button>
-
-          <div
-            className={styles.controlDropdown}
-            style={{
-              height: '100%',
-              padding: '0 8px',
-              display: 'flex',
-              alignItems: 'center',
-              cursor: 'default',
-              width: 'auto',
-              borderLeft: '1px solid var(--border-color)',
-              borderRadius: 0,
-            }}
-            title="Filter by Minimum Quality Score"
-          >
-            <label
-              htmlFor="minQuality"
-              style={{
-                fontSize: 'var(--studio-header-font-size)',
-                fontWeight: 400,
                 height: '100%',
+                padding: '0 8px',
+                gap: 8,
+                border: 'none',
+                borderLeft: '1px solid var(--border-color)',
+                borderRadius: 0,
+              }}
+              onClick={() => onControlChange('excludeNoise', !excludeNoise)}
+            >
+              <FaBroom
+                size={16}
+                color={excludeNoise ? 'var(--bubble-sent-bg)' : 'var(--text-secondary)'}
+                style={{ transition: 'color 0.2s' }}
+              />
+              <span
+                style={{
+                  fontSize: 'var(--studio-header-font-size)',
+                  fontWeight: 500,
+                  color: excludeNoise ? 'var(--bubble-sent-bg)' : 'inherit',
+                }}
+              >
+                Clean
+              </span>
+            </button>
+          </Tooltip>
+
+          <Tooltip
+            align="start"
+            content={
+              <div>
+                <div className={styles.tooltipTitle}>Minimum Quality Score (0–100)</div>
+                <div>Hides threads below this score based on recency, participation, message length, and volume.</div>
+              </div>
+            }
+          >
+            <div
+              className={styles.controlDropdown}
+              style={{
+                height: '100%',
+                padding: '0 8px',
                 display: 'flex',
                 alignItems: 'center',
-                cursor: 'pointer',
+                cursor: 'default',
+                width: 'auto',
+                borderLeft: '1px solid var(--border-color)',
+                borderRadius: 0,
               }}
             >
-              Quality
-            </label>
-            <input
-              id="minQuality"
-              type="number"
-              min={0}
-              max={100}
-              step={10}
-              value={minQuality || 0}
-              style={{
-                height: '100%',
-                width: '45px',
-                border: 'none',
-                background: 'transparent',
-                textAlign: 'right',
-                fontSize: '1rem',
-                fontWeight: 600,
-                color: 'var(--text-primary)',
-                outline: 'none',
-              }}
-              onChange={(e) => onControlChange('minQuality', parseInt(e.target.value) || 0)}
-            />
-          </div>
+              <label
+                htmlFor="minQuality"
+                style={{
+                  fontSize: 'var(--studio-header-font-size)',
+                  fontWeight: 400,
+                  height: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  cursor: 'pointer',
+                }}
+              >
+                Quality
+              </label>
+              <input
+                id="minQuality"
+                type="number"
+                min={0}
+                max={100}
+                step={10}
+                value={minQuality || 0}
+                style={{
+                  height: '100%',
+                  width: '45px',
+                  border: 'none',
+                  background: 'transparent',
+                  textAlign: 'right',
+                  fontSize: '1rem',
+                  fontWeight: 600,
+                  color: 'var(--text-primary)',
+                  outline: 'none',
+                }}
+                onChange={(e) => onControlChange('minQuality', parseInt(e.target.value) || 0)}
+              />
+            </div>
+          </Tooltip>
         </div>
       </div>
     </div>

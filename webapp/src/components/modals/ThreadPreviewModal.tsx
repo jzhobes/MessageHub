@@ -9,20 +9,53 @@ import styles from './ThreadPreviewModal.module.css';
 
 interface ThreadPreviewModalProps extends Pick<BaseModalProps, 'isOpen' | 'onClose' | 'onAfterClose'> {
   thread: Thread | null;
+  selectionEnabled?: boolean;
+  selectedDays?: Set<string>;
+  dayStats?: Record<string, { totalMsgs: number; myMsgs: number }>;
+  onToggleDay?: (dayKey: string) => void;
+  onClearDays?: () => void;
 }
 
-export default function ThreadPreviewModal({ isOpen, thread, onClose, onAfterClose }: ThreadPreviewModalProps) {
+function formatShortChipDate(dayKey: string): string {
+  const [y, m, d] = dayKey.split('-').map(Number);
+  if (!y || !m || !d) {
+    return dayKey;
+  }
+  return new Date(y, m - 1, d).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
+export default function ThreadPreviewModal({
+  isOpen,
+  thread,
+  selectionEnabled = false,
+  selectedDays,
+  dayStats,
+  onToggleDay,
+  onClearDays,
+  onClose,
+  onAfterClose,
+}: ThreadPreviewModalProps) {
   // State matching Home page usage of ChatWindow
   const [messages, setMessages] = useState<ContentRecord[] | null>(null);
   const [loading, setLoading] = useState(false);
+  const [jumping, setJumping] = useState(false);
   const [pageRange, setPageRange] = useState({ min: 1, max: 1 });
   const [visiblePage, setVisiblePage] = useState(1);
   const [hasMoreOld, setHasMoreOld] = useState(false);
   const [hasMoreNew, setHasMoreNew] = useState(false);
+  const [targetTimestamp, setTargetTimestamp] = useState<number | null>(null);
+  const [highlightToken, setHighlightToken] = useState(0);
+  const [jumpDateInput, setJumpDateInput] = useState('');
 
   const threadId = thread?.id;
   const threadPlatform = thread?.platform || '';
   const totalPages = thread?.messageCount ? Math.ceil(thread.messageCount / 100) : 1;
+  const isEventThread = !!threadId?.startsWith('fb-event-');
+  const showSelectionUI = selectionEnabled && !isEventThread && !!onToggleDay;
 
   // Track latest request to avoid race conditions
   const latestRequestRef = useRef<symbol | null>(null);
@@ -37,6 +70,9 @@ export default function ThreadPreviewModal({ isOpen, thread, onClose, onAfterClo
       setHasMoreOld(false);
       setHasMoreNew(false);
       setPageRange({ min: 1, max: 1 });
+      setTargetTimestamp(null);
+      setHighlightToken(0);
+      setJumpDateInput('');
     }
   }
 
@@ -173,6 +209,64 @@ export default function ThreadPreviewModal({ isOpen, thread, onClose, onAfterClo
     loadMessages(thread.id, next, 'newer');
   };
 
+  const handleJumpToDate = useCallback(
+    async (dateStr: string) => {
+      if (!threadId || !dateStr) {
+        return;
+      }
+      const requestId = Symbol('jumpToDate');
+      latestRequestRef.current = requestId;
+      setJumping(true);
+      setLoading(true);
+
+      try {
+        const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+        const jumpRes = await fetch(
+          `/api/jump?threadId=${encodeURIComponent(threadId)}&date=${encodeURIComponent(dateStr)}&timeZone=${encodeURIComponent(tz)}`,
+        );
+        if (latestRequestRef.current !== requestId) {
+          return;
+        }
+        if (!jumpRes.ok) {
+          return;
+        }
+        const jumpData = await jumpRes.json();
+        const page = jumpData.page || 1;
+        const ts = jumpData.timestamp || null;
+
+        const contentRes = await fetch(
+          `/api/content?threadId=${encodeURIComponent(threadId)}&page=${page}&platform=${encodeURIComponent(threadPlatform)}`,
+        );
+        if (latestRequestRef.current !== requestId) {
+          return;
+        }
+        if (contentRes.ok) {
+          const data = await contentRes.json();
+          const newMsgs = data.records || [];
+          const isFullPage = newMsgs.length >= 100;
+          setMessages(newMsgs);
+          setPageRange({ min: page, max: page });
+          setVisiblePage(page);
+          setHasMoreOld(newMsgs.length > 0 && isFullPage);
+          setHasMoreNew(page > 1);
+          setTargetTimestamp(ts);
+          setHighlightToken((prev) => prev + 1);
+        }
+      } catch (e) {
+        console.error('Failed to jump to date:', e);
+      } finally {
+        if (latestRequestRef.current === requestId) {
+          setJumping(false);
+          setLoading(false);
+        }
+      }
+    },
+    [threadId, threadPlatform],
+  );
+
+  const sortedSelectedDays = selectedDays ? Array.from(selectedDays).sort().reverse() : [];
+  const selectedMsgCount = sortedSelectedDays.reduce((sum, d) => sum + (dayStats?.[d]?.totalMsgs || 0), 0);
+
   return (
     <BaseModal
       isOpen={isOpen}
@@ -195,6 +289,64 @@ export default function ThreadPreviewModal({ isOpen, thread, onClose, onAfterClo
           </span>
         </div>
       </ModalHeader>
+      {showSelectionUI && (
+        <div className={styles.selectionBar}>
+          <div className={styles.selectionSummary}>
+            <span className={styles.selectionCount}>
+              {sortedSelectedDays.length > 0
+                ? `${sortedSelectedDays.length} ${sortedSelectedDays.length === 1 ? 'day' : 'days'} · ${selectedMsgCount.toLocaleString()} msgs`
+                : 'No days selected'}
+            </span>
+            {sortedSelectedDays.length > 0 && (
+              <div className={styles.chipList}>
+                {sortedSelectedDays.map((dayKey) => (
+                  <span key={dayKey} className={styles.dayChip}>
+                    <button
+                      type="button"
+                      className={styles.dayChipJump}
+                      title={`Jump to ${dayKey}`}
+                      onClick={() => handleJumpToDate(dayKey)}
+                    >
+                      {formatShortChipDate(dayKey)}
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.dayChipRemove}
+                      aria-label={`Remove ${dayKey}`}
+                      onClick={() => onToggleDay?.(dayKey)}
+                    >
+                      &times;
+                    </button>
+                  </span>
+                ))}
+                {onClearDays && (
+                  <button type="button" className={styles.clearBtn} onClick={onClearDays}>
+                    Clear
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+          <div className={styles.jumpControls}>
+            <label htmlFor="previewJumpDate" className={styles.jumpLabel}>
+              {jumping ? 'Jumping...' : 'Jump to:'}
+            </label>
+            <input
+              id="previewJumpDate"
+              type="date"
+              className={styles.dateInput}
+              value={jumpDateInput}
+              onChange={(e) => {
+                const val = e.target.value;
+                setJumpDateInput(val);
+                if (val) {
+                  handleJumpToDate(val);
+                }
+              }}
+            />
+          </div>
+        </div>
+      )}
       <div className={styles.messageList}>
         <ThreadContent
           activeThread={thread}
@@ -204,9 +356,13 @@ export default function ThreadPreviewModal({ isOpen, thread, onClose, onAfterClo
           hasMoreNew={hasMoreNew}
           pageRange={pageRange}
           targetMessageId={null}
-          highlightToken={0}
+          targetTimestamp={targetTimestamp}
+          highlightToken={highlightToken}
           initializing={loading && messages === null}
+          selectedDays={showSelectionUI ? selectedDays : undefined}
+          dayStats={showSelectionUI ? dayStats : undefined}
           hideHeader
+          onToggleDay={showSelectionUI ? onToggleDay : undefined}
           onStartReached={handleLoadOld}
           onEndReached={handleLoadNew}
           onPageChange={setVisiblePage}

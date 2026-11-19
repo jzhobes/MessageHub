@@ -250,6 +250,57 @@
   overflow-y: auto;
 }
 
+/* Studio Project Mode Day Header Bar (only rendered when onToggleDay is passed) */
+.dayHeaderBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  margin: 14px 0 8px 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  cursor: pointer;
+  user-select: none;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.dayHeaderBar:hover {
+  border-color: var(--bubble-sent-bg);
+}
+
+.dayHeaderSelected {
+  background: rgba(99, 102, 241, 0.1);
+  border-color: rgba(99, 102, 241, 0.45);
+}
+
+.dayHeaderLeft {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.dayHeaderCheckbox {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--bubble-sent-bg);
+  cursor: pointer;
+  margin: 0;
+}
+
+.dayHeaderMeta {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
 .participantsList {
   list-style: none;
   padding: 0;

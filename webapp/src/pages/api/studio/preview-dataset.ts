@@ -27,6 +27,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     customInstructions,
     skipSystemMessages,
     dateRange,
+    outputFormat,
+    selectedDaysByThread,
+    datasetName,
+    timeZone,
   } = req.body;
 
   if (!threadIds || !Array.isArray(threadIds) || threadIds.length === 0) {
@@ -38,6 +42,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
+    const isMarkdown = outputFormat === 'markdown';
+
     const generator = new DatasetGenerator({
       includeGroupSpeakerNames: !!includeGroupSpeakerNames,
       mergeSequential: !!mergeSequential,
@@ -47,6 +53,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       personaTag: personaTag || undefined,
       customInstructions: customInstructions || undefined,
       skipSystemMessages: !!skipSystemMessages,
+      datasetName: datasetName || 'virtual_me',
+      outputFormat: isMarkdown ? 'markdown' : 'jsonl',
+      selectedDaysByThread,
+      timeZone,
+      includeSummary: false,
       maxTokensPerSession: Infinity,
       maxTokensPerFile: 100000, // Small limit for preview
     });
@@ -56,6 +67,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // We only take a few threads for the preview
     const previewThreadIds = (threadIds as string[]).slice(0, 3);
     const recordsStream = generator.generateRecords(previewThreadIds, identityNames, dateRange);
+
+    if (isMarkdown) {
+      const files: { fileName: string; content: string }[] = [];
+      const MAX_PREVIEW_CHARS = 12000;
+      for await (const record of recordsStream) {
+        if (record.kind === 'markdown') {
+          const content =
+            record.content.length > MAX_PREVIEW_CHARS
+              ? `${record.content.slice(0, MAX_PREVIEW_CHARS)}\n\n... (truncated for preview)`
+              : record.content;
+          files.push({ fileName: record.fileName, content });
+        }
+      }
+      return res.status(200).json({ format: 'markdown', files });
+    }
 
     const allSessions: DatasetEntry[] = [];
 

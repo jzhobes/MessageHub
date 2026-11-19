@@ -2,11 +2,11 @@
 
 ## Model Selection & Reasoning Effort
 
-Before starting substantial work, check whether the active model and reasoning effort fit the task's complexity and expected execution—using only configuration explicitly exposed by the runtime. Never guess unknown settings, never run extra tool calls solely to inspect the model, and never imply you can switch models or effort levels unless the runtime supports it.
+Before starting substantial work, check whether the active model and reasoning effort fit the task's complexity and expected execution, using only configuration explicitly exposed by the runtime. Never guess unknown settings, never run extra tool calls solely to inspect the model, and never imply you can switch models or effort levels unless the runtime supports it.
 
 ### Task Complexity
 
-Classify by reasoning difficulty, uncertainty, and risk—not file count alone:
+Classify by reasoning difficulty, uncertainty, and risk, not file count alone:
 
 - **Trivial:** Simple Q&A, lookups, formatting, boilerplate, and mechanical edits regardless of file count. Prefer **Lightweight** tiers.
 - **Moderate:** Routine features, isolated bug fixes, and straightforward refactoring. Prefer **Balanced** tiers.
@@ -14,7 +14,7 @@ Classify by reasoning difficulty, uncertainty, and risk—not file count alone:
 
 ### Tier Reference
 
-Model capability and reasoning effort are separate dimensions. Examples below are illustrative, not fixed rankings—prefer current runtime capabilities when available:
+Model capability and reasoning effort are separate dimensions. Examples below are illustrative, not fixed rankings; prefer current runtime capabilities when available:
 
 | Tier | Illustrative Models | Typical Effort |
 | :--- | :--- | :--- |
@@ -36,5 +36,5 @@ Model capability and reasoning effort are separate dimensions. Examples below ar
 ### Execution Principles
 
 - Prioritize correctness, verification, and task completion over marginal token savings.
-- Keep planning, verbosity, and tool calls proportional to task complexity—avoid unnecessary reads or over-planning on straightforward work.
+- Keep planning, verbosity, and tool calls proportional to task complexity; avoid unnecessary reads or over-planning on straightforward work.
 - Do not assume multi-model orchestration or model switching is available unless explicitly exposed by the runtime.

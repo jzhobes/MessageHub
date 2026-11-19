@@ -4,7 +4,9 @@ import { encoding_for_model, Tiktoken, TiktokenModel } from 'tiktoken';
 // Builders
 import EmailPairBuilder, { Msg } from '@/lib/server/dataset/builders/EmailPairBuilder';
 import { EventRecordBuilder } from '@/lib/server/dataset/builders/EventRecordBuilder';
+import { MarkdownExportBuilder, MarkdownMessageRow } from '@/lib/server/dataset/builders/MarkdownExportBuilder';
 import { MessageSessionBuilder } from '@/lib/server/dataset/builders/MessageSessionBuilder';
+import { scanThreadDays } from '@/lib/server/dataset/scanThreadDays';
 // Utilities & Shared
 import { redactPII } from '@/lib/server/piiUtils';
 import { inferThreadTitle } from '@/lib/server/threadUtils';
@@ -24,6 +26,10 @@ export interface GeneratorOptions {
   customInstructions?: string;
   skipSystemMessages: boolean;
   datasetName?: string;
+  outputFormat?: 'jsonl' | 'markdown';
+  selectedDaysByThread?: Record<string, string[]>;
+  timeZone?: string;
+  includeSummary?: boolean;
 }
 
 export type GeneratedRecord =
@@ -49,6 +55,10 @@ export class DatasetGenerator {
   private _customInstructions?: string;
   private _skipSystemMessages: boolean;
   private _datasetName: string;
+  private _outputFormat: 'jsonl' | 'markdown';
+  private _selectedDaysByThread?: Record<string, string[]>;
+  private _timeZone?: string;
+  private _includeSummary: boolean;
 
   constructor(opts: GeneratorOptions) {
     // Database instance is provided after instantiation via setDb()
@@ -64,6 +74,10 @@ export class DatasetGenerator {
     this._customInstructions = opts.customInstructions;
     this._skipSystemMessages = opts.skipSystemMessages;
     this._datasetName = opts.datasetName || 'dataset';
+    this._outputFormat = opts.outputFormat || 'jsonl';
+    this._selectedDaysByThread = opts.selectedDaysByThread;
+    this._timeZone = opts.timeZone;
+    this._includeSummary = opts.includeSummary ?? true;
   }
 
   public setDb(db: Database.Database) {
@@ -80,14 +94,19 @@ export class DatasetGenerator {
     dateRange?: { start: number; end: number },
     onProgress?: (current: number, total: number) => void,
   ): AsyncGenerator<GeneratedRecord> {
+    if (!this._dbInstance) {
+      throw new Error('Database instance not set in DatasetGenerator');
+    }
+
+    if (this._outputFormat === 'markdown') {
+      yield* this._generateMarkdownRecords(threadIds, identityNames, dateRange, onProgress);
+      return;
+    }
+
     const myNamesLower = new Set(identityNames.map((n) => n.toLowerCase().trim()));
     const myNamesList = Array.from(myNamesLower);
 
     const historyBuilder = this._skipSystemMessages ? new EventRecordBuilder({ identityName: identityNames[0] }) : null;
-
-    if (!this._dbInstance) {
-      throw new Error('Database instance not set in DatasetGenerator');
-    }
 
     for (let threadIdx = 0; threadIdx < threadIds.length; threadIdx++) {
       const threadId = threadIds[threadIdx];
@@ -331,12 +350,162 @@ export class DatasetGenerator {
     }
   }
 
+  private async *_generateMarkdownRecords(
+    threadIds: string[],
+    identityNames: string[],
+    dateRange?: { start: number; end: number },
+    onProgress?: (current: number, total: number) => void,
+  ): AsyncGenerator<GeneratedRecord> {
+    const dbInstance = this._dbInstance!;
+    const mdBuilder = new MarkdownExportBuilder({
+      datasetName: this._datasetName,
+      identityNames,
+      includeReactions: this._imputeReactions,
+      removeSystemMessages: this._removeSystemMessages,
+      redactPII: this._redactPII,
+      timeZone: this._timeZone,
+    });
+
+    for (let threadIdx = 0; threadIdx < threadIds.length; threadIdx++) {
+      const threadId = threadIds[threadIdx];
+      if (onProgress) {
+        onProgress(threadIdx, threadIds.length);
+      }
+      await new Promise((resolve) => setImmediate(resolve));
+
+      const explicitDays = this._selectedDaysByThread?.[threadId];
+
+      if (threadId === 'fb-post-all') {
+        const params: (string | number)[] = [];
+        let sql = `
+          SELECT t.title as thread_title, m.sender_name, m.content, m.timestamp_ms,
+                 m.media_json, m.reactions_json, m.share_json, m.annotations_json
+          FROM content m
+          JOIN threads t ON m.thread_id = t.id
+          JOIN thread_labels tl ON m.thread_id = tl.thread_id
+          WHERE tl.label = 'post'
+        `;
+        if (dateRange && (!explicitDays || explicitDays.length === 0)) {
+          sql += ' AND m.timestamp_ms BETWEEN ? AND ?';
+          params.push(dateRange.start, dateRange.end);
+        }
+        sql += ' ORDER BY m.timestamp_ms ASC';
+        const rows = dbInstance.prepare(sql).all(...params) as MarkdownMessageRow[];
+        const selectedDays =
+          explicitDays && explicitDays.length > 0
+            ? explicitDays
+            : scanThreadDays(dbInstance, threadId, identityNames, {
+                dateRange,
+                timeZone: this._timeZone,
+              }).selectedDays;
+        mdBuilder.addPosts({ messages: rows, selectedDays });
+        continue;
+      }
+
+      if (threadId.startsWith('fb-event-')) {
+        const cat = threadId.replace('fb-event-', '');
+        const statuses = cat === 'owned' ? ['Created Event'] : ['Joined Event', 'Interested in Event'];
+        const placeholders = statuses.map(() => '?').join(',');
+        const params: (string | number)[] = [...statuses];
+        let sql = `
+          SELECT t.title as thread_title, m.content, m.timestamp_ms
+          FROM content m
+          JOIN threads t ON m.thread_id = t.id
+          JOIN thread_labels tl ON m.thread_id = tl.thread_id
+          WHERE tl.label = 'event' AND m.content IN (${placeholders})
+        `;
+        if (dateRange) {
+          sql += ' AND m.timestamp_ms BETWEEN ? AND ?';
+          params.push(dateRange.start, dateRange.end);
+        }
+        sql += ' ORDER BY m.timestamp_ms ASC';
+        const rows = dbInstance.prepare(sql).all(...params) as {
+          thread_title?: string;
+          content: string;
+          timestamp_ms: number;
+        }[];
+        for (const r of rows) {
+          mdBuilder.addEventRecord(r.content, r.timestamp_ms, 'facebook', r.thread_title);
+        }
+        continue;
+      }
+
+      const thread = dbInstance
+        .prepare('SELECT is_group, platform, title, participants_json FROM threads WHERE id = ?')
+        .get(threadId) as { is_group: number; platform: string; title: string; participants_json: string } | undefined;
+      if (!thread) {
+        continue;
+      }
+
+      const participants: string[] = JSON.parse(thread.participants_json || '[]');
+      const title = inferThreadTitle(thread.title, participants, identityNames);
+      const displayPlatform = PlatformMap[thread.platform] || thread.platform;
+      const isEmail = thread.platform === 'google_mail' || thread.platform === 'gmail';
+
+      const params: (string | number)[] = [threadId];
+      let sql = `
+        SELECT sender_name, content, timestamp_ms, media_json, reactions_json, share_json, annotations_json
+        FROM content
+        WHERE thread_id = ?
+      `;
+      // Only bound SQL by dateRange when using auto-scan; explicit user-picked days may be older than recencyFilter
+      if (dateRange && (!explicitDays || explicitDays.length === 0)) {
+        sql += ' AND timestamp_ms BETWEEN ? AND ?';
+        params.push(dateRange.start, dateRange.end);
+      }
+      sql += ' ORDER BY timestamp_ms ASC';
+
+      const rows = dbInstance.prepare(sql).all(...params) as MarkdownMessageRow[];
+      if (rows.length === 0) {
+        continue;
+      }
+
+      const selectedDays =
+        explicitDays && explicitDays.length > 0
+          ? explicitDays
+          : scanThreadDays(dbInstance, threadId, identityNames, {
+              dateRange,
+              timeZone: this._timeZone,
+            }).selectedDays;
+
+      if (isEmail) {
+        mdBuilder.addEmailThread({
+          threadId,
+          subject: title,
+          platform: displayPlatform,
+          participants,
+          messages: rows,
+          selectedDays,
+        });
+      } else {
+        mdBuilder.addChatThread({
+          threadId,
+          title,
+          platform: displayPlatform,
+          isGroup: !!thread.is_group,
+          participants,
+          messages: rows,
+          selectedDays,
+        });
+      }
+    }
+
+    const files = mdBuilder.finalize(this._includeSummary);
+    for (const f of files) {
+      yield {
+        kind: 'markdown',
+        fileName: f.fileName,
+        content: f.content,
+      };
+    }
+  }
+
   /**
    * Streams formatted dataset files for the selected thread IDs.
    * Requires `setDb()` to be called first. Supports both database thread IDs and virtual Facebook IDs
    * (`fb-post-all`, `fb-event-*`). Splits chat sessions on 4-hour inactivity gaps or token limits,
    * pairs Gmail threads via `EmailPairBuilder`, and yields JSONL chunks bounded by `maxTokensPerFile`
-   * (plus a `<datasetName>-history.md` file for Facebook events when `skipSystemMessages` is enabled).
+   * (or consolidated ChatGPT Project Markdown files when `outputFormat === 'markdown'`).
    * Yields to the event loop between threads and every 500 messages to keep the server responsive.
    */
   public async *generateStream(
@@ -346,13 +515,13 @@ export class DatasetGenerator {
     onProgress?: (current: number, total: number) => void,
   ): AsyncGenerator<{ fileName: string; content: string; tokenCount: number }> {
     const batchState: BatchState = { fileIndex: 1, sessions: [], tokens: 0 };
-    let markdownRecord: Extract<GeneratedRecord, { kind: 'markdown' }> | null = null;
+    const markdownRecords: Extract<GeneratedRecord, { kind: 'markdown' }>[] = [];
 
     for await (const record of this.generateRecords(threadIds, identityNames, dateRange, onProgress)) {
       if (record.kind === 'session') {
         yield* this._emitSession(record.entry, batchState);
       } else {
-        markdownRecord = record;
+        markdownRecords.push(record);
       }
     }
 
@@ -363,12 +532,12 @@ export class DatasetGenerator {
       yield { fileName: `${this._datasetName}${suffix}.jsonl`, content, tokenCount: batchState.tokens };
     }
 
-    // Yield Final Markdown History (Events)
-    if (markdownRecord) {
+    // Yield All Markdown Records
+    for (const md of markdownRecords) {
       yield {
-        fileName: markdownRecord.fileName,
-        content: markdownRecord.content,
-        tokenCount: this._encoder.encode(markdownRecord.content).length,
+        fileName: md.fileName,
+        content: md.content,
+        tokenCount: this._encoder.encode(md.content).length,
       };
     }
   }
