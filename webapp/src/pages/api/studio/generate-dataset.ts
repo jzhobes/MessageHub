@@ -3,7 +3,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
-import archiver from 'archiver';
+import { ZipArchive } from 'archiver';
 
 import { jobStore } from '@/lib/jobStore';
 import { DatasetGenerator } from '@/lib/server/DatasetGenerator';
@@ -45,6 +45,11 @@ interface GenerateDatasetBody {
   dateRange?: { start: number; end: number };
 }
 
+/**
+ * Runs `DatasetGenerator` in the background (merging UI identity names with DB identities as a
+ * fail-safe), packs generated parts into a temp ZIP archive, and updates `jobStore` progress/status.
+ * Marks the job failed if no valid training parts are emitted.
+ */
 async function processJob(jobId: string, body: GenerateDatasetBody) {
   try {
     jobStore.update(jobId, { status: 'processing' });
@@ -81,7 +86,7 @@ async function processJob(jobId: string, body: GenerateDatasetBody) {
     const filePath = path.join(tmpDir, fileName);
     const outputStream = fs.createWriteStream(filePath);
 
-    const archive = archiver('zip', {
+    const archive = new ZipArchive({
       zlib: { level: 9 }, // Maximum compression
     });
 
@@ -126,7 +131,7 @@ async function processJob(jobId: string, body: GenerateDatasetBody) {
     }
 
     if (partCount === 0) {
-      await archive.abort();
+      archive.abort();
       throw new Error(
         'No valid training data found in selection. Ensure you selected threads where you are an active participant.',
       );
@@ -143,6 +148,12 @@ async function processJob(jobId: string, body: GenerateDatasetBody) {
   }
 }
 
+/**
+ * Async dataset export endpoint.
+ * - `POST`: prunes jobs and temp archives older than 1 hour, enqueues a background generation job,
+ *   and responds `202` with `{ jobId }`.
+ * - `GET ?jobId=...`: streams the completed ZIP archive for download.
+ */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   // 1. Download Handling
   if (req.method === 'GET') {

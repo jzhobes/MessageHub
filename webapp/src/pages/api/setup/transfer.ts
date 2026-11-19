@@ -7,6 +7,11 @@ import appConfig from '@/lib/shared/appConfig';
 
 import type { NextApiRequest, NextApiResponse } from 'next';
 
+/**
+ * Streams archive copy/move progress over SSE (`POST`). Jails source paths to `ROOT_IMPORT_PATH` and
+ * the destination to `ROOT_WORKSPACE_PATH`, skips files that already exist in the workspace without
+ * overwriting, and falls back to copy+unlink on cross-device (`EXDEV`) moves.
+ */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', ['POST']);

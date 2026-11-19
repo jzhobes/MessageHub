@@ -6,6 +6,10 @@ import appConfig from '@/lib/shared/appConfig';
 
 import type { NextApiRequest, NextApiResponse } from 'next';
 
+/**
+ * Closes the active DB connection and, if `messagehub.db` does not yet exist, synchronously runs
+ * `scripts/ingest.py` so Python initializes the authoritative SQLite schema before returning.
+ */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', ['POST']);

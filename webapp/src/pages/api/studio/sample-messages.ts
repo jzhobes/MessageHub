@@ -4,6 +4,10 @@ import { containsHtmlOrEntities, decodeHtmlEntities, stripHtml, stripUrls } from
 
 import type { NextApiRequest, NextApiResponse } from 'next';
 
+/**
+ * Fetches up to `limit` (default 100) cleaned, URL-stripped user messages (`POST`) across real thread
+ * IDs and virtual Facebook post/event IDs for writing-style analysis.
+ */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', ['POST']);

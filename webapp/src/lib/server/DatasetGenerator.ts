@@ -26,6 +26,9 @@ export interface GeneratorOptions {
   datasetName?: string;
 }
 
+export type GeneratedRecord =
+  { kind: 'session'; entry: DatasetEntry } | { kind: 'markdown'; fileName: string; content: string };
+
 interface BatchState {
   fileIndex: number;
   sessions: DatasetEntry[];
@@ -67,13 +70,16 @@ export class DatasetGenerator {
     this._dbInstance = db;
   }
 
-  public async *generateStream(
+  /**
+   * Streams structured dataset records (training sessions and optional Markdown history)
+   * without coupling consumers to file packaging. Requires `setDb()` to be called first.
+   */
+  public async *generateRecords(
     threadIds: string[],
     identityNames: string[],
     dateRange?: { start: number; end: number },
     onProgress?: (current: number, total: number) => void,
-  ): AsyncGenerator<{ fileName: string; content: string; tokenCount: number }> {
-    const batchState: BatchState = { fileIndex: 1, sessions: [], tokens: 0 };
+  ): AsyncGenerator<GeneratedRecord> {
     const myNamesLower = new Set(identityNames.map((n) => n.toLowerCase().trim()));
     const myNamesList = Array.from(myNamesLower);
 
@@ -128,8 +134,7 @@ export class DatasetGenerator {
         const thread = this._dbInstance
           .prepare('SELECT is_group, platform, title, participants_json FROM threads WHERE id = ?')
           .get(threadId) as
-          | { is_group: number; platform: string; title: string; participants_json: string }
-          | undefined;
+          { is_group: number; platform: string; title: string; participants_json: string } | undefined;
 
         if (!thread) {
           continue;
@@ -208,14 +213,14 @@ export class DatasetGenerator {
           if (chatBuilder) {
             const session = chatBuilder.finalize();
             if (session) {
-              yield* this._emitSession(session, batchState);
+              yield { kind: 'session', entry: session };
             }
           }
         } else if (isVirtual && prevMsg) {
           if (chatBuilder) {
             const session = chatBuilder.finalize();
             if (session) {
-              yield* this._emitSession(session, batchState);
+              yield { kind: 'session', entry: session };
             }
           }
         }
@@ -290,7 +295,7 @@ export class DatasetGenerator {
               } else {
                 session = { messages: [systemMsg, ...pair] };
               }
-              yield* this._emitSession(session, batchState);
+              yield { kind: 'session', entry: session };
             }
           }
           continue;
@@ -300,7 +305,7 @@ export class DatasetGenerator {
         if (chatBuilder) {
           const session = chatBuilder.addMessage(content, role, msg.sender_name, msg.timestamp_ms, msg.reactions_json);
           if (session) {
-            yield* this._emitSession(session, batchState);
+            yield { kind: 'session', entry: session };
           }
         }
       }
@@ -308,8 +313,46 @@ export class DatasetGenerator {
       if (chatBuilder) {
         const session = chatBuilder.finalize();
         if (session) {
-          yield* this._emitSession(session, batchState);
+          yield { kind: 'session', entry: session };
         }
+      }
+    }
+
+    // Yield Final Markdown History (Events)
+    if (historyBuilder) {
+      const mdContent = historyBuilder.finalize();
+      if (mdContent) {
+        yield {
+          kind: 'markdown',
+          fileName: `${this._datasetName}-history.md`,
+          content: mdContent,
+        };
+      }
+    }
+  }
+
+  /**
+   * Streams formatted dataset files for the selected thread IDs.
+   * Requires `setDb()` to be called first. Supports both database thread IDs and virtual Facebook IDs
+   * (`fb-post-all`, `fb-event-*`). Splits chat sessions on 4-hour inactivity gaps or token limits,
+   * pairs Gmail threads via `EmailPairBuilder`, and yields JSONL chunks bounded by `maxTokensPerFile`
+   * (plus a `<datasetName>-history.md` file for Facebook events when `skipSystemMessages` is enabled).
+   * Yields to the event loop between threads and every 500 messages to keep the server responsive.
+   */
+  public async *generateStream(
+    threadIds: string[],
+    identityNames: string[],
+    dateRange?: { start: number; end: number },
+    onProgress?: (current: number, total: number) => void,
+  ): AsyncGenerator<{ fileName: string; content: string; tokenCount: number }> {
+    const batchState: BatchState = { fileIndex: 1, sessions: [], tokens: 0 };
+    let markdownRecord: Extract<GeneratedRecord, { kind: 'markdown' }> | null = null;
+
+    for await (const record of this.generateRecords(threadIds, identityNames, dateRange, onProgress)) {
+      if (record.kind === 'session') {
+        yield* this._emitSession(record.entry, batchState);
+      } else {
+        markdownRecord = record;
       }
     }
 
@@ -321,15 +364,12 @@ export class DatasetGenerator {
     }
 
     // Yield Final Markdown History (Events)
-    if (historyBuilder) {
-      const mdContent = historyBuilder.finalize();
-      if (mdContent) {
-        yield {
-          fileName: `${this._datasetName}-history.md`,
-          content: mdContent,
-          tokenCount: this._encoder.encode(mdContent).length,
-        };
-      }
+    if (markdownRecord) {
+      yield {
+        fileName: markdownRecord.fileName,
+        content: markdownRecord.content,
+        tokenCount: this._encoder.encode(markdownRecord.content).length,
+      };
     }
   }
 
@@ -369,6 +409,13 @@ export class DatasetGenerator {
     return patterns.some((regex) => regex.test(content));
   }
 
+  /**
+   * Normalizes a content record for dataset export, returning `null` to drop low-signal items
+   * (e.g. `'MMS Sent'`, empty non-media records, URL-only messages outside Gmail, non-Gmail strings
+   * under 2 characters, bare `'Post'`/event labels without media except event labels in Knowledge mode,
+   * and short birthday wall posts). Strips HTML, substitutes placeholders for media/attachment-only
+   * records unless `opts.isPost` or `skipSystemMessages` is active, and applies PII redaction if enabled.
+   */
   private _cleanContent(msg: ContentRecord, platform?: string, opts: { isPost?: boolean } = {}): string | null {
     let content = msg.content || '';
     if (content === 'MMS Sent') {
@@ -429,6 +476,12 @@ export class DatasetGenerator {
     yield* this._emitRawRecord(session, state);
   }
 
+  /**
+   * Appends `record` to the mutable `state` batch, estimating tokens with OpenAI chat framing overhead
+   * (`3 + sum(4 + role + content)`) for chat records or raw JSON token count otherwise.
+   * Flushes accumulated sessions as a `.partN.jsonl` chunk before appending whenever `record` would
+   * exceed `maxTokensPerFile`.
+   */
   private *_emitRawRecord(
     record: DatasetEntry,
     state: BatchState,

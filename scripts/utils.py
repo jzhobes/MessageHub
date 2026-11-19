@@ -262,13 +262,14 @@ def clean_google_mail_files(data_dir=WORKSPACE_PATH):
 def merge_folders(src, dst):
     """
     Recursively merges src directory into dst directory with progress reporting.
-    Deletes src after successful merge.
+    Deletes src only after every file is successfully merged.
+    Returns True if all files merged cleanly (or src did not exist), False otherwise.
     """
     src = Path(src)
     dst = Path(dst)
 
     if not src.exists():
-        return
+        return True
 
     # Phase 1: Count total files (Discovery)
     total_files = 0
@@ -281,11 +282,12 @@ def merge_folders(src, dst):
             shutil.rmtree(src)
         except Exception as e:
             print(f"Warning: Could not remove empty source folder {src}: {e}")
-        return
+        return True
 
     # Phase 2: Targeted Move with Progress
     current_count = 0
     folder_name = src.name
+    failed_files = []
 
     for root, dirs, filenames in os.walk(src):
         rel_path = Path(root).relative_to(src)
@@ -296,28 +298,32 @@ def merge_folders(src, dst):
             src_file = Path(root) / f
             dst_file = target_dir / f
 
-            # Move (fast on same drive)
+            # Move atomically on the same filesystem without pre-deleting dst_file
             try:
-                if dst_file.exists():
-                    try:
-                        dst_file.unlink()  # Overwrite if exists
-                    except Exception:
-                        pass
-
-                shutil.move(str(src_file), str(dst_file))
+                os.replace(str(src_file), str(dst_file))
             except Exception:
-                # Fallback to copy if move fails (e.g. cross-device)
+                # Fallback to copy + unlink if cross-device or replace fails
                 try:
                     shutil.copy2(str(src_file), str(dst_file))
                     src_file.unlink()
                 except Exception as e2:
                     print(f"Error merging file {src_file}: {e2}")
+                    failed_files.append(src_file)
 
             current_count += 1
             if current_count % 100 == 0 or current_count == total_files:
                 print(f"[MergeProgress]: {folder_name}|{current_count}|{total_files}")
 
-    # Phase 3: Cleanup empty directories
+    # Phase 3: Cleanup empty directories only; preserve failed inputs
+    if failed_files:
+        print(f"Warning: Preserving {src}; {len(failed_files)} file(s) failed to merge.")
+        for root, _, _ in os.walk(src, topdown=False):
+            try:
+                os.rmdir(root)
+            except OSError:
+                pass
+        return False
+
     def on_rm_error(func, path, exc_info):
         try:
             os.chmod(path, stat.S_IWRITE)
@@ -329,3 +335,4 @@ def merge_folders(src, dst):
         shutil.rmtree(src, onerror=on_rm_error)
     except Exception:
         pass
+    return True

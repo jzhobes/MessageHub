@@ -17,6 +17,12 @@ interface SearchRow {
   search_snippet?: string;
 }
 
+/**
+ * Executes hybrid FTS5 + SQL `LIKE` search across message content, thread titles, and sender names
+ * using `parseSearchQuery` (`OR` groups, quoted phrases, `^` word-start, `*`/`?` wildcards).
+ * Returns paginated HTML-stripped context snippets alongside self-excluding platform/category facets
+ * and top-20 sender counts with user identities consolidated under one display name.
+ */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { q, page = '1', platform, threadId } = req.query;
 

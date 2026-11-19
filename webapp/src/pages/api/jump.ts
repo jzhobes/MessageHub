@@ -2,6 +2,12 @@ import db from '@/lib/server/db';
 
 import type { NextApiRequest, NextApiResponse } from 'next';
 
+/**
+ * Resolves a `messageId` into its navigation target (`threadId`, `platform`, `page`, `timestamp`,
+ * `category`) by computing its 1-based descending rank using `PAGE_SIZE = 100` (must match
+ * `/api/content`). Maps Facebook post, check-in, and event records to their virtual aggregated thread
+ * IDs and distinct-timestamp rankings.
+ */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { messageId } = req.query;
 
@@ -19,8 +25,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       timestamp_ms: number;
     }
     const record = dbInstance.prepare('SELECT id, thread_id, timestamp_ms FROM content WHERE id = ?').get(messageId) as
-      | ContentRow
-      | undefined;
+      ContentRow | undefined;
 
     if (!record) {
       return res.status(404).json({ error: 'Content not found' });

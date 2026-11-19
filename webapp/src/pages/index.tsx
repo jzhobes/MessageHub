@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 
 import Link from 'next/link';
 import { useRouter } from 'next/router';
@@ -20,53 +20,136 @@ import ThreadList from '@/sections/ThreadList';
 
 const platformPreference = ['facebook', 'instagram', 'google_chat', 'google_mail', 'google_voice'];
 
+function resolvePlatform(candidate: string | undefined, availableMap: Record<string, boolean>) {
+  if (candidate && availableMap[candidate]) {
+    return candidate;
+  }
+
+  for (const p of platformPreference) {
+    if (availableMap[p]) {
+      return p;
+    }
+  }
+  // Fallback to candidate or default if nothing is available
+  return candidate || platformPreference[0];
+}
+
+function subscribeWindowWidth(callback: () => void) {
+  window.addEventListener('resize', callback);
+  return () => window.removeEventListener('resize', callback);
+}
+
+function getWindowWidth() {
+  return window.innerWidth;
+}
+
+function getServerWindowWidth() {
+  return 0;
+}
+
 export default function Home() {
   const router = useRouter();
-  const prevWidthRef = useRef(0);
+  const { isInitialized, availability } = useApp();
+  const { theme, toggleTheme, mounted } = useTheme();
 
-  // --- State ---
-  const [activePlatform, setActivePlatform] = useState<string>('facebook');
+  // --- Layout / Viewport State ---
+  const windowWidth = useSyncExternalStore(subscribeWindowWidth, getWindowWidth, getServerWindowWidth);
+  const isMobile = windowWidth > 0 && windowWidth < 768;
+
+  const [showSidebar, setShowSidebar] = useState(true);
+  const [showMedia, setShowMedia] = useState(false);
+  const [prevWindowWidth, setPrevWindowWidth] = useState(0);
+
+  // Auto-collapse sidebar on initial client measurement or viewport threshold crossing
+  const sidebarThreshold = showMedia ? 1350 : 1024;
+  if (windowWidth !== prevWindowWidth) {
+    if (prevWindowWidth === 0 && windowWidth > 0) {
+      setShowSidebar(windowWidth >= sidebarThreshold);
+    } else if (prevWindowWidth > 0) {
+      if (prevWindowWidth >= sidebarThreshold && windowWidth < sidebarThreshold) {
+        setShowSidebar(false);
+      } else if (prevWindowWidth < sidebarThreshold && windowWidth >= sidebarThreshold) {
+        setShowSidebar(true);
+      }
+    }
+    setPrevWindowWidth(windowWidth);
+  }
+
+  // --- URL-Derived Platform, Category & Thread ---
+  const platformParam = typeof router.query.platform === 'string' ? router.query.platform : undefined;
+  const typeParam = typeof router.query.type === 'string' ? router.query.type : undefined;
+  const threadIdParam = typeof router.query.threadId === 'string' ? router.query.threadId : undefined;
+  const pageParam = typeof router.query.page === 'string' ? router.query.page : undefined;
+
+  const activePlatform = resolvePlatform(platformParam, availability);
+  const defaultCat = activePlatform === 'google_mail' ? 'inbox' : 'message';
+  const activeCategory = typeParam || defaultCat;
+
+  // --- Data & UI State ---
   const [threads, setThreads] = useState<Thread[] | null>(null);
-  const [activeThread, setActiveThread] = useState<Thread | null>(null);
+  const [categoryCounts, setCategoryCounts] = useState<Record<string, number>>({});
   const [messages, setMessages] = useState<ContentRecord[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [targetMessageId, setTargetMessageId] = useState<string | null>(null);
   const [targetTimestamp, setTargetTimestamp] = useState<number | null>(null);
   const [showSetup, setShowSetup] = useState(false);
-  const [showMedia, setShowMedia] = useState(false);
-  const hasCheckedBgIngestRef = useRef(false);
-
-  // Layout State
-  const [showSidebar, setShowSidebar] = useState(true);
-  const [isMobile, setIsMobile] = useState(false);
-  const [windowWidth, setWindowWidth] = useState(0);
   const [highlightToken, setHighlightToken] = useState(0);
-  // Availability & Router State
-  const { isInitialized, availability } = useApp();
-  const [isRouterReady, setIsRouterReady] = useState(false);
+
+  const hasCheckedBgIngestRef = useRef(false);
+  const latestRequestRef = useRef<symbol | null>(null);
 
   // Pagination State
   const [pageRange, setPageRange] = useState({ min: 1, max: 1 });
   const [hasMoreOld, setHasMoreOld] = useState(false);
   const [hasMoreNew, setHasMoreNew] = useState(false);
-  const [activeCategory, setActiveCategory] = useState<string>('message');
 
-  const { theme, toggleTheme, mounted } = useTheme();
-
-  const resolvePlatform = useCallback((candidate: string | undefined, availableMap: Record<string, boolean>) => {
-    if (candidate && availableMap[candidate]) {
-      return candidate;
-    }
-
-    for (const p of platformPreference) {
-      if (availableMap[p]) {
-        return p;
+  // Reset thread/message lists when platform or category changes
+  const platformCategoryKey = `${activePlatform}:${activeCategory}`;
+  const [prevPlatformCategoryKey, setPrevPlatformCategoryKey] = useState(platformCategoryKey);
+  if (platformCategoryKey !== prevPlatformCategoryKey) {
+    setPrevPlatformCategoryKey(platformCategoryKey);
+    setThreads(null);
+    setMessages(null);
+    if (activePlatform === 'google_mail' && showMedia) {
+      setShowMedia(false);
+      if (windowWidth >= 1024) {
+        setShowSidebar(true);
       }
     }
-    // Fallback to candidate or default if nothing is available
-    return candidate || platformPreference[0];
-  }, []);
+  }
+
+  const activeThread = useMemo<Thread | null>(() => {
+    if (!threads?.length) {
+      return null;
+    }
+    if (threadIdParam) {
+      const target = threads.find((t) => t.id === threadIdParam);
+      return target ? { ...target, platform: activePlatform } : null;
+    }
+    return !isMobile ? { ...threads[0], platform: activePlatform } : null;
+  }, [threads, threadIdParam, activePlatform, isMobile]);
+
+  const activeThreadId = activeThread?.id ?? null;
+  const activeThreadPageCount = activeThread?.pageCount;
+
+  const parsedPage = pageParam ? parseInt(pageParam, 10) : 1;
+  const startPage = Number.isNaN(parsedPage) || parsedPage < 1 ? 1 : parsedPage;
+  const targetLoadKey =
+    activeThreadId && (!threadIdParam || threadIdParam === activeThreadId)
+      ? `${activePlatform}:${activeThreadId}:${startPage}`
+      : '';
+
+  const [prevLoadKey, setPrevLoadKey] = useState('');
+  if (targetLoadKey !== prevLoadKey) {
+    setPrevLoadKey(targetLoadKey);
+    if (targetLoadKey) {
+      setPageRange({ min: startPage, max: startPage });
+      setMessages(null);
+      setHasMoreOld(false);
+      setHasMoreNew(false);
+    }
+  }
 
   // --- Callbacks & Helpers ---
 
@@ -97,23 +180,29 @@ export default function Home() {
     [router, activeCategory],
   );
 
-  const latestRequestRef = useRef<symbol | null>(null);
+  const handleShowMediaChange = useCallback((next: boolean) => {
+    setShowMedia(next);
+    const width = window.innerWidth;
+    if (next) {
+      if (width < 1350) {
+        setShowSidebar(false);
+      }
+    } else if (width >= 1024) {
+      setShowSidebar(true);
+    }
+  }, []);
 
-  // Load Messages Helper
+  // Load Older/Newer Messages Helper
   const loadMessages = useCallback(
-    async (threadId: string, pageNum: number, mode: 'reset' | 'older' | 'newer') => {
-      if (!activeThread || activeThread.id !== threadId) {
+    async (threadId: string, pageNum: number, mode: 'older' | 'newer') => {
+      if (!activeThreadId || activeThreadId !== threadId) {
         return;
       }
 
       const requestId = Symbol('loadMessages');
       latestRequestRef.current = requestId;
 
-      if (mode === 'reset') {
-        setMessages(null);
-      } else {
-        setLoading(true);
-      }
+      setLoading(true);
 
       try {
         const res = await fetch(
@@ -131,41 +220,28 @@ export default function Home() {
           const hasData = newMsgs.length > 0;
           const isFullPage = newMsgs.length >= 100;
 
-          if (mode === 'reset') {
-            setMessages(newMsgs);
-            setHasMoreNew(pageNum > 1);
-            setHasMoreOld(hasData && isFullPage);
-            setPageRange({ min: pageNum, max: pageNum });
-          } else if (mode === 'older') {
+          if (mode === 'older') {
             setMessages((prev) => [...(prev || []), ...newMsgs]);
-            if (activeThread.pageCount) {
-              setHasMoreOld(pageNum < activeThread.pageCount);
+            if (activeThreadPageCount) {
+              setHasMoreOld(pageNum < activeThreadPageCount);
             } else {
               setHasMoreOld(hasData && isFullPage);
             }
             setPageRange((prev) => ({ ...prev, max: pageNum }));
-          } else if (mode === 'newer') {
+          } else {
             setMessages((prev) => [...newMsgs, ...(prev || [])]);
             setHasMoreNew(pageNum > 1);
             setPageRange((prev) => ({ ...prev, min: pageNum }));
           }
         } else {
-          // Handle error state
-          if (mode === 'reset') {
-            setMessages([]); // Clear spinner
-          }
           if (mode === 'older') {
             setHasMoreOld(false);
-          }
-          if (mode === 'newer') {
+          } else {
             setHasMoreNew(false);
           }
         }
       } catch (e) {
         console.error(e);
-        if (mode === 'reset') {
-          setMessages([]);
-        } // Clear spinner on throw
       } finally {
         // Only turn off loading if this is still the latest request
         if (latestRequestRef.current === requestId) {
@@ -173,22 +249,20 @@ export default function Home() {
         }
       }
     },
-    [activePlatform, activeThread],
+    [activePlatform, activeThreadId, activeThreadPageCount],
   );
 
   const handlePlatformSelect = useCallback(
     (p: string) => {
       const safePlatform = resolvePlatform(p, availability);
-      const defaultCat = safePlatform === 'google_mail' ? 'inbox' : 'message';
+      const defaultCategory = safePlatform === 'google_mail' ? 'inbox' : 'message';
 
       // 1. Same platform/category selection
-      if (safePlatform === activePlatform && activeCategory === defaultCat) {
+      if (safePlatform === activePlatform && activeCategory === defaultCategory) {
         if (isMobile) {
-          if (activeThread) {
-            setActiveThread(null);
+          if (activeThreadId) {
             setMessages(null);
-            lastLoadedRef.current = '';
-            updateUrl(safePlatform, undefined, undefined, defaultCat);
+            updateUrl(safePlatform, undefined, undefined, defaultCategory);
           }
           setShowSidebar(false);
         }
@@ -196,57 +270,42 @@ export default function Home() {
       }
 
       // 2. Changing Platform or Category:
-      // Full reset. Threads will be re-fetched by Effect 4 because activePlatform or activeCategory will change.
+      // Full reset. Threads will be re-fetched because activePlatform or activeCategory will change.
       setThreads(null);
-      setActiveThread(null);
       setMessages(null);
-      lastLoadedRef.current = '';
-      if (activeCategory !== defaultCat) {
-        setActiveCategory(defaultCat);
-      }
-      updateUrl(safePlatform, undefined, undefined, defaultCat);
+      updateUrl(safePlatform, undefined, undefined, defaultCategory);
 
       if (isMobile) {
         setShowSidebar(false);
       }
     },
-    [availability, resolvePlatform, updateUrl, isMobile, activePlatform, activeCategory, activeThread],
+    [availability, updateUrl, isMobile, activePlatform, activeCategory, activeThreadId],
   );
 
   const handleCategoryChange = useCallback(
     (cat: string) => {
       // 1. Same category selection
       if (cat === activeCategory) {
-        if (isMobile && activeThread) {
-          setActiveThread(null);
+        if (isMobile && activeThreadId) {
           setMessages(null);
-          lastLoadedRef.current = '';
           updateUrl(activePlatform, undefined, undefined, cat);
-          return;
         }
         return;
       }
 
       // 2. Changing category
-      setActiveCategory(cat); // Trigger Effect 4
       setThreads(null);
-      setActiveThread(null);
       setMessages(null);
-      lastLoadedRef.current = '';
       updateUrl(activePlatform, undefined, undefined, cat);
     },
-    [activePlatform, updateUrl, activeCategory, activeThread, isMobile],
+    [activePlatform, updateUrl, activeCategory, activeThreadId, isMobile],
   );
 
   const handleThreadSelect = useCallback(
     (t: Thread) => {
-      if (activeThread?.id === t.id) {
+      if (activeThreadId === t.id) {
         return;
       }
-      setActiveThread({
-        ...t,
-        platform: activePlatform,
-      });
       setMessages(null);
       // Don't set loading(true) here, as messages=null handles the spinner
       setHasMoreOld(false);
@@ -256,7 +315,7 @@ export default function Home() {
       setTargetTimestamp(null);
       updateUrl(activePlatform, t.id, undefined, activeCategory); // Page undefined -> 1
     },
-    [activeThread, activePlatform, activeCategory, updateUrl],
+    [activeThreadId, activePlatform, activeCategory, updateUrl],
   );
 
   const handleSearchNavigate = useCallback(
@@ -280,20 +339,20 @@ export default function Home() {
   );
 
   const handleLoadOld = useCallback(() => {
-    if (!activeThread) {
+    if (!activeThreadId) {
       return;
     }
     const next = pageRange.max + 1;
-    if (activeThread.pageCount && next > activeThread.pageCount) {
+    if (activeThreadPageCount && next > activeThreadPageCount) {
       setHasMoreOld(false);
       return;
     }
     setPageRange((prev) => ({ ...prev, max: next }));
-    loadMessages(activeThread.id, next, 'older');
-  }, [activeThread, pageRange.max, loadMessages]);
+    loadMessages(activeThreadId, next, 'older');
+  }, [activeThreadId, activeThreadPageCount, pageRange.max, loadMessages]);
 
   const handleLoadNew = useCallback(() => {
-    if (!activeThread) {
+    if (!activeThreadId) {
       return;
     }
     const next = pageRange.min - 1;
@@ -302,33 +361,12 @@ export default function Home() {
       return;
     }
     setPageRange((prev) => ({ ...prev, min: next }));
-    loadMessages(activeThread.id, next, 'newer');
-  }, [activeThread, pageRange.min, loadMessages]);
+    loadMessages(activeThreadId, next, 'newer');
+  }, [activeThreadId, pageRange.min, loadMessages]);
 
   // --- Effects ---
 
-  // 1. Router Ready Check
-  useEffect(() => {
-    if (router.isReady) {
-      setIsRouterReady(true);
-    }
-  }, [router.isReady]);
-
-  // 2. Initialize Backend Status
-  useEffect(() => {
-    if (isInitialized === false) {
-      setShowSetup(true);
-    }
-
-    if (availability) {
-      const safePlatform = resolvePlatform(activePlatform, availability);
-      if (safePlatform !== activePlatform) {
-        setActivePlatform(safePlatform);
-      }
-    }
-  }, [activePlatform, resolvePlatform, isInitialized, availability]);
-
-  // 3. One-time Check for Background Jobs on Mount
+  // 1. One-time Check for Background Jobs on Mount
   useEffect(() => {
     const checkIngest = async () => {
       if (hasCheckedBgIngestRef.current) {
@@ -350,76 +388,17 @@ export default function Home() {
     };
 
     checkIngest();
-  }, [setShowSetup]);
+  }, []);
 
-  // 3. Responsive Check
+  // 2. Load Threads on activePlatform / activeCategory change
   useEffect(() => {
-    const handleResize = () => {
-      const width = window.innerWidth;
-      setWindowWidth(width);
-      const mobile = width < 768;
-      setIsMobile(mobile);
-
-      // Auto-collapse sidebar logic
-      // When media is open, we need more room, so we collapse sidebar at 1350px instead of 1024px
-      const threshold = showMedia ? 1350 : 1024;
-      const prevWidth = prevWidthRef.current;
-
-      if (prevWidth > 0) {
-        if (prevWidth >= threshold && width < threshold) {
-          setShowSidebar(false);
-        } else if (prevWidth < threshold && width >= threshold) {
-          setShowSidebar(true);
-        }
-      }
-      prevWidthRef.current = width;
-    };
-
-    const initialWidth = window.innerWidth;
-    prevWidthRef.current = initialWidth;
-
-    handleResize();
-    const threshold = showMedia ? 1350 : 1024;
-    if (initialWidth < threshold) {
-      setShowSidebar(false);
-    } else {
-      setShowSidebar(true);
-    }
-
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, [showMedia]);
-
-  // Sync sidebar state when Media Panel is toggled manually
-  useEffect(() => {
-    if (!mounted) {
-      return;
-    }
-    const width = window.innerWidth;
-    if (showMedia) {
-      if (width < 1350) {
-        setShowSidebar(false);
-      }
-    } else {
-      if (width >= 1024) {
-        setShowSidebar(true);
-      }
-    }
-  }, [showMedia, mounted]);
-
-  const [categoryCounts, setCategoryCounts] = useState<Record<string, number>>({});
-  // ...
-  // 4. Load Threads on activePlatform change
-  useEffect(() => {
-    if (!isRouterReady) {
+    if (!router.isReady) {
       return;
     }
 
     let ignore = false;
 
     async function loadThreads() {
-      // Set to null while fetching to trigger loading state
-      setThreads(null);
       try {
         const res = await fetch(`/api/threads?platform=${encodeURIComponent(activePlatform)}&type=${activeCategory}`);
         if (res.ok) {
@@ -443,104 +422,78 @@ export default function Home() {
     return () => {
       ignore = true;
     };
-  }, [activePlatform, activeCategory, isRouterReady]);
+  }, [activePlatform, activeCategory, router.isReady]);
 
-  // 5. Sync state with URL params on mount/update (Navigation)
+  // 3. Auto-write first thread ID to URL on desktop when none is selected
   useEffect(() => {
-    if (!isRouterReady) {
+    if (router.isReady && !isMobile && !threadIdParam && threads?.length) {
+      updateUrl(activePlatform, threads[0].id, undefined, activeCategory);
+    }
+  }, [router.isReady, isMobile, threadIdParam, threads, activePlatform, activeCategory, updateUrl]);
+
+  // 4. Initial Load / Reset Messages when Active Thread or Page changes
+  useEffect(() => {
+    if (!targetLoadKey || !activeThreadId) {
       return;
     }
+    const threadId: string = activeThreadId;
 
-    const platformParam = router.query.platform as string;
-    const threadIdParam = router.query.threadId as string;
-    const typeParam = router.query.type as string;
+    const controller = new AbortController();
+    const requestId = Symbol('loadMessages');
+    latestRequestRef.current = requestId;
 
-    const safePlatform = resolvePlatform(platformParam || activePlatform, availability);
+    console.info(`[Effect] Initializing thread ${threadId} at Page ${startPage}`);
 
-    // If URL contains an invalid/unavailable platform, rewrite it to the first valid one
-    if (safePlatform !== activePlatform) {
-      setActivePlatform(safePlatform);
-      setActiveThread(null);
-      setMessages(null);
-      setThreads(null);
-      // If no type param, set default for new platform
-      const defaultCat = safePlatform === 'google_mail' ? 'inbox' : 'message';
-      setActiveCategory(typeParam || defaultCat);
-      return;
-    }
+    async function fetchInitialMessages() {
+      try {
+        const res = await fetch(
+          `/api/content?threadId=${encodeURIComponent(threadId)}&page=${startPage}&platform=${encodeURIComponent(activePlatform)}`,
+          { signal: controller.signal },
+        );
 
-    const defaultCat = activePlatform === 'google_mail' ? 'inbox' : 'message';
-
-    // Auto-close Media Panel if switching to a platform that doesn't support it (e.g., Gmail)
-    if (activePlatform === 'google_mail' && showMedia) {
-      setShowMedia(false);
-    }
-    const effectiveType = typeParam || defaultCat;
-    if (effectiveType !== activeCategory) {
-      setActiveCategory(effectiveType);
-    }
-
-    if (threads?.length) {
-      if (threadIdParam) {
-        if (threadIdParam !== activeThread?.id) {
-          const target = threads.find((t) => t.id === threadIdParam);
-          if (target) {
-            setActiveThread({
-              ...target,
-              platform: safePlatform,
-            });
-          }
+        if (controller.signal.aborted || latestRequestRef.current !== requestId) {
+          return;
         }
-      } else if (!isMobile) {
-        // Auto-select first thread on desktop
-        handleThreadSelect(threads[0]);
-      } else if (activeThread) {
-        setActiveThread(null);
+
+        if (res.ok) {
+          const data = await res.json();
+          if (controller.signal.aborted || latestRequestRef.current !== requestId) {
+            return;
+          }
+          const newMsgs = data.records || [];
+          const hasData = newMsgs.length > 0;
+          const isFullPage = newMsgs.length >= 100;
+
+          setMessages(newMsgs);
+          setHasMoreNew(startPage > 1);
+          setHasMoreOld(hasData && isFullPage);
+          setPageRange({ min: startPage, max: startPage });
+        } else {
+          setMessages([]);
+        }
+      } catch (e) {
+        if (e instanceof Error && e.name === 'AbortError') {
+          return;
+        }
+        console.error(e);
+        if (latestRequestRef.current === requestId) {
+          setMessages([]);
+        }
+      } finally {
+        if (!controller.signal.aborted && latestRequestRef.current === requestId) {
+          setLoading(false);
+        }
       }
     }
-  }, [
-    isRouterReady,
-    router.query,
-    activePlatform,
-    activeThread,
-    activeCategory,
-    threads,
-    resolvePlatform,
-    availability,
-    updateUrl,
-    handleThreadSelect,
-    isMobile,
-    showMedia,
-  ]);
 
-  const lastLoadedRef = useRef<string>('');
+    fetchInitialMessages();
 
-  // 6. Initial Load / Reset Messages when Active Thread changes
-  useEffect(() => {
-    if (!activeThread?.id) {
-      return;
-    }
+    return () => {
+      controller.abort();
+    };
+  }, [targetLoadKey, activeThreadId, activePlatform, startPage]);
 
-    const threadIdParam = router.query.threadId as string | undefined;
-    if (threadIdParam && threadIdParam !== activeThread.id) {
-      return;
-    }
-
-    const pageParam = router.query.page;
-    const startPage = pageParam ? parseInt(pageParam as string, 10) : 1;
-    const loadKey = `${activeThread.id}-${startPage}`;
-
-    if (lastLoadedRef.current === loadKey) {
-      return;
-    }
-
-    console.info(`[Effect] Initializing thread ${activeThread.id} at Page ${startPage}`);
-    lastLoadedRef.current = loadKey;
-    setPageRange({ min: startPage, max: startPage });
-    loadMessages(activeThread.id, startPage, 'reset');
-  }, [activeThread?.id, router.query.page, router.query.threadId, loadMessages]);
-
-  if (!isRouterReady) {
+  if (!router.isReady) {
     return <div>Loading...</div>;
   }
 
@@ -551,6 +504,7 @@ export default function Home() {
   const showThreadContent = !isMobile || (isMobile && !!activeThread && !showMedia);
   const isSidebarVisible = true;
   const collapsed = !showSidebar;
+  const isSetupOpen = showSetup || isInitialized === false;
 
   // Derive initialization state to prevent flickering during transitions
   // We are initializing if:
@@ -558,14 +512,14 @@ export default function Home() {
   // 2. We're on desktop, no thread is active, and we're currently loading threads (threads === null)
   // 3. We're on desktop, no thread is active, but threads have arrived and are waiting to be auto-selected (threads.length > 0)
   const isInitializing =
-    (!!router.query.threadId && !activeThread && availability[activePlatform]) ||
+    (!!threadIdParam && !activeThread && availability[activePlatform]) ||
     (!isMobile && !activeThread && (threads === null || !!threads?.length));
 
   return (
     <div className={styles.container} data-theme={theme}>
-      {showSetup && (
+      {isSetupOpen && (
         <SetupModal
-          isOpen={showSetup}
+          isOpen={isSetupOpen}
           initialStep={isInitialized ? 2 : 0}
           isFirstRun={isInitialized === false}
           onClose={() => setShowSetup(false)}
@@ -586,7 +540,7 @@ export default function Home() {
             <button
               className={styles.iconButton}
               onClick={() => {
-                setShowMedia(false);
+                handleShowMediaChange(false);
                 updateUrl(activePlatform);
               }}
             >
@@ -604,10 +558,11 @@ export default function Home() {
             className={styles.appTitle}
             href="/"
             prefetch={false}
-            onClick={(e) => {
-              // Force full reload to guarantee clean state
-              e.preventDefault();
-              window.location.href = '/';
+            onClick={() => {
+              handleShowMediaChange(false);
+              setTargetMessageId(null);
+              setTargetTimestamp(null);
+              setIsSearchOpen(false);
             }}
           >
             <span>💬</span>
@@ -692,7 +647,7 @@ export default function Home() {
                 showMedia={showMedia}
                 onStartReached={handleLoadOld}
                 onEndReached={handleLoadNew}
-                onShowMediaChange={setShowMedia}
+                onShowMediaChange={handleShowMediaChange}
               />
             </div>
           )}
@@ -710,7 +665,7 @@ export default function Home() {
               isOpen={showMedia}
               platform={activeThread?.platform || ''}
               threadId={activeThread?.id || ''}
-              onClose={() => setShowMedia(false)}
+              onClose={() => handleShowMediaChange(false)}
               onMediaClick={handleSearchNavigate}
             />
           </div>

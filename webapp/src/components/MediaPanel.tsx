@@ -26,25 +26,50 @@ export default function MediaPanel({ threadId, platform, isOpen, onClose, onMedi
   const [media, setMedia] = useState<MediaItem[]>([]);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    if (isOpen && threadId) {
-      fetchMedia();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, threadId]);
+  const fetchKey = isOpen && threadId ? threadId : null;
+  const [prevFetchKey, setPrevFetchKey] = useState<string | null>(null);
 
-  async function fetchMedia() {
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/media-gallery?threadId=${encodeURIComponent(threadId)}`);
-      const data = await res.json();
-      setMedia(data.media || []);
-    } catch (error) {
-      console.error('Failed to fetch media:', error);
-    } finally {
-      setLoading(false);
+  if (fetchKey !== prevFetchKey) {
+    setPrevFetchKey(fetchKey);
+    if (fetchKey) {
+      setLoading(true);
     }
   }
+
+  useEffect(() => {
+    if (!isOpen || !threadId) {
+      return;
+    }
+
+    const controller = new AbortController();
+
+    async function fetchMedia() {
+      try {
+        const res = await fetch(`/api/media-gallery?threadId=${encodeURIComponent(threadId)}`, {
+          signal: controller.signal,
+        });
+        const data = await res.json();
+        if (!controller.signal.aborted) {
+          setMedia(data.media || []);
+        }
+      } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') {
+          return;
+        }
+        console.error('Failed to fetch media:', error);
+      } finally {
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
+      }
+    }
+
+    fetchMedia();
+
+    return () => {
+      controller.abort();
+    };
+  }, [isOpen, threadId]);
 
   // Flatten media with month headers for VirtuosoGrid
   const gridData = useMemo(() => {

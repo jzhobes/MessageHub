@@ -55,6 +55,10 @@ export interface FileExplorerFooterData {
   visibleCount: number;
 }
 
+/**
+ * Minimal filename matcher supporting only `'*'`, case-insensitive extension globs (`'*.ext'`),
+ * and exact filename equality (not full glob syntax).
+ */
 function simpleGlobMatch(filename: string, pattern: string): boolean {
   if (pattern === '*') {
     return true;
@@ -77,6 +81,11 @@ export function formatBytes(bytes: number, decimals = 1) {
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
 }
 
+/**
+ * Server-backed directory browser supporting `'import'` (archive selection) and `'workspace'`
+ * (destination folder selection with path validation metadata) modes. Evaluates `filters` in order
+ * so later matching rules override earlier ones; folders are always visible and never selectable.
+ */
 export default function FileExplorer({
   initialPath,
   height = 300,
@@ -93,6 +102,7 @@ export default function FileExplorer({
 }: FileExplorerProps) {
   const [currentPath, setCurrentPath] = useState(initialPath || '');
   const [debouncedPath, setDebouncedPath] = useState(currentPath);
+  const [prevInitialPath, setPrevInitialPath] = useState(initialPath);
   const [parentPath, setParentPath] = useState<string | null>(null);
   const [items, setItems] = useState<FileItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -130,13 +140,14 @@ export default function FileExplorer({
     setCurrentPath(newPath);
   };
 
-  // Sync initialPath if changed from outside
-  useEffect(() => {
+  // Sync initialPath if changed from outside (adjusting state during render)
+  if (initialPath !== prevInitialPath) {
+    setPrevInitialPath(initialPath);
     if (initialPath !== undefined && initialPath !== currentPath) {
-      navigateTo(initialPath, true);
+      setCurrentPath(initialPath);
+      setDebouncedPath(initialPath);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialPath]);
+  }
 
   // Notify parent of path changes (Debounced to prevent rendering loops)
   useEffect(() => {

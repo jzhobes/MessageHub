@@ -51,6 +51,12 @@ export function ModalHeader({
   );
 }
 
+/**
+ * Native `<dialog>` modal (`showModal()`) with 300ms exit-animation unmounting via `useModalAnimation`.
+ * Intercepts Escape (`cancel`) and backdrop clicks according to `dismissible`, fires `onAfterClose`
+ * after unmount, and defers enabling `ModalHeader`'s close button by 10ms so the browser's initial
+ * focus scan lands on modal content first.
+ */
 export default function BaseModal({
   isOpen,
   children,

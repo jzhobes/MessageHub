@@ -37,6 +37,16 @@ function sampleMessages(messages, limit = 10, maxChars = 1000) {
   return messages.slice(0, limit).join('\n---\n').substring(0, maxChars);
 }
 
+/**
+ * Handles worker commands backed by a lazily initialized `Xenova/mobilebert-uncased-mnli` zero-shot
+ * classifier (WebGPU with WASM fallback):
+ * - `'preload'`: warms up the model cache and posts `preload:complete`.
+ * - `'filter_threads'`: classifies sampled messages per thread against `labels`, posting
+ *   `filter:status`, `filter:match`, `filter:progress`, and `filter:complete`.
+ * - default (`'analyze'`): classifies `messages` against `LABELS`, posting `analyze:status` and
+ *   `analyze:result`.
+ * Emits `progress` during model downloads (>200ms) and `error` on failure.
+ */
 self.onmessage = async (e) => {
   const { type, messages, threads, labels: targetLabels, isLast } = e.data;
 

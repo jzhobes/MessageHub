@@ -7,6 +7,13 @@ import appConfig from '@/lib/shared/appConfig';
 
 import type { NextApiRequest, NextApiResponse } from 'next';
 
+/**
+ * Manages workspace path configuration.
+ * - `GET`: validates the active `WORKSPACE_PATH` against the allowed workspace root and reports existence.
+ * - `POST`: validates safety, nesting, and writability for `workspacePath`, optionally creates the
+ *   directory (`create: true`), closes the active SQLite connection before updating `appConfig`, and
+ *   persists the setting to `.env`.
+ */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === 'GET') {
     const currentPath = process.env.WORKSPACE_PATH || 'data';

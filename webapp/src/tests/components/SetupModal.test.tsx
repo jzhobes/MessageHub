@@ -1,6 +1,6 @@
 import React from 'react';
 
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from 'vitest';
 
 import SetupModal from '@/components/modals/SetupModal';
@@ -26,13 +26,6 @@ vi.mock('@/components/modals/setup/ScanStep', () => ({
   default: () => <div data-testid="scan-step">Scan Step</div>,
 }));
 
-// Mock global fetch
-global.fetch = vi.fn().mockImplementation(() =>
-  Promise.resolve({
-    json: () => Promise.resolve({ workspacePath: '/test/path', resolved: '/test/path' }),
-  }),
-) as Mock;
-
 describe('SetupModal Component', () => {
   const defaultProps = {
     isOpen: true,
@@ -57,6 +50,12 @@ describe('SetupModal Component', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockUseIngestion();
+    global.fetch = vi.fn().mockImplementation(() =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ workspacePath: '/test/path', resolved: '/test/path' }),
+      }),
+    ) as Mock;
   });
 
   afterEach(() => {
@@ -159,5 +158,44 @@ describe('SetupModal Component', () => {
     // 4. Scan
     expect(await screen.findByTestId('scan-step')).toBeTruthy();
     expect(dots[2].className).toContain('dotActive');
+  });
+
+  it('stays on Path step when saving workspace config fails during FirstRun', async () => {
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    global.fetch = vi.fn().mockImplementation((_url: string, options?: RequestInit) => {
+      if (options?.method === 'POST') {
+        return Promise.resolve({
+          ok: false,
+          json: () => Promise.resolve({ error: 'Permission denied' }),
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ workspacePath: '/test/path', resolved: '/test/path' }),
+      });
+    }) as Mock;
+
+    try {
+      render(<SetupModal {...defaultProps} isFirstRun={true} initialStep={3} />);
+
+      expect(await screen.findByTestId('path-step')).toBeTruthy();
+
+      const nextButton = screen.getByRole('button', { name: /Next/i }) as HTMLButtonElement;
+      await waitFor(() => {
+        expect(nextButton.disabled).toBe(false);
+      });
+
+      nextButton.click();
+
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalledWith('/api/setup/config', expect.objectContaining({ method: 'POST' }));
+      });
+
+      expect(screen.getByTestId('path-step')).toBeTruthy();
+      expect(screen.queryByTestId('import-step')).toBeNull();
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
   });
 });

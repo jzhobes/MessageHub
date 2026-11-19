@@ -41,6 +41,12 @@ interface PlatformSelectionDropdownProps {
   align?: 'left' | 'right';
 }
 
+/**
+ * Hierarchical platform and category multi-select dropdown where empty `selectedPlatforms` and
+ * `selectedCategories` sets represent "All Platforms". Toggling a parent platform toggles all of its
+ * child categories; unchecking only a subset of child categories keeps the parent ID in
+ * `selectedPlatforms` and renders the parent checkbox as indeterminate.
+ */
 export default function PlatformSelectionDropdown({
   open,
   onOpenChange,

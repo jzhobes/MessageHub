@@ -475,8 +475,8 @@ def ingest_google_mail_mbox(cursor, mbox_path, identity_stats):
             else:
                 skipped_total += 1
 
-            if i % 100 == 0:
-                print(f"  ... Processed {i} emails...")
+            if (i + 1) % 100 == 0:
+                print(f"  ... Processed {i + 1} emails...")
 
         except Exception as e:
             print(f"Error processing message {i} in MBOX: {e}")

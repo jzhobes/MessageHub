@@ -133,7 +133,7 @@ export default function SetupModal({
 
         // First-run configuration does not trigger immediate finalization or refresh.
         if (isFirstRun) {
-          return;
+          return true;
         }
 
         // Settings mode: Finalize changes and reload when switching to an existing workspace.
@@ -142,16 +142,20 @@ export default function SetupModal({
             await fetch('/api/setup/finalize', { method: 'POST' });
           }
           window.location.reload();
+          return true;
         } catch {
           setPathError('Network error finalizing workspace change');
+          return false;
         }
       } else {
         setPathError(data.error || 'Failed to update workspace');
         console.error('Error saving workspace path:', data.error);
+        return false;
       }
     } catch (e) {
       setPathError('Network error updating workspace');
       console.error('Network error saving workspace path', e);
+      return false;
     }
   };
 
@@ -172,7 +176,10 @@ export default function SetupModal({
     }
 
     if (activeTab === 'path') {
-      await saveConfig();
+      const saved = await saveConfig();
+      if (!saved) {
+        return;
+      }
 
       if (isFirstRun) {
         // Validation check for first run

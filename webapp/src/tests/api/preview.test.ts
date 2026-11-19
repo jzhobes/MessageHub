@@ -1,0 +1,295 @@
+// @vitest-environment node
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+
+import { createMocks } from 'node-mocks-http';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import appConfig from '@/lib/shared/appConfig';
+import handler from '@/pages/api/preview';
+
+describe('/api/preview', () => {
+  let originalWorkspace: string;
+  let originalInstagramAuth: string | undefined;
+  let tempDir: string;
+
+  beforeEach(() => {
+    originalWorkspace = appConfig.WORKSPACE_PATH;
+    originalInstagramAuth = process.env.INSTAGRAM_AUTH;
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'messagehub-preview-'));
+    appConfig.WORKSPACE_PATH = tempDir;
+
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+
+    appConfig.WORKSPACE_PATH = originalWorkspace;
+    if (originalInstagramAuth === undefined) {
+      delete process.env.INSTAGRAM_AUTH;
+    } else {
+      process.env.INSTAGRAM_AUTH = originalInstagramAuth;
+    }
+
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it('returns 400 when url is missing', async () => {
+    const { req, res } = createMocks({ method: 'GET', query: {} });
+
+    await handler(req, res);
+
+    expect(res._getStatusCode()).toBe(400);
+    expect(res._getJSONData()).toEqual({ error: 'Missing url' });
+  });
+
+  it('returns 400 when url is malformed', async () => {
+    const { req, res } = createMocks({ method: 'GET', query: { url: 'invalid-url' } });
+
+    await handler(req, res);
+
+    expect(res._getStatusCode()).toBe(400);
+    expect(res._getJSONData()).toEqual({ error: 'Invalid URL' });
+  });
+
+  it.each([
+    'http://localhost/admin',
+    'http://127.0.0.1/admin',
+    'http://[::1]/admin',
+    'http://nas.local/files',
+    'http://metadata.internal/token',
+    'http://10.0.0.1/status',
+    'http://192.168.1.5/router',
+    'http://172.16.0.1/metrics',
+    'http://172.31.255.1/metrics',
+    'http://169.254.169.254/latest/meta-data/',
+  ])('blocks SSRF target without calling fetch: %s', async (targetUrl) => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { req, res } = createMocks({ method: 'GET', query: { url: targetUrl } });
+
+    await handler(req, res);
+
+    expect(res._getStatusCode()).toBe(403);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('returns cached preview without calling fetch on cache hit', async () => {
+    const targetUrl = 'https://example.com/cached-article';
+    const cachedEntry = {
+      url: targetUrl,
+      title: 'Cached Title',
+      image: 'https://example.com/cached.png',
+      description: 'Cached Description',
+    };
+    fs.writeFileSync(path.join(tempDir, 'preview_cache.json'), JSON.stringify({ [targetUrl]: cachedEntry }));
+
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { req, res } = createMocks({ method: 'GET', query: { url: targetUrl } });
+
+    await handler(req, res);
+
+    expect(res._getStatusCode()).toBe(200);
+    expect(res._getJSONData()).toEqual(cachedEntry);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('extracts OpenGraph/Twitter metadata, decodes HTML entities, and caches result', async () => {
+    const targetUrl = 'https://example.com/article';
+    const html = `
+      <html>
+        <head>
+          <meta content="Hello &amp; Welcome" property="og:title" />
+          <meta property="twitter:image" content="https://example.com/hero.jpg" />
+          <meta name="description" content="It&#39;s a great &quot;day&quot;" />
+        </head>
+      </html>
+    `;
+    const fetchMock = vi.fn().mockResolvedValue(new Response(html, { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { req, res } = createMocks({ method: 'GET', query: { url: [targetUrl] } });
+
+    await handler(req, res);
+
+    expect(res._getStatusCode()).toBe(200);
+    const data = res._getJSONData();
+    expect(data).toEqual({
+      url: targetUrl,
+      title: 'Hello & Welcome',
+      image: 'https://example.com/hero.jpg',
+      description: 'It\'s a great "day"',
+    });
+
+    const writtenCache = JSON.parse(fs.readFileSync(path.join(tempDir, 'preview_cache.json'), 'utf8'));
+    expect(writtenCache[targetUrl]).toEqual(data);
+  });
+
+  it('uses Reddit JSON strategy for array responses and filters non-http thumbnails', async () => {
+    const targetUrl = 'https://www.reddit.com/r/typescript/comments/abc123/post_title/';
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify([
+          {
+            data: {
+              children: [
+                {
+                  data: {
+                    title: 'TypeScript 5 Tips',
+                    thumbnail: 'self',
+                    selftext: 'Body text here',
+                  },
+                },
+              ],
+            },
+          },
+        ]),
+        { status: 200 },
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { req, res } = createMocks({ method: 'GET', query: { url: targetUrl } });
+
+    await handler(req, res);
+
+    expect(res._getStatusCode()).toBe(200);
+    expect(res._getJSONData()).toEqual({
+      url: targetUrl,
+      title: 'TypeScript 5 Tips',
+      image: null,
+      description: 'Body text here',
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://www.reddit.com/r/typescript/comments/abc123/post_title.json',
+      expect.any(Object),
+    );
+  });
+
+  it('uses Reddit JSON object responses and falls back to HTML when JSON lacks a title', async () => {
+    const targetUrl = 'https://reddit.com/r/news/comments/xyz';
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            data: {
+              children: [{ data: { thumbnail: 'https://b.thumbs.redditmedia.com/thumb.jpg' } }],
+            },
+          }),
+          { status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response('<meta property="og:title" content="Fallback HTML Title" />', { status: 200 }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { req, res } = createMocks({ method: 'GET', query: { url: targetUrl } });
+
+    await handler(req, res);
+
+    expect(res._getStatusCode()).toBe(200);
+    expect(res._getJSONData().title).toBe('Fallback HTML Title');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('uses Facebook crawler headers and rewrites lookaside image URLs to proxy', async () => {
+    const targetUrl = 'https://www.facebook.com/share/p/12345';
+    const lookasideUrl = 'https://lookaside.fbsbx.com/lookaside/crawler/media/?media_id=99';
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        `<meta property="og:title" content="FB Post" /><meta property="og:image" content="${lookasideUrl}" />`,
+        {
+          status: 200,
+        },
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { req, res } = createMocks({ method: 'GET', query: { url: targetUrl } });
+
+    await handler(req, res);
+
+    expect(res._getStatusCode()).toBe(200);
+    expect(res._getJSONData()).toEqual({
+      url: targetUrl,
+      title: 'FB Post',
+      image: `/api/fb-image-proxy?url=${encodeURIComponent(lookasideUrl)}`,
+      description: null,
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      targetUrl,
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          'User-Agent': expect.stringContaining('facebookexternalhit'),
+        }),
+      }),
+    );
+  });
+
+  it('sends authenticated Instagram cookie headers when INSTAGRAM_AUTH is configured', async () => {
+    process.env.INSTAGRAM_AUTH = JSON.stringify({ sessionid: 'sess123', csrftoken: 'csrf456' });
+    const targetUrl = 'https://www.instagram.com/p/C12345/';
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response('<meta property="og:title" content="IG Photo" />', { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { req, res } = createMocks({ method: 'GET', query: { url: targetUrl } });
+
+    await handler(req, res);
+
+    expect(res._getStatusCode()).toBe(200);
+    expect(res._getJSONData().title).toBe('IG Photo');
+    expect(fetchMock).toHaveBeenCalledWith(
+      targetUrl,
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Cookie: 'sessionid=sess123; csrftoken=csrf456',
+        }),
+      }),
+    );
+  });
+
+  it('degrades gracefully when upstream fails, times out, or hits redirect loop', async () => {
+    const timeoutErr = new Error('Timed out');
+    timeoutErr.name = 'TimeoutError';
+
+    const redirectErr = Object.assign(new Error('fetch failed'), {
+      cause: { message: 'redirect count exceeded' },
+    });
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response('Forbidden', { status: 403 }))
+      .mockRejectedValueOnce(timeoutErr)
+      .mockRejectedValueOnce(redirectErr);
+    vi.stubGlobal('fetch', fetchMock);
+
+    for (const targetUrl of [
+      'https://example.com/status-403',
+      'https://example.com/timeout',
+      'https://example.com/redirect-loop',
+    ]) {
+      const { req, res } = createMocks({ method: 'GET', query: { url: targetUrl } });
+      await handler(req, res);
+      expect(res._getStatusCode()).toBe(200);
+      expect(res._getJSONData()).toEqual({
+        url: targetUrl,
+        title: null,
+        image: null,
+        description: null,
+      });
+    }
+  });
+});

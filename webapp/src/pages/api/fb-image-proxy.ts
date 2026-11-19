@@ -2,6 +2,11 @@ import { getFacebookCrawlerHeaders } from '@/lib/server/facebook';
 
 import type { NextApiRequest, NextApiResponse } from 'next';
 
+/**
+ * Proxies images from an allowlist of Facebook CDN domains using crawler headers to bypass hotlink
+ * and lookaside restrictions. Rejects disallowed hosts (`403`) and non-`image/*` responses (`415`),
+ * and caches valid images as immutable.
+ */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { url } = req.query;
   const targetUrl = Array.isArray(url) ? url[0] : url;

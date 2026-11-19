@@ -10,7 +10,7 @@ MessageHub also includes **DataForge AI**, a dataset curation studio designed to
 
 ### Requirements
 
-- Node.js 20+
+- Node.js 26+ (LTS)
 - Python 3.10+
 - macOS, Linux, or WSL
   > **Note for non-developers:**  
@@ -44,6 +44,26 @@ Supported export sources:
 
 > [!TIP]
 > Including _Profile Information_ is critical. This allows MessageHub to reliably distinguish your own messages from other participants during analysis.
+
+---
+
+## ⚙️ Optional Configuration
+
+### Instagram Link Previews (`INSTAGRAM_AUTH`)
+
+MessageHub can fetch rich link previews for shared Instagram URLs if you provide authenticated browser cookies via `INSTAGRAM_AUTH` in the project-root `.env` file (created automatically by the setup wizard, or you can create it manually).
+
+Add `INSTAGRAM_AUTH` using either a JSON object of cookie key/value pairs or a raw `Cookie` header string:
+
+```env
+# JSON object of cookie key/value pairs
+INSTAGRAM_AUTH='{"sessionid":"...","csrftoken":"..."}'
+
+# Or a raw Cookie header string
+INSTAGRAM_AUTH="sessionid=...; csrftoken=..."
+```
+
+`.env` is loaded at startup, so restart `./start.sh` after editing `.env`—startup logs will indicate whether the credentials appear valid.
 
 ---
 

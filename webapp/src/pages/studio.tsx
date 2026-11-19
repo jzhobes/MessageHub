@@ -10,6 +10,7 @@ import SetupModal from '@/components/modals/SetupModal';
 import ThreadPreviewModal from '@/components/modals/ThreadPreviewModal';
 import TextInput from '@/components/TextInput';
 
+import { useDatasetGeneration } from '@/hooks/useDatasetGeneration';
 import { useForm } from '@/hooks/useForm';
 import { usePersonaFilter } from '@/hooks/usePersonaFilter';
 import { useTheme } from '@/hooks/useTheme';
@@ -81,8 +82,6 @@ export default function Studio() {
   const [threads, setThreads] = useState<Thread[]>([]);
   const [selectedIds, setSelectedIds] = useState(new Set<string>());
   const [loading, setLoading] = useState(true);
-  const [generating, setGenerating] = useState(false);
-  const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [downloadProgress, setDownloadProgress] = useState(0);
 
@@ -99,11 +98,20 @@ export default function Studio() {
   const [analyzingStyle, setAnalyzingStyle] = useState(false);
 
   // --- Custom Hooks ---
+  const { generating, progress, generate: startDatasetGeneration } = useDatasetGeneration();
   const { theme, toggleTheme, mounted } = useTheme();
   const { values: config, setField } = useForm(initialState);
   const { values: filters, setField: setFilterField } = useForm(initialFilterState);
 
   const analyzeWorkerRef = useRef<Worker | null>(null);
+
+  // Terminate style analysis worker on unmount
+  useEffect(() => {
+    return () => {
+      analyzeWorkerRef.current?.terminate();
+      analyzeWorkerRef.current = null;
+    };
+  }, []);
 
   // Fetch initial data
   useEffect(() => {
@@ -335,6 +343,7 @@ export default function Studio() {
 
       // 2. Run Worker
       setStatusMessage('Initializing AI...');
+      analyzeWorkerRef.current?.terminate();
       const worker = new Worker('/workers/style-worker.js', { type: 'module' });
       analyzeWorkerRef.current = worker;
 
@@ -382,95 +391,42 @@ export default function Studio() {
     if (visibleSelectedThreads.length === 0) {
       return;
     }
-    setGenerating(true);
-    setProgress({ current: 0, total: 0 });
 
-    try {
-      const names = config.identityNames
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean);
+    const names = config.identityNames
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
 
-      // 1. Create Job
-      const res = await fetch('/api/studio/generate-dataset', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          threadIds: visibleSelectedThreads.map((t) => t.id),
-          identityNames: names,
-          includeGroupSpeakerNames: config.includeGroupNames,
-          mergeSequential: config.mergeSequential,
-          removeSystemMessages: config.removeSystemMessages,
-          imputeReactions: config.imputeReactions,
-          redactPII: config.redactPII,
-          splitDataset: config.exportTarget === 'custom' ? config.customSplit : config.exportTarget === 'customgpt',
-          maxTokensPerFile:
-            config.exportTarget === 'custom' && config.customSplit
-              ? parseInt(config.customFileLimit) || 2000000
-              : config.exportTarget === 'customgpt'
-                ? 1900000
-                : undefined,
-          maxTokensPerSession:
-            config.exportTarget === 'custom'
-              ? parseInt(config.customSessionLimit) || Infinity
-              : config.exportTarget === 'customgpt'
-                ? 2000 // Increased from 800 for better email/long-thread support
-                : 12000, // Increased from 8k for modern GPT-4o style fine-tuning
-          personaTag: config.personaTag.trim(),
-          customInstructions: config.customInstructions.trim(),
-          skipSystemMessages: config.exportTarget === 'customgpt',
-          datasetName: config.datasetName.trim(),
-          dateRange: calculateDateRange(config.recencyFilter),
-        }),
-      });
-
-      if (!res.ok) {
-        const err = await res.json();
-        alert('Error: ' + err.error);
-        setGenerating(false);
-        return;
-      }
-
-      const { jobId } = await res.json();
-
-      // 2. Poll Status
-      const poll = setInterval(async () => {
-        try {
-          const statusRes = await fetch(`/api/job-status?id=${jobId}`);
-          if (!statusRes.ok) {
-            return;
-          } // Keep trying
-
-          const job = await statusRes.json();
-
-          setProgress({ current: job.progress ?? 0, total: job.total ?? 0 });
-
-          if (job.status === 'completed') {
-            clearInterval(poll);
-            setGenerating(false);
-
-            // Trigger Download
-            const downloadUrl = `/api/studio/generate-dataset?jobId=${jobId}`;
-            const a = document.createElement('a');
-            a.href = downloadUrl;
-            a.download = `${config.datasetName || 'virtual_me'}.zip`;
-            document.body.appendChild(a);
-            a.click(); // Browser handles download
-            document.body.removeChild(a);
-          } else if (job.status === 'failed') {
-            clearInterval(poll);
-            setGenerating(false);
-            alert('Generation failed: ' + (job.error || 'Unknown error'));
-          }
-        } catch (e) {
-          console.error('Polling error', e);
-        }
-      }, 1000);
-    } catch (e) {
-      console.error(e);
-      alert('Generation failed to start');
-      setGenerating(false);
-    }
+    await startDatasetGeneration(
+      {
+        threadIds: visibleSelectedThreads.map((t) => t.id),
+        identityNames: names,
+        includeGroupSpeakerNames: config.includeGroupNames,
+        mergeSequential: config.mergeSequential,
+        removeSystemMessages: config.removeSystemMessages,
+        imputeReactions: config.imputeReactions,
+        redactPII: config.redactPII,
+        splitDataset: config.exportTarget === 'custom' ? config.customSplit : config.exportTarget === 'customgpt',
+        maxTokensPerFile:
+          config.exportTarget === 'custom' && config.customSplit
+            ? parseInt(config.customFileLimit) || 2000000
+            : config.exportTarget === 'customgpt'
+              ? 1900000
+              : undefined,
+        maxTokensPerSession:
+          config.exportTarget === 'custom'
+            ? parseInt(config.customSessionLimit) || Infinity
+            : config.exportTarget === 'customgpt'
+              ? 2000 // Increased from 800 for better email/long-thread support
+              : 12000, // Increased from 8k for modern GPT-4o style fine-tuning
+        personaTag: config.personaTag.trim(),
+        customInstructions: config.customInstructions.trim(),
+        skipSystemMessages: config.exportTarget === 'customgpt',
+        datasetName: config.datasetName.trim(),
+        dateRange: calculateDateRange(config.recencyFilter),
+      },
+      config.datasetName,
+    );
   }
 
   // Realistic Token Estimation

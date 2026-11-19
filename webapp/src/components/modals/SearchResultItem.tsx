@@ -19,7 +19,11 @@ interface SearchResultItemProps {
   onClick: () => void;
 }
 
-// Helper to highlight matches
+/**
+ * Splits `text` into plain strings and highlighted `<span>` elements matching terms parsed by
+ * `parseSearchQuery` across all `OR` groups. Strips `*` and `?` wildcards so only literal query terms
+ * are highlighted rather than wildcard expansions.
+ */
 function highlightText(text: string, query: string) {
   if (!query.trim()) {
     return text;

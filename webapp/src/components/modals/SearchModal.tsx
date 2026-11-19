@@ -107,6 +107,14 @@ export default function SearchModal({ isOpen, onClose, onNavigate }: SearchModal
     [config.filterPlatforms, config.filterCategories],
   ); // Dependencies for fetchResults
 
+  const clearSearchState = () => {
+    abortControllerRef.current?.abort();
+    setResults([]);
+    setTotalCount(0);
+    setFacets(null);
+    setLoading(false);
+  };
+
   // Debounce effect for Query/Filters
   useEffect(() => {
     if (!isOpenRef.current) {
@@ -114,9 +122,6 @@ export default function SearchModal({ isOpen, onClose, onNavigate }: SearchModal
       return;
     }
     if (!config.query.trim()) {
-      setResults([]);
-      setFacets(null);
-      setLoading(false);
       return;
     }
     const timer = setTimeout(async () => {
@@ -151,7 +156,7 @@ export default function SearchModal({ isOpen, onClose, onNavigate }: SearchModal
   // Reset handler
   const handleReset = () => {
     resetForm();
-    setResults([]);
+    clearSearchState();
   };
 
   const handlePlatformChange = (platforms: Set<string>, categories: Set<string>) => {
@@ -233,7 +238,13 @@ export default function SearchModal({ isOpen, onClose, onNavigate }: SearchModal
               </div>
             }
             autoFocus
-            onChange={(e) => setField('query', e.target.value)}
+            onChange={(e) => {
+              const nextQuery = e.target.value;
+              setField('query', nextQuery);
+              if (!nextQuery.trim()) {
+                clearSearchState();
+              }
+            }}
           />
         </div>
         <div className={styles.searchMetaRow}>

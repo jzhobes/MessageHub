@@ -2,6 +2,22 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Thread } from '@/lib/shared/types';
 
+/**
+ * Pure helper that returns a new persona cache map with `matches` added to a cloned `Set` for `id`.
+ */
+export function mergePersonaCacheMatches(
+  prev: Record<string, Set<string>>,
+  id: string,
+  matches: string[],
+): Record<string, Set<string>> {
+  const updatedSet = new Set(prev[id] ?? []);
+  matches.forEach((m) => updatedSet.add(m));
+  return {
+    ...prev,
+    [id]: updatedSet,
+  };
+}
+
 interface UsePersonaFilterProps {
   visibleThreads: Thread[];
   setSelectedIds: React.Dispatch<React.SetStateAction<Set<string>>>;
@@ -9,6 +25,13 @@ interface UsePersonaFilterProps {
   setFilterProgress?: (progress: number) => void;
 }
 
+/**
+ * Manages incremental client-side persona filtering via `/workers/style-worker.js`.
+ * Toggling a label on fetches uncached thread samples in batches of 20 from `/api/studio/thread-content`,
+ * caches matched labels per thread, and adds matches to `setSelectedIds`; toggling a label off cancels
+ * remaining batches and deselects threads that no longer match any active label. Automatically scans
+ * newly visible threads whenever `visibleThreads` changes.
+ */
 export function usePersonaFilter({
   visibleThreads,
   setSelectedIds,
@@ -39,15 +62,8 @@ export function usePersonaFilter({
         const { type, id, matches, labels: echoedLabels, message, progress } = e.data;
 
         if (type === 'filter:match') {
-          // Update Cache
-          setPersonaCache((prev) => {
-            const next = { ...prev };
-            if (!next[id]) {
-              next[id] = new Set();
-            }
-            matches.forEach((m: string) => next[id].add(m));
-            return next;
-          });
+          // Update Cache without mutating prior Set instances
+          setPersonaCache((prev) => mergePersonaCacheMatches(prev, id, matches as string[]));
         } else if (type === 'filter:complete') {
           if (echoedLabels) {
             const label = echoedLabels[0];
@@ -274,19 +290,26 @@ export function usePersonaFilter({
     pendingCompletionRef.current.clear();
   }, []);
 
-  // Auto-scan on new threads (Reactive to visibleThreads changes)
-  const previousThreadCountRef = useRef(visibleThreads.length);
+  // Auto-scan on visible thread list changes (tracks thread IDs, not just count)
+  const visibleThreadIdsKey = useMemo(() => visibleThreads.map((t) => t.id).join('\0'), [visibleThreads]);
+  const previousVisibleIdsKeyRef = useRef(visibleThreadIdsKey);
   useEffect(() => {
-    if (visibleThreads.length !== previousThreadCountRef.current) {
-      previousThreadCountRef.current = visibleThreads.length;
-      // If threads changed, ensure active personas cover new threads
-      activePersonas.forEach((label) => {
-        if (!scanningLabels.has(label)) {
-          scanLabel(label);
-        }
-      });
+    if (visibleThreadIdsKey === previousVisibleIdsKeyRef.current) {
+      return;
     }
-  }, [visibleThreads, activePersonas, scanningLabels, scanLabel]);
+    previousVisibleIdsKeyRef.current = visibleThreadIdsKey;
+
+    activePersonas.forEach((label) => {
+      if (scanningLabels.has(label)) {
+        return;
+      }
+      const scanned = scannedIdsRef.current[label];
+      const hasUnscanned = visibleThreads.some((t) => !scanned?.has(t.id));
+      if (hasUnscanned) {
+        scanLabel(label);
+      }
+    });
+  }, [visibleThreadIdsKey, visibleThreads, activePersonas, scanningLabels, scanLabel]);
 
   const personaCounts = useMemo(() => {
     const counts: Record<string, number> = {};

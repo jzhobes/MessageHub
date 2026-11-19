@@ -6,6 +6,15 @@ import appConfig from '@/lib/shared/appConfig';
 
 import { getInstagramHeaders } from './instagram';
 
+export const INSTAGRAM_AUTH_CHECK_URL = 'https://www.instagram.com/accounts/edit/';
+
+export type InstagramCheckResult = 'valid' | 'invalid' | 'checkpoint' | 'inconclusive' | 'error';
+
+/**
+ * Runs server boot diagnostics: verifies `WORKSPACE_PATH` exists (on missing WSL `/mnt/<drive>/` paths,
+ * attempts an interactive `sudo mount -t drvfs` and registers `SIGINT`/`SIGTERM` unmount hooks)
+ * and fires a non-blocking Instagram session check when `INSTAGRAM_AUTH` is configured.
+ */
 export async function runStartupChecks() {
   console.log('🔍 [Instrumentation] Running Startup Checks...');
 
@@ -70,35 +79,91 @@ export async function runStartupChecks() {
   }
 
   // 2. Check Instagram Credentials
-  const igAuth = process.env.INSTAGRAM_AUTH;
+  const igAuth = process.env.INSTAGRAM_AUTH?.trim();
   if (igAuth) {
     // Don't await to avoid blocking server start
-    checkInstagram(igAuth);
+    void checkInstagram(igAuth);
   } else {
     console.log('ℹ️  [Instrumentation] No INSTAGRAM_AUTH in .env. Skipping Instagram validation.');
   }
 }
 
-async function checkInstagram(authEnv: string) {
+function extractRedirectPath(rawLocation: string): string {
+  if (!rawLocation) {
+    return '';
+  }
+  try {
+    return new URL(rawLocation, INSTAGRAM_AUTH_CHECK_URL).pathname;
+  } catch {
+    return rawLocation;
+  }
+}
+
+/**
+ * Probes `INSTAGRAM_AUTH_CHECK_URL` with `redirect: 'manual'` and a 10-second timeout,
+ * classifying session cookie health into `'valid'`, `'invalid'`, `'checkpoint'`, `'inconclusive'`,
+ * or `'error'` without throwing.
+ */
+export async function checkInstagram(authEnv: string): Promise<InstagramCheckResult> {
   const headers = getInstagramHeaders(authEnv);
 
   try {
-    const res = await fetch('https://www.instagram.com/', {
+    const res = await fetch(INSTAGRAM_AUTH_CHECK_URL, {
       method: 'GET',
       headers: headers as unknown as HeadersInit,
+      redirect: 'manual',
       signal: AbortSignal.timeout(10000),
     });
 
-    const data = await res.text();
-    const isLogin = data.includes('<title>Login') || data.includes('Login • Instagram');
+    if (res.status === 200) {
+      const data = await res.text();
+      const isLogin = data.includes('<title>Login') || data.includes('Login • Instagram');
 
-    if (res.status === 200 && !isLogin) {
-      console.log('✅ [Instrumentation] Instagram Credentials appear VALID.');
-    } else {
-      console.warn(`⚠️  [Instrumentation] Instagram Credentials might be INVALID or EXPIRED (Status: ${res.status}).`);
+      if (!isLogin) {
+        console.log('✅ [Instrumentation] Instagram Credentials appear VALID.');
+        return 'valid';
+      }
+
+      console.warn('⚠️  [Instrumentation] Instagram Credentials appear INVALID or EXPIRED (Login page returned).');
+      return 'invalid';
     }
+
+    await res.body?.cancel().catch(() => {});
+
+    if (res.status >= 300 && res.status < 400) {
+      const rawLocation = res.headers.get('location') ?? '';
+      const redirectPath = extractRedirectPath(rawLocation);
+
+      if (/\/(challenge|checkpoint)\b/i.test(redirectPath)) {
+        console.warn(
+          `⚠️  [Instrumentation] Instagram session requires verification/checkpoint (Status: ${res.status}, Redirect: ${redirectPath}).`,
+        );
+        return 'checkpoint';
+      }
+
+      console.warn(
+        `⚠️  [Instrumentation] Instagram Credentials appear INVALID or EXPIRED (Status: ${res.status}${redirectPath ? `, Redirect: ${redirectPath}` : ''}).`,
+      );
+      return 'invalid';
+    }
+
+    if (res.status === 401 || res.status === 403) {
+      console.warn(`⚠️  [Instrumentation] Instagram Credentials appear INVALID or EXPIRED (Status: ${res.status}).`);
+      return 'invalid';
+    }
+
+    if (res.status === 429 || res.status >= 500) {
+      console.warn(
+        `⚠️  [Instrumentation] Instagram credential check inconclusive (Status: ${res.status} — rate-limited or unavailable).`,
+      );
+      return 'inconclusive';
+    }
+
+    console.warn(`⚠️  [Instrumentation] Instagram credential check returned unexpected status (${res.status}).`);
+    return 'inconclusive';
   } catch (e) {
     const errorMessage = e instanceof Error ? e.message : String(e);
     console.warn(`⚠️  [Instrumentation] Failed to connect to Instagram check: ${errorMessage}`);
+    return 'error';
   }
 }

@@ -1,3 +1,8 @@
+/**
+ * Builds browser-like navigation headers for authenticated Instagram requests.
+ * Accepts `authEnv` as either a JSON object of cookie key/value pairs or a raw `Cookie` header string,
+ * falling back to the raw string if JSON parsing fails.
+ */
 export function getInstagramHeaders(authEnv: string): Record<string, string> {
   let cookieString = authEnv;
 

@@ -102,6 +102,12 @@ interface ThreadContentProps {
   onShowMediaChange?: (show: boolean) => void;
 }
 
+/**
+ * Virtualized bidirectional message timeline powered by `Virtuoso`. Reverses newest-first `messages`
+ * into chronological display order, shifts `firstItemIndex` downward from `START_INDEX` when prepending
+ * older history to preserve scroll position, gates `startReached`/`endReached` behind a 500ms `isReady`
+ * cooldown, and supports scroll-and-highlight for both external search jumps and clicked quoted replies.
+ */
 export default function ThreadContent({
   activeThread,
   messages,
@@ -120,11 +126,14 @@ export default function ThreadContent({
   onPageChange,
   onShowMediaChange,
 }: ThreadContentProps) {
+  const threadId = activeThread?.id ?? null;
+
   // Refs
   const virtuosoRef = useRef<VirtuosoHandle>(null);
   const previousMessagesLength = useRef(0);
   const newestMessageIdRef = useRef<string | null>(null);
   const atBottomRef = useRef(false);
+  const prevThreadIdRef = useRef<string | null>(threadId);
 
   // State
   const [currentTopPage, setCurrentTopPage] = useState(pageRange.min);
@@ -132,6 +141,20 @@ export default function ThreadContent({
   const [isReady, setIsReady] = useState(false);
   const [localTargetId, setLocalTargetId] = useState<string | null>(null);
   const [localHighlightToken, setLocalHighlightToken] = useState(0);
+  const [prevThreadId, setPrevThreadId] = useState<string | null>(threadId);
+
+  if (threadId !== prevThreadId) {
+    setPrevThreadId(threadId);
+    setFirstItemIndex(START_INDEX);
+    setLocalTargetId(null);
+  }
+
+  const readyKey = `${threadId ?? ''}:${targetMessageId ?? ''}`;
+  const [prevReadyKey, setPrevReadyKey] = useState(readyKey);
+  if (readyKey !== prevReadyKey) {
+    setPrevReadyKey(readyKey);
+    setIsReady(false);
+  }
 
   // Memos (data)
   const virtuosoData = useMemo(() => {
@@ -157,6 +180,12 @@ export default function ThreadContent({
 
   // Layout effects
   useLayoutEffect(() => {
+    if (prevThreadIdRef.current !== threadId) {
+      prevThreadIdRef.current = threadId;
+      previousMessagesLength.current = 0;
+      newestMessageIdRef.current = null;
+    }
+
     if (!virtuosoData.length) {
       return;
     }
@@ -184,17 +213,9 @@ export default function ThreadContent({
       const last = virtuosoData[virtuosoData.length - 1];
       newestMessageIdRef.current = last.id || last.timestamp_ms.toString();
     }
-  }, [virtuosoData]);
+  }, [virtuosoData, threadId]);
 
   // Effects
-
-  // Reset on Thread Change
-  useEffect(() => {
-    setFirstItemIndex(START_INDEX);
-    previousMessagesLength.current = 0;
-    newestMessageIdRef.current = null;
-    setLocalTargetId(null);
-  }, [activeThread?.id]);
 
   // Reset atBottom state prevents stale true causing runaway on navigation
   useEffect(() => {
@@ -203,12 +224,11 @@ export default function ThreadContent({
 
   // Ready state logic
   useEffect(() => {
-    setIsReady(false);
     const t = setTimeout(() => {
       setIsReady(true);
     }, 500);
     return () => clearTimeout(t);
-  }, [activeThread?.id, targetMessageId]);
+  }, [readyKey]);
 
   // Manual trigger for onEndReached once ready
   useEffect(() => {

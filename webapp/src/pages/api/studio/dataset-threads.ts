@@ -15,6 +15,12 @@ interface ThreadStatsRow {
   my_avg_len: number;
 }
 
+/**
+ * Computes per-thread stats and a 0–100 heuristic quality score (combining 2-year recency,
+ * participation ratio, log message length, and sqrt volume; zeroed when fewer than 5 user messages
+ * exist), appends virtual Facebook post/event threads when applicable, and returns threads sorted
+ * by descending quality score.
+ */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { platform } = req.query;
   const platformStr = Array.isArray(platform) ? platform[0] : platform;

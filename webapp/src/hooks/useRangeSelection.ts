@@ -7,6 +7,12 @@ interface UseRangeSelectionProps<T> {
   getId: (item: T) => string;
 }
 
+/**
+ * Tracks global Shift-key state to provide Shift+Click range selection over an ordered item list.
+ * Uses a rolling anchor and base snapshot: each Shift+Click applies the clicked item's toggled state
+ * across the inclusive range from the previous anchor to the clicked item, then advances the anchor
+ * until Shift is released.
+ */
 export function useRangeSelection<T>({ items, selectedIds, onChange, getId }: UseRangeSelectionProps<T>) {
   const lastCheckedId = useRef<string | null>(null);
   const rangeStartId = useRef<string | null>(null);

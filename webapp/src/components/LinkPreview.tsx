@@ -13,26 +13,37 @@ export default function LinkPreview({ url }: LinkPreviewProps) {
   const [data, setData] = useState<{ image?: string; title?: string; description?: string } | null>(null);
   const [loading, setLoading] = useState(!isDirectImage);
   const isMounted = useRef(true);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
+    isMounted.current = true;
     return () => {
       isMounted.current = false;
+      abortControllerRef.current?.abort();
+      abortControllerRef.current = null;
     };
   }, []);
 
   const fetchPreview = useCallback(async () => {
+    abortControllerRef.current?.abort();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     try {
-      const res = await fetch(`/api/preview?url=${encodeURIComponent(url)}`);
+      const res = await fetch(`/api/preview?url=${encodeURIComponent(url)}`, { signal: controller.signal });
       if (res.ok) {
         const json = await res.json();
-        if (isMounted.current) {
+        if (!controller.signal.aborted && isMounted.current) {
           setData(json);
         }
       }
     } catch (e) {
+      if (e instanceof Error && e.name === 'AbortError') {
+        return;
+      }
       console.error('Preview fetch error', e);
     } finally {
-      if (isMounted.current) {
+      if (!controller.signal.aborted && isMounted.current) {
         setLoading(false);
       }
     }

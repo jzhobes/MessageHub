@@ -21,6 +21,12 @@ interface DropdownProps {
   onOpenChange?: (open: boolean) => void;
 }
 
+/**
+ * Accessible dropdown built on the native HTML Popover API (`popover="auto"`) with CSS anchor
+ * positioning and a JS viewport fallback. Supports controlled (`open`) and uncontrolled modes,
+ * keyboard navigation (`ArrowUp`/`ArrowDown`/`Home`/`End`/`Enter`/`Space`/`Escape`/`Tab`),
+ * and a 150ms post-close guard so light-dismissing via the trigger does not immediately reopen it.
+ */
 export function Dropdown({
   trigger,
   children,
@@ -262,6 +268,10 @@ interface DropdownItemProps {
   onClick?: () => void;
 }
 
+/**
+ * Menu item that closes the parent `Dropdown` on click unless `closeOnClick` is `false` or the
+ * item/click target contains an interactive form control (`input`, `textarea`, `select`, `label`).
+ */
 export function DropdownItem({ children, className, style, closeOnClick, disabled, onClick }: DropdownItemProps) {
   const ctx = useContext(DropdownContext);
   const itemRef = useRef<HTMLDivElement>(null);

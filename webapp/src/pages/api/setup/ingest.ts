@@ -3,6 +3,11 @@ import { setupSSE } from '@/lib/server/sse';
 
 import type { NextApiRequest, NextApiResponse } from 'next';
 
+/**
+ * Starts or attaches to the singleton ingestion process over SSE (`POST`), replaying buffered logs
+ * and streaming live stdout/stderr. Client disconnects detach listeners without terminating the
+ * underlying child process.
+ */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', ['POST']);

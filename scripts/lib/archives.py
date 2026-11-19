@@ -59,6 +59,7 @@ def extract_archives_found_with_opts(search_dirs, target_root, platform_filter="
         is_zip = archive_path.suffix == ".zip"
         is_tar = archive_path.name.endswith(".tar.gz") or archive_path.name.endswith(".tgz")
 
+        archive_obj = None
         try:
             file_list = []
 
@@ -99,7 +100,6 @@ def extract_archives_found_with_opts(search_dirs, target_root, platform_filter="
 
                 if not allowed:
                     print(f"  Skipping {archive_path.name}: Filter mismatch.")
-                    archive_obj.close()
                     return False, None, None
 
             # Extract
@@ -126,7 +126,6 @@ def extract_archives_found_with_opts(search_dirs, target_root, platform_filter="
                 local_detected.add("facebook")
             else:
                 print(f"  Skipping {archive_path.name}: Unknown structure.")
-                archive_obj.close()
                 return False, None, None
 
             # Prepare destination directory (Locked)
@@ -143,13 +142,18 @@ def extract_archives_found_with_opts(search_dirs, target_root, platform_filter="
             print(f"[ArchiveStarted]: {archive_path.name}|{total_members}")
 
             dest_dir_real = os.path.realpath(dest_dir)
+            failed_members = 0
 
             for i, member in enumerate(members):
+                member_name = member if is_zip else member.name
                 try:
                     # Security Check: Prevent Zip Slip (path traversal)
-                    member_name = member if is_zip else member.name
                     target_path = os.path.realpath(os.path.join(dest_dir_real, member_name))
-                    if not target_path.startswith(dest_dir_real):
+                    try:
+                        is_safe = os.path.commonpath([dest_dir_real, target_path]) == dest_dir_real
+                    except ValueError:
+                        is_safe = False
+                    if not is_safe:
                         print(f"  [Security] Skipping unsafe member (potential Zip Slip): {member_name}")
                         continue
 
@@ -157,41 +161,53 @@ def extract_archives_found_with_opts(search_dirs, target_root, platform_filter="
                     if (i + 1) % 50 == 0 or (i + 1) == total_members:
                         print(f"[ArchiveProgress]: {archive_path.name}|{i + 1}|{total_members}")
                 except Exception as e:
-                    member_name = member if is_zip else member.name
+                    failed_members += 1
                     print(f"  Warning: Failed to extract {member_name} from {archive_path.name}: {e}")
 
-            archive_obj.close()
+            if failed_members > 0:
+                print(
+                    f"  [Error] Incomplete extraction for {archive_path.name}: "
+                    f"{failed_members} member(s) failed. Preserving archive."
+                )
+                return False, None, None
+
             print(f"[ArchiveExtracted]: {archive_path.name}")
-
-            # Post-Processing: Move or Delete archive
-            try:
-                with extraction_lock:
-                    if delete_after:
-                        archive_path.unlink()
-                        print(f"  [Post] Deleted archive: {archive_path.name}")
-                        return True, local_detected, (archive_path, None)
-                    else:
-                        processed_dir = target_root / ".processed"
-                        os.makedirs(processed_dir, exist_ok=True)
-
-                        destination = processed_dir / archive_path.name
-                        if destination.exists():
-                            timestamp = int(time.time() * 1000)
-                            destination = processed_dir / f"{archive_path.stem}_{timestamp}{archive_path.suffix}"
-
-                        # Double check archive still exists
-                        if not archive_path.exists():
-                            return True, local_detected, None
-
-                        shutil.move(str(archive_path), str(destination))
-                        return True, local_detected, (archive_path, destination)
-            except Exception as e:
-                print(f"  Warning: Move/Delete failed for {archive_path.name}: {e}")
-                return True, local_detected, None
 
         except Exception as e:
             print(f"  Error processing {archive_path.name}: {e}")
             return False, None, None
+        finally:
+            if archive_obj is not None:
+                try:
+                    archive_obj.close()
+                except Exception:
+                    pass
+
+        # Post-Processing: Move or Delete archive (only after archive_obj is closed & extraction succeeded)
+        try:
+            with extraction_lock:
+                if delete_after:
+                    archive_path.unlink()
+                    print(f"  [Post] Deleted archive: {archive_path.name}")
+                    return True, local_detected, (archive_path, None)
+                else:
+                    processed_dir = target_root / ".processed"
+                    os.makedirs(processed_dir, exist_ok=True)
+
+                    destination = processed_dir / archive_path.name
+                    if destination.exists():
+                        timestamp = int(time.time() * 1000)
+                        destination = processed_dir / f"{archive_path.stem}_{timestamp}{archive_path.suffix}"
+
+                    # Double check archive still exists
+                    if not archive_path.exists():
+                        return True, local_detected, None
+
+                    shutil.move(str(archive_path), str(destination))
+                    return True, local_detected, (archive_path, destination)
+        except Exception as e:
+            print(f"  Warning: Move/Delete failed for {archive_path.name}: {e}")
+            return True, local_detected, None
 
     # Run Parallel
     max_workers = min(4, len(all_archives))
@@ -215,7 +231,8 @@ def extract_archives_found_with_opts(search_dirs, target_root, platform_filter="
         dst = target_root / "Voice"
         if src.exists():
             print("  Consolidating Google Voice data...")
-            merge_folders(src, dst)
+            if not merge_folders(src, dst):
+                print(f"  Warning: Incomplete consolidation for {src}; failed source files were preserved.")
 
     # Google Chat
     if "google_chat" in detected_platforms:
@@ -223,7 +240,8 @@ def extract_archives_found_with_opts(search_dirs, target_root, platform_filter="
         dst = target_root / "Google Chat"
         if src.exists():
             print("  Consolidating Google Chat data...")
-            merge_folders(src, dst)
+            if not merge_folders(src, dst):
+                print(f"  Warning: Incomplete consolidation for {src}; failed source files were preserved.")
 
     # Google Mail
     if "google_mail" in detected_platforms:
@@ -231,7 +249,8 @@ def extract_archives_found_with_opts(search_dirs, target_root, platform_filter="
         dst = target_root / "Mail"
         if src.exists():
             print("  Consolidating Google Mail data...")
-            merge_folders(src, dst)
+            if not merge_folders(src, dst):
+                print(f"  Warning: Incomplete consolidation for {src}; failed source files were preserved.")
 
     # Final cleanup: remove empty Takeout folder
     takeout_root = target_root / "Takeout"

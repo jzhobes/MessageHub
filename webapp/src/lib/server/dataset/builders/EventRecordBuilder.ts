@@ -23,6 +23,11 @@ export class EventRecordBuilder {
     });
   }
 
+  /**
+   * Sorts collected event entries chronologically, groups them under `## <year>` Markdown headings,
+   * and wraps them with a timeline preamble and voice-interpretation notes.
+   * Returns an empty string if no entries were added.
+   */
   public finalize(): string {
     if (this.entries.length === 0) {
       return '';

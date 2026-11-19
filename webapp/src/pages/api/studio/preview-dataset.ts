@@ -4,6 +4,11 @@ import { DatasetEntry } from '@/lib/shared/types';
 
 import type { NextApiRequest, NextApiResponse } from 'next';
 
+/**
+ * Generates a fast dataset formatting preview (`POST`) by running `DatasetGenerator` on at most the
+ * first 3 selected threads (capped at 100k tokens/file and 20 parsed sessions) and returning the
+ * 5 most recent sessions.
+ */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', ['POST']);
@@ -50,18 +55,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // We only take a few threads for the preview
     const previewThreadIds = (threadIds as string[]).slice(0, 3);
-    const generatorStream = generator.generateStream(previewThreadIds, identityNames, dateRange);
+    const recordsStream = generator.generateRecords(previewThreadIds, identityNames, dateRange);
 
     const allSessions: DatasetEntry[] = [];
 
-    for await (const part of generatorStream) {
-      // The stream yields file parts, we want to parse the sessions back out
-      const lines = part.content.split('\n');
-      for (const line of lines) {
-        if (line.trim()) {
-          allSessions.push(JSON.parse(line));
-        }
+    for await (const record of recordsStream) {
+      if (record.kind === 'session') {
+        allSessions.push(record.entry);
+      } else {
+        allSessions.push({
+          messages: [{ role: 'assistant', content: record.content }],
+        });
       }
+
       // Don't over-collect if we have a massive thread, 20 is enough to get a recent sample
       if (allSessions.length >= 20) {
         break;

@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import React, { createContext, useCallback, useContext, useSyncExternalStore } from 'react';
 
 // Define context shape
 interface ThemeContextType {
@@ -10,33 +10,55 @@ interface ThemeContextType {
 // Create context
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
-export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  // Always initialize to 'light' to match server-side rendering and avoid hydration mismatch
-  const [theme, setTheme] = useState('light');
-  const [mounted, setMounted] = useState(false);
+const emptySubscribe = () => () => {};
+const themeListeners = new Set<() => void>();
 
-  // Sync with localStorage on mount (Client only)
-  useEffect(() => {
-    setMounted(true);
-    const saved = localStorage.getItem('theme');
-    if (saved && saved !== theme) {
-      setTheme(saved);
-    } else if (
-      !saved &&
-      window.matchMedia &&
-      window.matchMedia('(prefers-color-scheme: dark)').matches &&
-      theme !== 'dark'
-    ) {
-      setTheme('dark');
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+function getServerTheme() {
+  return 'light';
+}
+
+function getClientTheme() {
+  const saved = localStorage.getItem('theme');
+  if (saved) {
+    return saved;
+  }
+  if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+    return 'dark';
+  }
+  return 'light';
+}
+
+function subscribeTheme(listener: () => void) {
+  themeListeners.add(listener);
+  const mediaQuery = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+  mediaQuery?.addEventListener?.('change', listener);
+  window.addEventListener('storage', listener);
+
+  return () => {
+    themeListeners.delete(listener);
+    mediaQuery?.removeEventListener?.('change', listener);
+    window.removeEventListener('storage', listener);
+  };
+}
+
+function notifyThemeListeners() {
+  themeListeners.forEach((listener) => listener());
+}
+
+export function ThemeProvider({ children }: { children: React.ReactNode }) {
+  // Always initialize server snapshot to 'light' to match SSR and avoid hydration mismatch
+  const theme = useSyncExternalStore(subscribeTheme, getClientTheme, getServerTheme);
+  const mounted = useSyncExternalStore(
+    emptySubscribe,
+    () => true,
+    () => false,
+  );
 
   const toggleTheme = useCallback(() => {
-    const next = theme === 'light' ? 'dark' : 'light';
-    setTheme(next);
+    const next = getClientTheme() === 'light' ? 'dark' : 'light';
     localStorage.setItem('theme', next);
-  }, [theme]);
+    notifyThemeListeners();
+  }, []);
 
   return <ThemeContext.Provider value={{ theme, toggleTheme, mounted }}>{children}</ThemeContext.Provider>;
 }

@@ -44,6 +44,11 @@ export const jobStore = {
     }
   },
 
+  /**
+   * Evicts jobs older than `olderThanMs` (default 1 hour) from the in-memory store.
+   * Invokes `onRemove` before deleting each expired job, catching and logging callback errors
+   * so a single failed artifact cleanup does not abort the sweep.
+   */
   cleanup: (olderThanMs: number = 3600000, onRemove?: (job: Job) => void) => {
     // Optional: Clear old jobs
     const now = Date.now();
