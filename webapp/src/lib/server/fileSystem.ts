@@ -167,14 +167,17 @@ class FileSystemService {
       await fs.promises.access(dirPath);
       exists = true;
 
-      const activeWorkspace = process.env.WORKSPACE_PATH || 'data';
-      const absoluteActive = canonicalizePath(activeWorkspace);
-      const absoluteCurrent = path.resolve(dirPath);
+      try {
+        const activeWorkspace = process.env.WORKSPACE_PATH || 'data';
+        const absoluteActive = this.resolveSafePath('workspace', activeWorkspace);
 
-      if (absoluteCurrent === absoluteActive) {
-        isActive = true;
-      } else if (absoluteCurrent.startsWith(absoluteActive + path.sep)) {
-        isNested = true;
+        if (dirPath === absoluteActive) {
+          isActive = true;
+        } else if (dirPath.startsWith(absoluteActive + path.sep)) {
+          isNested = true;
+        }
+      } catch {
+        // Invalid active configuration must not hide metadata for a valid requested directory.
       }
 
       // Check for existing workspace signature

@@ -25,10 +25,45 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllEnvs();
   fs.rmSync(base, { recursive: true, force: true });
 });
 
 describe('filesystem path boundaries', () => {
+  it.each(['outside', 'escaping-link', 'dangling-link'])(
+    'preserves directory metadata with an invalid active workspace: %s',
+    async (kind) => {
+      let active = path.join(outside, 'missing');
+      if (kind !== 'outside') {
+        active = path.join(workspaceRoot, kind);
+        fs.symlinkSync(kind === 'escaping-link' ? outside : path.join(outside, 'missing'), active, 'dir');
+      }
+      vi.stubEnv('WORKSPACE_PATH', active);
+      fs.writeFileSync(path.join(workspaceRoot, 'messagehub.db'), 'workspace');
+
+      await expect(fileSystem.getPathMetadata(workspaceRoot)).resolves.toMatchObject({
+        exists: true,
+        isWritable: true,
+        isEmpty: false,
+        isExistingWorkspace: true,
+        isActive: false,
+        isNested: false,
+      });
+    },
+  );
+
+  it('compares active and nested directories using validated canonical paths', async () => {
+    const active = path.join(workspaceRoot, 'active');
+    const nested = path.join(active, 'nested');
+    const alias = path.join(workspaceRoot, 'alias');
+    fs.mkdirSync(nested, { recursive: true });
+    fs.symlinkSync(active, alias, 'dir');
+    vi.stubEnv('WORKSPACE_PATH', alias);
+
+    await expect(fileSystem.getPathMetadata(active)).resolves.toMatchObject({ isActive: true, isNested: false });
+    await expect(fileSystem.getPathMetadata(nested)).resolves.toMatchObject({ isActive: false, isNested: true });
+  });
+
   it('allows the root, normalized descendants and missing nested directories', () => {
     expect(fileSystem.resolveSafePath('import')).toBe(importRoot);
     expect(fileSystem.resolveSafePath('import', path.join(importRoot, 'folder', '..', 'file.zip'))).toBe(
