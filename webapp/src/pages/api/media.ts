@@ -1,6 +1,7 @@
 import { createReadStream, promises as fs } from 'fs';
 import path from 'path';
 
+import { fetchRemote, isBlockedRemoteUrl } from '@/lib/server/remoteFetch';
 import appConfig from '@/lib/shared/appConfig';
 
 import type { NextApiRequest, NextApiResponse } from 'next';
@@ -26,25 +27,30 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   // Handle external URLs (for Gmail proxies, etc.)
   if (filePath.startsWith('http')) {
     try {
-      const response = await fetch(filePath, {
+      const { response, readBody } = await fetchRemote(filePath, {
         headers: {
           'User-Agent':
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
         },
-        redirect: 'follow',
+        timeoutMs: 30000,
+        maxResponseBytes: 50 * 1024 * 1024,
       });
 
       if (!response.ok) {
+        await response.body?.cancel();
         return res.status(response.status).send('Failed to fetch external media');
       }
 
       const contentType = response.headers.get('Content-Type') || 'application/octet-stream';
-      const buffer = Buffer.from(await response.arrayBuffer());
+      const buffer = await readBody();
 
       res.setHeader('Content-Type', contentType);
       res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
       return res.send(buffer);
     } catch (e) {
+      if (isBlockedRemoteUrl(e)) {
+        return res.status(403).send('URL is not allowed');
+      }
       console.error('Error fetching external media:', e);
       return res.status(500).send('Error fetching external media');
     }

@@ -2,7 +2,7 @@ import db from '@/lib/server/db';
 import { getMyNames } from '@/lib/server/identity';
 import { PlatformMap, ReversePlatformMap } from '@/lib/shared/platforms';
 import { parseSearchQuery } from '@/lib/shared/search';
-import { decodeHtmlEntities, generateContextSnippet, stripHtml } from '@/lib/shared/stringUtils';
+import { generateContextSnippet, stripHtml } from '@/lib/shared/stringUtils';
 
 import type { NextApiRequest, NextApiResponse } from 'next';
 
@@ -262,7 +262,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       // Clean HTML for Gmail and HTML-heavy content
       if (row.platform === 'google_mail' || snippet.includes('<') || snippet.includes('&')) {
-        snippet = decodeHtmlEntities(stripHtml(snippet));
+        snippet = stripHtml(snippet);
       }
 
       // Generate context-aware snippet that centers on the search query

@@ -47,7 +47,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         .json({ error: 'Permission denied: This location is outside the allowed workspace boundary.' });
     }
 
-    const meta = await fileSystem.getPathMetadata(resolved);
+    let meta;
+    try {
+      meta = await fileSystem.getPathMetadata(resolved);
+    } catch {
+      return res.status(403).json({ error: 'Permission denied: Cannot inspect this folder.' });
+    }
 
     // 1. Nested workspace check
     if (meta.isNested) {
@@ -69,7 +74,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Handle Creation if not exists
     if (!finalExists && create) {
       try {
+        resolved = fileSystem.resolveSafePath('workspace', resolved);
         await fs.promises.mkdir(resolved, { recursive: true });
+        resolved = fileSystem.resolveSafePath('workspace', resolved);
         finalExists = true;
         finalEmpty = true;
       } catch (e) {
@@ -83,9 +90,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (finalExists) {
       // Close active connection before changing path to prevent zombie instances
       db.close();
-      appConfig.WORKSPACE_PATH = workspacePath;
+      appConfig.WORKSPACE_PATH = resolved;
       try {
-        await persistWorkspacePath(workspacePath);
+        await persistWorkspacePath(resolved);
       } catch (e) {
         console.error('Failed to persist workspace path to .env:', e);
       }

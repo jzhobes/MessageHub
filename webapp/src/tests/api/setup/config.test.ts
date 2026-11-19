@@ -22,7 +22,7 @@ describe('/api/setup/config', () => {
 
   beforeEach(() => {
     originalWorkspace = appConfig.WORKSPACE_PATH;
-    tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'messagehub-config-'));
+    tempRoot = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'messagehub-config-')));
     appConfig.WORKSPACE_PATH = tempRoot;
 
     vi.spyOn(fileSystem, 'getRoot').mockReturnValue(tempRoot);
@@ -168,6 +168,38 @@ describe('/api/setup/config', () => {
     expect(db.close).toHaveBeenCalledTimes(1);
     expect(appConfig.WORKSPACE_PATH).toBe(newDir);
     expect(persistWorkspacePath).toHaveBeenCalledWith(newDir);
+  });
+
+  it('rejects workspace creation through a symlink without writing outside the root', async () => {
+    const outside = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'messagehub-config-outside-')));
+    try {
+      fs.symlinkSync(outside, path.join(tempRoot, 'escape'), 'dir');
+      const { req, res } = createMocks({
+        method: 'POST',
+        body: { workspacePath: path.join(tempRoot, 'escape', 'new', 'nested'), create: true },
+      });
+      await handler(req, res);
+      expect(res._getStatusCode()).toBe(403);
+      expect(fs.readdirSync(outside)).toEqual([]);
+      expect(persistWorkspacePath).not.toHaveBeenCalled();
+      expect(db.close).not.toHaveBeenCalled();
+    } finally {
+      fs.rmSync(outside, { recursive: true, force: true });
+    }
+  });
+
+  it('persists a canonical workspace path when the selected path is an internal symlink', async () => {
+    const actual = path.join(tempRoot, 'actual');
+    fs.mkdirSync(actual);
+    fs.symlinkSync(actual, path.join(tempRoot, 'alias'), 'dir');
+    // The active workspace is elsewhere, so choosing this directory is not nesting.
+    process.env.WORKSPACE_PATH = path.join(tempRoot, 'active');
+    const { req, res } = createMocks({ method: 'POST', body: { workspacePath: path.join(tempRoot, 'alias') } });
+    await handler(req, res);
+    expect(res._getStatusCode()).toBe(200);
+    expect(res._getJSONData().resolved).toBe(actual);
+    expect(appConfig.WORKSPACE_PATH).toBe(actual);
+    expect(persistWorkspacePath).toHaveBeenCalledWith(actual);
   });
 
   it('POST returns 500 when mkdir fails and still returns 200 if persistWorkspacePath fails', async () => {

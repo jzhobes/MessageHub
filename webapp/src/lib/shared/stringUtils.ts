@@ -1,43 +1,102 @@
-/**
- * Decodes basic HTML entities in a string.
- * Handles decimal (&#123;), hex (&#xabc;), and standard named entities (&quot;, &amp;, etc).
- */
-export const decodeHtmlEntities = (str: string): string => {
-  return str
-    .replace(/&#(\d+);/g, (match, dec) => String.fromCharCode(parseInt(dec, 10)))
-    .replace(/&#x([0-9a-f]+);/gi, (match, hex) => String.fromCharCode(parseInt(hex, 16)))
-    .replace(/&quot;/g, '"')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&apos;/g, "'");
-};
+import { decode } from 'html-entities';
+import { parseFragment } from 'parse5';
+
+import type { DefaultTreeAdapterMap } from 'parse5';
 
 /**
- * Strips HTML tags from a string, including partial tags at the ends.
+ * Decodes one layer of HTML5 entities without reprocessing decoded output.
+ * Requires semicolons and preserves unknown or malformed entities.
+ * Replaces lone Unicode surrogates with the replacement character.
+ * This decodes text; it does not sanitize HTML.
+ *
+ * @param str - The text containing HTML entities
+ * @returns The text with each supported entity decoded once
+ */
+export const decodeHtmlEntities = (str: string): string => {
+  return decode(str, { level: 'html5', scope: 'strict' }).toWellFormed();
+};
+
+const TEXT_BREAK_ELEMENTS = new Set([
+  'address',
+  'article',
+  'aside',
+  'blockquote',
+  'br',
+  'div',
+  'dl',
+  'dt',
+  'dd',
+  'fieldset',
+  'figcaption',
+  'figure',
+  'footer',
+  'form',
+  'h1',
+  'h2',
+  'h3',
+  'h4',
+  'h5',
+  'h6',
+  'header',
+  'hr',
+  'li',
+  'main',
+  'nav',
+  'ol',
+  'p',
+  'pre',
+  'section',
+  'table',
+  'tr',
+  'ul',
+]);
+
+/**
+ * Extracts plain text from HTML, excluding script and style contents.
+ * Preserves block and line breaks and decodes entities once during parsing.
+ * The result is text, not sanitized HTML, and must be rendered as text.
+ *
+ * @param html - The HTML document or fragment to extract text from
+ * @returns Plain text with normalized whitespace
  */
 export const stripHtml = (html: string): string => {
   if (!html) {
     return '';
   }
-  return (
-    html
-      // Remove style/script entirely
-      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, ' ')
-      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, ' ')
-      // Convert block breaks to newlines to preserve structure
-      .replace(/<(br|p|div|li|tr|h[1-6])[^>]*>/gi, '\n')
-      // Strip all other tags
-      .replace(/<[a-z!/][^>]*>/gi, ' ')
-      // Partial tag residues
-      .replace(/^[^<]*>/, (match) => (match.includes('<') ? match : ' '))
-      .replace(/<[a-z!/][^>]*$/gi, ' ')
-      // Collapse horizontal whitespace but preserve newlines
-      .replace(/[ \t]+/g, ' ')
-      .replace(/[ \t]*\n[ \t]*/g, '\n')
-      .replace(/\n+/g, '\n')
-      .trim()
-  );
+
+  const chunks: string[] = [];
+  // An explicit stack avoids recursive traversal limits on deeply nested input.
+  const pending: (DefaultTreeAdapterMap['node'] | string)[] = [parseFragment(html)];
+  while (pending.length > 0) {
+    const node = pending.pop()!;
+    if (typeof node === 'string') {
+      chunks.push(node);
+    } else if ('value' in node) {
+      chunks.push(node.value);
+    } else if ('childNodes' in node) {
+      const tag = 'tagName' in node ? node.tagName : '';
+      if (tag === 'script' || tag === 'style' || tag === 'template') {
+        chunks.push(' ');
+        continue;
+      }
+      const separator = TEXT_BREAK_ELEMENTS.has(tag) ? '\n' : tag === 'td' || tag === 'th' ? ' ' : '';
+      if (separator) {
+        chunks.push(separator);
+        pending.push(separator);
+      }
+      for (let i = node.childNodes.length - 1; i >= 0; i--) {
+        pending.push(node.childNodes[i]);
+      }
+    }
+  }
+
+  return chunks
+    .join('')
+    .replace(/[ \t\r\f]+/g, ' ')
+    .replace(/ *\n */g, '\n')
+    .replace(/\n+/g, '\n')
+    .trim()
+    .toWellFormed();
 };
 
 /**

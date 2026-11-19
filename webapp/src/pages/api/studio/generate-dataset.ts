@@ -143,7 +143,7 @@ async function processJob(jobId: string, body: GenerateDatasetBody) {
 
     jobStore.update(jobId, { status: 'completed', resultPath: filePath });
   } catch (error: unknown) {
-    console.error(`Job ${jobId} failed:`, error);
+    console.error('Job %s failed:', jobId, error);
     jobStore.update(jobId, { status: 'failed', error: (error as Error).message || 'Unknown error' });
   }
 }

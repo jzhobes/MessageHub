@@ -9,7 +9,8 @@ class AppConfig {
   private _workspacePath?: string;
 
   /**
-   * Resolves a raw string path into a validated absolute path.
+   * Normalizes a configured workspace path into an absolute path.
+   * Request handlers validate filesystem boundaries before updating this configuration.
    * Handles Windows drive-letter mapping (X:\ -> /mnt/x/) for Non-Windows host environments.
    */
   private _resolvePath(targetPath?: string): string {
@@ -47,13 +48,7 @@ class AppConfig {
       p = p.replace(/^[a-zA-Z]:\\/, `/mnt/${driveLetter}/`).replace(/\\/g, '/');
     }
 
-    const resolved = path.isAbsolute(p) ? p : path.resolve(projectRoot, p);
-
-    if (!fs.existsSync(resolved)) {
-      console.warn(`⚠️  Configuration path does not exist: ${resolved}`);
-    }
-
-    return resolved;
+    return path.resolve(projectRoot, p);
   }
 
   /**

@@ -10,14 +10,23 @@ import type { NextApiRequest, NextApiResponse } from 'next';
  * Leverages FileSystem manager class for security and path resolution.
  */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const requestedPath = req.query.path as string | undefined;
-  const mode = (req.query.mode as 'import' | 'workspace') || 'import';
+  const requestedPath = req.query.path;
+  const mode = req.query.mode ?? 'import';
+  if (
+    (requestedPath !== undefined && typeof requestedPath !== 'string') ||
+    (mode !== 'import' && mode !== 'workspace')
+  ) {
+    return res.status(400).json({ error: 'Invalid path or mode' });
+  }
+  const extParam = req.query.extensions;
+  if (extParam !== undefined && typeof extParam !== 'string') {
+    return res.status(400).json({ error: 'Invalid extensions' });
+  }
 
   try {
     const currentPath = fileSystem.resolveSafePath(mode, requestedPath);
 
     // Parse extensions
-    const extParam = req.query.extensions as string | undefined;
     let extensions: string[] | undefined;
     if (extParam) {
       extensions = extParam.split(',').map((e) => (e.startsWith('.') ? e : `.${e}`));
@@ -43,7 +52,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // If it doesn't exist, we don't try to list contents
-    const items = (meta?.exists ?? true) ? await fileSystem.listContents(currentPath, extensions) : [];
+    const items = (meta?.exists ?? true) ? await fileSystem.listContents(currentPath, extensions, mode) : [];
 
     return res.status(200).json({
       path: currentPath,
@@ -61,7 +70,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const message = 'Failed to list directory';
-    console.error(`${message}:`, e);
+    console.error('%s:', message, e);
     return res.status(500).json({
       error: e instanceof Error ? e.message : message,
     });

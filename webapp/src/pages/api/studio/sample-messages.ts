@@ -1,6 +1,6 @@
 import db from '@/lib/server/db';
 import { getMyNames } from '@/lib/server/identity';
-import { containsHtmlOrEntities, decodeHtmlEntities, stripHtml, stripUrls } from '@/lib/shared/stringUtils';
+import { containsHtmlOrEntities, stripHtml, stripUrls } from '@/lib/shared/stringUtils';
 
 import type { NextApiRequest, NextApiResponse } from 'next';
 
@@ -97,7 +97,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       messages: results.map((r) => {
         const content = r.content;
         if (containsHtmlOrEntities(content)) {
-          return stripUrls(decodeHtmlEntities(stripHtml(content)));
+          return stripUrls(stripHtml(content));
         }
         return stripUrls(content);
       }),

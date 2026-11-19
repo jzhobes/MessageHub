@@ -21,7 +21,7 @@ describe('/api/system/list', () => {
 
   beforeEach(() => {
     originalWorkspace = appConfig.WORKSPACE_PATH;
-    tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'messagehub-syslist-'));
+    tempRoot = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'messagehub-syslist-')));
     appConfig.WORKSPACE_PATH = tempRoot;
 
     fs.mkdirSync(path.join(tempRoot, 'z-folder'));
@@ -142,6 +142,25 @@ describe('/api/system/list', () => {
       error: "Access denied: I'm sorry. I'm afraid I can't do that.",
     });
   });
+
+  it('rejects a directory symlink escaping the allowed root', async () => {
+    const link = path.join(tempRoot, 'escape');
+    fs.symlinkSync(path.dirname(tempRoot), link, 'dir');
+    for (const mode of ['import', 'workspace']) {
+      const { req, res } = createMocks({ method: 'GET', query: { mode, path: link } });
+      await handler(req, res);
+      expect(res._getStatusCode()).toBe(403);
+    }
+  });
+
+  it.each([{ mode: 'unexpected' }, { path: ['one', 'two'] }, { extensions: ['zip', 'txt'] }])(
+    'rejects malformed query parameters: %j',
+    async (query) => {
+      const { req, res } = createMocks({ method: 'GET', query });
+      await handler(req, res);
+      expect(res._getStatusCode()).toBe(400);
+    },
+  );
 
   it('returns 500 when listing directory fails unexpectedly', async () => {
     vi.spyOn(fileSystem, 'listContents').mockRejectedValueOnce(new Error('Disk I/O failure'));

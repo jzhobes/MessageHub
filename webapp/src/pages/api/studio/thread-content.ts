@@ -1,6 +1,6 @@
 import db from '@/lib/server/db';
 import { getMyNames } from '@/lib/server/identity';
-import { containsHtmlOrEntities, decodeHtmlEntities, stripHtml, stripUrls } from '@/lib/shared/stringUtils';
+import { containsHtmlOrEntities, stripHtml, stripUrls } from '@/lib/shared/stringUtils';
 
 import type { NextApiRequest, NextApiResponse } from 'next';
 
@@ -137,7 +137,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 function cleanThreadMessage(content: string): string | null {
   let clean = content;
   if (containsHtmlOrEntities(clean)) {
-    clean = decodeHtmlEntities(stripHtml(clean));
+    clean = stripHtml(clean);
   }
   clean = stripUrls(clean);
   return clean || null;

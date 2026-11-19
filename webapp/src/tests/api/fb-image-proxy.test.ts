@@ -1,4 +1,8 @@
 // @vitest-environment node
+import '../helpers/remoteFetchMock';
+
+import { format } from 'node:util';
+
 import { createMocks } from 'node-mocks-http';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -31,6 +35,22 @@ describe('/api/fb-image-proxy', () => {
     expect(res._getStatusCode()).toBe(400);
     expect(res._getJSONData()).toEqual({ error: 'Invalid URL' });
   });
+
+  it.each(['%s', '%d', '%j', '%o'])(
+    'logs invalid URLs containing %s without consuming the error',
+    async (specifier) => {
+      const url = `invalid-url-${specifier}`;
+      const { req, res } = createMocks({ method: 'GET', query: { url } });
+
+      await handler(req, res);
+
+      const args = vi.mocked(console.error).mock.calls[0];
+      expect(res._getStatusCode()).toBe(400);
+      expect(format(...args)).toContain(`Invalid URL: "${url}"`);
+      expect(args[args.length - 1]).toBeInstanceOf(Error);
+      expect(format(...args)).toContain('TypeError');
+    },
+  );
 
   it.each([
     'https://example.com/photo.jpg',
@@ -72,14 +92,34 @@ describe('/api/fb-image-proxy', () => {
     expect(res._getHeaders()['content-type']).toBe('image/png');
     expect(res._getHeaders()['cache-control']).toBe('public, max-age=31536000, immutable');
     expect(Buffer.from(res._getData())).toEqual(imgBytes);
-    expect(fetchMock).toHaveBeenCalledWith(
-      targetUrl,
-      expect.objectContaining({
-        headers: expect.objectContaining({
-          'User-Agent': expect.stringContaining('facebookexternalhit'),
-        }),
-      }),
-    );
+    expect(new Headers(fetchMock.mock.calls[0][1].headers).get('user-agent')).toContain('facebookexternalhit');
+  });
+
+  it.each(['https://example.com/image.jpg', 'http://127.0.0.1/admin'])(
+    'rejects redirects outside the CDN allowlist: %s',
+    async (location) => {
+      const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 302, headers: { location } }));
+      vi.stubGlobal('fetch', fetchMock);
+      const { req, res } = createMocks({ method: 'GET', query: { url: 'https://lookaside.fbsbx.com/image' } });
+      await handler(req, res);
+      expect(res._getStatusCode()).toBe(403);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it('follows redirects between allowed CDN hosts', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(null, { status: 302, headers: { location: 'https://scontent.xx.fbcdn.net/image' } }),
+      )
+      .mockResolvedValueOnce(new Response(Buffer.from([0, 255]), { headers: { 'content-type': 'image/png' } }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { req, res } = createMocks({ method: 'GET', query: { url: 'https://lookaside.fbsbx.com/image' } });
+    await handler(req, res);
+    expect(res._getStatusCode()).toBe(200);
+    expect(Buffer.from(res._getData())).toEqual(Buffer.from([0, 255]));
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it('uses the first element when url query param is an array', async () => {

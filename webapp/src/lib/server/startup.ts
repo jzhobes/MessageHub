@@ -1,4 +1,4 @@
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import fs from 'fs';
 import './env'; // Ensure env is loaded securely at boot
 
@@ -27,7 +27,7 @@ export async function runStartupChecks() {
     console.warn(`⚠️  [Instrumentation] Data Directory NOT FOUND: ${dataDir}`);
 
     // Auto-Mount Attempt for WSL
-    const wslMatch = dataDir.match(/\/mnt\/([a-z])\//);
+    const wslMatch = dataDir.match(/^\/mnt\/([a-z])\//);
     if (wslMatch) {
       const driveLetter = wslMatch[1];
       const mountPoint = `/mnt/${driveLetter}`;
@@ -38,9 +38,11 @@ export async function runStartupChecks() {
 
       try {
         // Create dir just in case
-        execSync(`sudo mkdir -p "${mountPoint}"`, { stdio: 'inherit' });
+        execFileSync('sudo', ['mkdir', '-p', mountPoint], { stdio: 'inherit' });
         // Mount
-        execSync(`sudo mount -t drvfs ${driveLetter.toUpperCase()}: "${mountPoint}"`, { stdio: 'inherit' });
+        execFileSync('sudo', ['mount', '-t', 'drvfs', `${driveLetter.toUpperCase()}:`, mountPoint], {
+          stdio: 'inherit',
+        });
 
         if (fs.existsSync(dataDir)) {
           console.log(`✅ [Instrumentation] Auto-Mount SUCCESS! Drive is ready.`);
@@ -49,9 +51,9 @@ export async function runStartupChecks() {
           const cleanup = () => {
             console.log(`\n🧹 [Instrumentation] Unmounting "${mountPoint}"...`);
             try {
-              execSync(`sudo umount "${mountPoint}"`, { stdio: 'inherit' });
+              execFileSync('sudo', ['umount', mountPoint], { stdio: 'inherit' });
               // Try to remove the empty dir to keep things clean
-              execSync(`sudo rmdir "${mountPoint}"`, { stdio: 'inherit' });
+              execFileSync('sudo', ['rmdir', mountPoint], { stdio: 'inherit' });
               console.log(`✅ Unmounted and removed "${mountPoint}".`);
             } catch (e) {
               console.error(`❌ Failed to unmount/remove:`, e);
@@ -64,8 +66,8 @@ export async function runStartupChecks() {
         } else {
           // Mount succeeded but data dir still not found? Bad mount. Cleanup.
           console.warn(`⚠️ [Instrumentation] Mount successful but ${dataDir} not found. Unmounting...`);
-          execSync(`sudo umount "${mountPoint}"`, { stdio: 'inherit' });
-          execSync(`sudo rmdir "${mountPoint}"`, { stdio: 'inherit' });
+          execFileSync('sudo', ['umount', mountPoint], { stdio: 'inherit' });
+          execFileSync('sudo', ['rmdir', mountPoint], { stdio: 'inherit' });
           throw new Error('Directory still missing after mount.');
         }
       } catch (e) {

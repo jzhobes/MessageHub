@@ -1,4 +1,6 @@
 // @vitest-environment node
+import '../helpers/remoteFetchMock';
+
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -88,6 +90,32 @@ describe('/api/media', () => {
     });
     await handler(errCall.req, errCall.res);
     expect(errCall.res._getStatusCode()).toBe(500);
+  });
+
+  it.each(['http://127.0.0.2/admin', 'http://[::ffff:127.0.0.1]/admin', 'http://169.254.169.254/'])(
+    'blocks non-public external media: %s',
+    async (url) => {
+      const fetchMock = vi.fn();
+      vi.stubGlobal('fetch', fetchMock);
+      const { req, res } = createMocks({ method: 'GET', query: { path: url, platform: 'google_mail' } });
+      await handler(req, res);
+      expect(res._getStatusCode()).toBe(403);
+      expect(fetchMock).not.toHaveBeenCalled();
+    },
+  );
+
+  it('blocks a public media URL redirecting to an internal address', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(null, { status: 302, headers: { location: 'http://10.0.0.1/private' } }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { req, res } = createMocks({
+      method: 'GET',
+      query: { path: 'https://example.com/image', platform: 'google_mail' },
+    });
+    await handler(req, res);
+    expect(res._getStatusCode()).toBe(403);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it('serves Facebook and Instagram files with and without activity prefix', async () => {

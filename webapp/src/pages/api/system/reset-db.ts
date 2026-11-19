@@ -42,7 +42,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         } catch (e) {
           // Just skip if file doesn't exist (ENOENT)
           if (e && typeof e === 'object' && 'code' in e && e.code !== 'ENOENT') {
-            console.warn(`[Reset] Could not delete file ${file}:`, e);
+            console.warn('[Reset] Could not delete file %s:', file, e);
           }
         }
       }
@@ -58,7 +58,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         console.log(`[Reset] Deleted directory: ${dirPath}`);
       } catch (e) {
         if (e && typeof e === 'object' && 'code' in e && e.code !== 'ENOENT') {
-          console.warn(`[Reset] Could not delete directory ${dirPath}:`, e);
+          console.warn('[Reset] Could not delete directory %s:', dirPath, e);
         }
       }
     }

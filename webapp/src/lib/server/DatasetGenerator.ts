@@ -9,7 +9,7 @@ import { MessageSessionBuilder } from '@/lib/server/dataset/builders/MessageSess
 import { redactPII } from '@/lib/server/piiUtils';
 import { inferThreadTitle } from '@/lib/server/threadUtils';
 import { PlatformMap } from '@/lib/shared/platforms';
-import { containsHtmlOrEntities, decodeHtmlEntities, stripHtml } from '@/lib/shared/stringUtils';
+import { containsHtmlOrEntities, stripHtml } from '@/lib/shared/stringUtils';
 import { ContentRecord, DatasetEntry } from '@/lib/shared/types';
 
 export interface GeneratorOptions {
@@ -428,7 +428,7 @@ export class DatasetGenerator {
       content = '[Sent an attachment]';
     }
     if (containsHtmlOrEntities(content)) {
-      content = decodeHtmlEntities(stripHtml(content));
+      content = stripHtml(content);
     }
     if (!content) {
       if (msg.media_json && msg.media_json !== '[]') {

@@ -3,11 +3,12 @@ import { readdir, stat } from 'fs/promises';
 import os from 'os';
 import path from 'path';
 
+import { canonicalizePath, isPathWithinRoot } from './pathValidators';
 import { PathMetadata } from '../shared/types';
 
 /**
  * FileSystemService manages secure file system access within the application.
- * It enforces path restrictions based on the FILE_SYSTEM_ROOT environment variable.
+ * It enforces the ROOT_IMPORT_PATH and ROOT_WORKSPACE_PATH directory boundaries.
  */
 class FileSystemService {
   private _importRoot: string;
@@ -34,28 +35,37 @@ class FileSystemService {
   }
 
   /**
-   * Resolves a requested path and ensures it remains within the allowed root for the given mode.
+   * Resolves a requested path and its symlinks within the allowed root for the given mode.
+   * Validates the nearest existing ancestor when the requested path does not exist yet.
+   *
+   * @param mode - The import or workspace boundary to enforce
+   * @param requestedPath - The requested path, defaulting to the configured root
+   * @returns The canonical absolute path inside the configured root
    */
   public resolveSafePath(mode: 'import' | 'workspace', requestedPath?: string): string {
-    const root = this.getRoot(mode);
-    const resolved = path.resolve(requestedPath || root);
-
-    // Check if the resolved path is within the allowed root
-    const rootWithSep = root.endsWith(path.sep) ? root : root + path.sep;
-    const isWithin = resolved === root || resolved.startsWith(rootWithSep);
-
-    if (!isWithin) {
+    if (requestedPath !== undefined && (typeof requestedPath !== 'string' || requestedPath.includes('\0'))) {
       throw new Error('PERMISSION_DENIED');
     }
+    const root = path.resolve(this.getRoot(mode));
+    const canonicalRoot = fs.realpathSync(root);
+    const resolved = path.resolve(requestedPath || root);
 
-    return resolved;
+    if (!isPathWithinRoot(root, resolved) && !isPathWithinRoot(canonicalRoot, resolved)) {
+      throw new Error('PERMISSION_DENIED');
+    }
+    const canonical = canonicalizePath(resolved);
+    if (!isPathWithinRoot(canonicalRoot, canonical)) {
+      throw new Error('PERMISSION_DENIED');
+    }
+    return canonical;
   }
 
   /**
    * Calculates a safe parent path, returning null if the path is the allowed root.
    */
   public getSafeParent(mode: 'import' | 'workspace', currentPath: string): string | null {
-    const root = this.getRoot(mode);
+    const root = this.resolveSafePath(mode);
+    currentPath = this.resolveSafePath(mode, currentPath);
     const parent = path.dirname(currentPath);
     if (currentPath === root || parent === currentPath) {
       return null;
@@ -66,8 +76,14 @@ class FileSystemService {
   /**
    * Lists the contents of a directory with metadata, excluding hidden files.
    * Optionally filters files by extensions.
+   *
+   * @param dirPath - The directory to list within the configured root
+   * @param extensions - Optional filename extensions to include
+   * @param mode - The import or workspace boundary to enforce
+   * @returns The directory entries with folders first, sorted by name
    */
-  public async listContents(dirPath: string, extensions?: string[]) {
+  public async listContents(dirPath: string, extensions?: string[], mode: 'import' | 'workspace' = 'import') {
+    dirPath = this.resolveSafePath(mode, dirPath);
     const dirents = await readdir(dirPath, { withFileTypes: true });
 
     const folders = dirents
@@ -96,7 +112,7 @@ class FileSystemService {
       fileDirents.map(async (d) => {
         const filePath = path.join(dirPath, d.name);
         try {
-          const s = await stat(filePath);
+          const s = await stat(this.resolveSafePath(mode, filePath));
           return {
             name: d.name,
             path: filePath,
@@ -104,7 +120,7 @@ class FileSystemService {
             size: s.size,
           };
         } catch (e) {
-          console.error(`Failed to stat ${filePath}:`, e);
+          console.error('Failed to stat %s:', filePath, e);
           return {
             name: d.name,
             path: filePath,
@@ -126,6 +142,7 @@ class FileSystemService {
    * Generates intelligence metadata for a path, used for validation and UI feedback.
    */
   public async getPathMetadata(dirPath: string): Promise<PathMetadata> {
+    dirPath = this.resolveSafePath('workspace', dirPath);
     let exists = false;
     let isWritable = false;
     let isEmpty = true;
@@ -138,7 +155,7 @@ class FileSystemService {
       exists = true;
 
       const activeWorkspace = process.env.WORKSPACE_PATH || 'data';
-      const absoluteActive = path.resolve(activeWorkspace);
+      const absoluteActive = canonicalizePath(activeWorkspace);
       const absoluteCurrent = path.resolve(dirPath);
 
       if (absoluteCurrent === absoluteActive) {
@@ -149,7 +166,7 @@ class FileSystemService {
 
       // Check for existing workspace signature
       try {
-        await fs.promises.access(path.join(dirPath, 'messagehub.db'));
+        await fs.promises.access(this.resolveSafePath('workspace', path.join(dirPath, 'messagehub.db')));
         isExistingWorkspace = true;
       } catch {}
 

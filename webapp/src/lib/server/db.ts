@@ -41,7 +41,7 @@ class DatabaseService {
       this._instance.pragma('foreign_keys = ON');
       return this._instance;
     } catch (e) {
-      console.error(`Failed to open database at ${dbPath}`, e);
+      console.error('Failed to open database at %s', dbPath, e);
       throw e;
     }
   }

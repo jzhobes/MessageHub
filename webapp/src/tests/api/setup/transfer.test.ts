@@ -20,7 +20,7 @@ describe('/api/setup/transfer', () => {
 
   beforeEach(() => {
     originalWorkspace = appConfig.WORKSPACE_PATH;
-    tempBase = fs.mkdtempSync(path.join(os.tmpdir(), 'messagehub-transfer-'));
+    tempBase = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'messagehub-transfer-')));
     importDir = path.join(tempBase, 'import');
     workspaceDir = path.join(tempBase, 'workspace');
     fs.mkdirSync(importDir, { recursive: true });

@@ -1,4 +1,6 @@
 // @vitest-environment node
+import '../helpers/remoteFetchMock';
+
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -60,6 +62,10 @@ describe('/api/preview', () => {
   it.each([
     'http://localhost/admin',
     'http://127.0.0.1/admin',
+    'http://127.0.0.2/admin',
+    'http://2130706433/admin',
+    'http://[::ffff:127.0.0.1]/admin',
+    'http://[fc00::1]/admin',
     'http://[::1]/admin',
     'http://nas.local/files',
     'http://metadata.internal/token',
@@ -78,6 +84,47 @@ describe('/api/preview', () => {
 
     expect(res._getStatusCode()).toBe(403);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it.each(['https://example.com/article', 'https://reddit.com/r/news/comments/abc'])(
+    'blocks private redirects from either preview strategy: %s',
+    async (url) => {
+      const fetchMock = vi.fn().mockResolvedValue(
+        new Response(null, {
+          status: 302,
+          headers: { location: 'http://169.254.169.254/latest/meta-data/' },
+        }),
+      );
+      vi.stubGlobal('fetch', fetchMock);
+      const { req, res } = createMocks({ method: 'GET', query: { url } });
+      await handler(req, res);
+      expect(res._getStatusCode()).toBe(403);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(fs.existsSync(path.join(tempDir, 'preview_cache.json'))).toBe(false);
+    },
+  );
+
+  it('strips Instagram credentials on cross-origin redirects', async () => {
+    process.env.INSTAGRAM_AUTH = 'sessionid=fake-test-session';
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(null, { status: 302, headers: { location: 'https://example.com/photo' } }))
+      .mockResolvedValueOnce(new Response('<meta property="og:title" content="Photo" />'));
+    vi.stubGlobal('fetch', fetchMock);
+    const { req, res } = createMocks({ method: 'GET', query: { url: 'https://www.instagram.com/p/123/' } });
+    await handler(req, res);
+    expect(res._getJSONData().title).toBe('Photo');
+    expect(new Headers(fetchMock.mock.calls[0][1].headers).get('cookie')).toBe('sessionid=fake-test-session');
+    expect(new Headers(fetchMock.mock.calls[1][1].headers).get('cookie')).toBeNull();
+  });
+
+  it('does not send Instagram cookies over HTTP', async () => {
+    process.env.INSTAGRAM_AUTH = 'sessionid=fake-test-session';
+    const fetchMock = vi.fn().mockResolvedValue(new Response(''));
+    vi.stubGlobal('fetch', fetchMock);
+    const { req, res } = createMocks({ method: 'GET', query: { url: 'http://www.instagram.com/p/123/' } });
+    await handler(req, res);
+    expect(new Headers(fetchMock.mock.calls[0][1].headers).get('cookie')).toBeNull();
   });
 
   it('returns cached preview without calling fetch on cache hit', async () => {
@@ -227,14 +274,7 @@ describe('/api/preview', () => {
       image: `/api/fb-image-proxy?url=${encodeURIComponent(lookasideUrl)}`,
       description: null,
     });
-    expect(fetchMock).toHaveBeenCalledWith(
-      targetUrl,
-      expect.objectContaining({
-        headers: expect.objectContaining({
-          'User-Agent': expect.stringContaining('facebookexternalhit'),
-        }),
-      }),
-    );
+    expect(new Headers(fetchMock.mock.calls[0][1].headers).get('user-agent')).toContain('facebookexternalhit');
   });
 
   it('sends authenticated Instagram cookie headers when INSTAGRAM_AUTH is configured', async () => {
@@ -251,14 +291,7 @@ describe('/api/preview', () => {
 
     expect(res._getStatusCode()).toBe(200);
     expect(res._getJSONData().title).toBe('IG Photo');
-    expect(fetchMock).toHaveBeenCalledWith(
-      targetUrl,
-      expect.objectContaining({
-        headers: expect.objectContaining({
-          Cookie: 'sessionid=sess123; csrftoken=csrf456',
-        }),
-      }),
-    );
+    expect(new Headers(fetchMock.mock.calls[0][1].headers).get('cookie')).toBe('sessionid=sess123; csrftoken=csrf456');
   });
 
   it('degrades gracefully when upstream fails, times out, or hits redirect loop', async () => {
