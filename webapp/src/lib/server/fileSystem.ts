@@ -3,7 +3,7 @@ import { readdir, stat } from 'fs/promises';
 import os from 'os';
 import path from 'path';
 
-import { canonicalizePath, isPathWithinRoot } from './pathValidators';
+import { canonicalizePath } from './pathValidators';
 import { PathMetadata } from '../shared/types';
 
 /**
@@ -50,11 +50,24 @@ class FileSystemService {
     const canonicalRoot = fs.realpathSync(root);
     const resolved = path.resolve(requestedPath || root);
 
-    if (!isPathWithinRoot(root, resolved) && !isPathWithinRoot(canonicalRoot, resolved)) {
+    // Keep containment guards beside the path they validate so static analysis can follow them.
+    const relative = path.relative(root, resolved);
+    const relativeToCanonicalRoot = path.relative(canonicalRoot, resolved);
+    if (
+      (relative === '..' || relative.startsWith('..' + path.sep) || path.isAbsolute(relative)) &&
+      (relativeToCanonicalRoot === '..' ||
+        relativeToCanonicalRoot.startsWith('..' + path.sep) ||
+        path.isAbsolute(relativeToCanonicalRoot))
+    ) {
       throw new Error('PERMISSION_DENIED');
     }
     const canonical = canonicalizePath(resolved);
-    if (!isPathWithinRoot(canonicalRoot, canonical)) {
+    const canonicalRelative = path.relative(canonicalRoot, canonical);
+    if (
+      canonicalRelative === '..' ||
+      canonicalRelative.startsWith('..' + path.sep) ||
+      path.isAbsolute(canonicalRelative)
+    ) {
       throw new Error('PERMISSION_DENIED');
     }
     return canonical;

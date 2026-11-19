@@ -37,15 +37,3 @@ export function canonicalizePath(targetPath: string): string {
     }
   }
 }
-
-/**
- * Checks containment using complete path components rather than a string prefix.
- *
- * @param root - The absolute root directory
- * @param target - The absolute path to check
- * @returns Whether the target is the root or one of its descendants
- */
-export function isPathWithinRoot(root: string, target: string): boolean {
-  const relative = path.relative(root, target);
-  return relative === '' || (!path.isAbsolute(relative) && relative !== '..' && !relative.startsWith(`..${path.sep}`));
-}
