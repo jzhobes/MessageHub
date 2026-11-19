@@ -35,18 +35,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const parent = fileSystem.getSafeParent(mode, currentPath);
     const meta = mode === 'workspace' ? await fileSystem.getPathMetadata(currentPath) : null;
 
-    // In import mode, we still 404 if not exists
-    if (mode === 'import' && (!meta || !meta.exists)) {
-      // Manual exists check if meta is null (import mode)
-      let actualExists = true;
-      if (!meta) {
-        try {
-          await fs.promises.access(currentPath);
-        } catch {
-          actualExists = false;
-        }
-      }
-      if (!actualExists) {
+    if (mode === 'import') {
+      try {
+        await fs.promises.access(currentPath);
+      } catch {
         return res.status(404).json({ error: 'Path not found' });
       }
     }

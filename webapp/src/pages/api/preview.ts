@@ -1,11 +1,12 @@
 import { promises as fs } from 'fs';
 import path from 'path';
 
+import { type DefaultTreeAdapterMap, parse } from 'parse5';
+
 import { getFacebookCrawlerHeaders } from '@/lib/server/facebook';
 import { getInstagramHeaders } from '@/lib/server/instagram';
 import { fetchRemote, isBlockedRemoteUrl } from '@/lib/server/remoteFetch';
 import appConfig from '@/lib/shared/appConfig';
-import { decodeHtmlEntities } from '@/lib/shared/stringUtils';
 
 import type { NextApiRequest, NextApiResponse } from 'next';
 
@@ -20,28 +21,28 @@ interface PreviewMetadata {
  * Parses HTML content to extract OpenGraph and other metadata.
  */
 function parseMetadata(html: string): { title: string | null; image: string | null; description: string | null } {
-  const getMeta = (htmlContent: string, propName: string) => {
-    const patterns = [
-      new RegExp(`<meta\\s+[^>]*property=["']${propName}["']\\s+[^>]*content=["']([^"']+)["']`, 'i'),
-      new RegExp(`<meta\\s+[^>]*content=["']([^"']+)["']\\s+[^>]*property=["']${propName}["']`, 'i'),
-      new RegExp(`<meta\\s+[^>]*name=["']${propName}["']\\s+[^>]*content=["']([^"']+)["']`, 'i'),
-      new RegExp(`<meta\\s+[^>]*content=["']([^"']+)["']\\s+[^>]*name=["']${propName}["']`, 'i'),
-    ];
-
-    for (const pattern of patterns) {
-      const match = pattern.exec(htmlContent);
-      if (match) {
-        return decodeHtmlEntities(match[1]);
+  const metadata = new Map<string, string>();
+  const nodes: DefaultTreeAdapterMap['node'][] = [parse(html)];
+  while (nodes.length) {
+    const node = nodes.pop()!;
+    if ('tagName' in node && node.tagName === 'meta') {
+      const attributes = new Map(node.attrs.map(({ name, value }) => [name, value]));
+      const key = (attributes.get('property') || attributes.get('name'))?.toLowerCase();
+      const content = attributes.get('content');
+      if (key && content && !metadata.has(key)) {
+        metadata.set(key, content);
       }
     }
-    return null;
-  };
+    if ('childNodes' in node) {
+      nodes.push(...node.childNodes.toReversed());
+    }
+  }
+  const getMeta = (key: string) => metadata.get(key) ?? null;
 
   return {
-    title: getMeta(html, 'og:title') || getMeta(html, 'twitter:title'),
-    image: getMeta(html, 'og:image') || getMeta(html, 'twitter:image'),
-    description:
-      getMeta(html, 'og:description') || getMeta(html, 'twitter:description') || getMeta(html, 'description'),
+    title: getMeta('og:title') || getMeta('twitter:title'),
+    image: getMeta('og:image') || getMeta('twitter:image'),
+    description: getMeta('og:description') || getMeta('twitter:description') || getMeta('description'),
   };
 }
 

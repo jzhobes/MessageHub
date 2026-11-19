@@ -149,6 +149,26 @@ describe('/api/preview', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it('parses quoted and unquoted metadata attributes and decodes entities once', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(`
+      <META CONTENT="It's > a test &amp;lt;b&amp;gt;" PROPERTY=og:title>
+      <meta name=description content="A &quot;quoted&quot; description">
+      <meta property=og:title content="Later duplicate">
+    `),
+      ),
+    );
+    const { req, res } = createMocks({ query: { url: 'https://example.com/parser' } });
+    await handler(req, res);
+    expect(res._getStatusCode()).toBe(200);
+    expect(res._getJSONData()).toMatchObject({
+      title: "It's > a test &lt;b&gt;",
+      description: 'A "quoted" description',
+    });
+  });
+
   it('extracts OpenGraph/Twitter metadata, decodes HTML entities, and caches result', async () => {
     const targetUrl = 'https://example.com/article';
     const html = `

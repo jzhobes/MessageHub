@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { parseEnv } from 'util';
 
 /**
  * AppConfig serves as the central configuration manager for the application.
@@ -27,10 +28,7 @@ class AppConfig {
         const envPath = path.join(projectRoot, '.env');
         if (fs.existsSync(envPath)) {
           const content = fs.readFileSync(envPath, 'utf8');
-          const match = /^WORKSPACE_PATH=(.*)$/m.exec(content);
-          if (match && match[1]) {
-            p = match[1].trim().replace(/^["']|["']$/g, '');
-          }
+          p = parseEnv(content).WORKSPACE_PATH;
         }
       } catch (e) {
         console.error('Failed to read .env file during path resolution:', e);

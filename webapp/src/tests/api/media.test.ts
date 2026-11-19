@@ -57,6 +57,30 @@ describe('/api/media', () => {
     },
   );
 
+  it.each(['google_mail', 'google_chat', 'facebook'])(
+    'blocks symlinks outside the active workspace for %s',
+    async (platform) => {
+      const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'messagehub-media-outside-'));
+      try {
+        fs.writeFileSync(path.join(outside, 'secret.txt'), 'private');
+        fs.symlinkSync(outside, path.join(tempDir, 'escape'), 'dir');
+        const { req, res } = createMocks({ query: { path: 'escape/secret.txt', platform } });
+        await handler(req, res);
+        expect(res._getStatusCode()).toBe(403);
+        expect(res._getData()).toBe('Access denied');
+      } finally {
+        fs.rmSync(outside, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it('blocks an extension fallback that is an escaping symlink', async () => {
+    fs.symlinkSync(os.tmpdir(), path.join(tempDir, 'photo.jpg'), 'dir');
+    const { req, res } = createMocks({ query: { path: 'photo', platform: 'google_mail' } });
+    await handler(req, res);
+    expect(res._getStatusCode()).toBe(403);
+  });
+
   it('proxies external http URLs and handles upstream failures', async () => {
     const imgBytes = Buffer.from('remote-img');
     vi.stubGlobal(

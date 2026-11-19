@@ -12,7 +12,8 @@ import fileSystem from '@/lib/server/fileSystem';
 import appConfig from '@/lib/shared/appConfig';
 import handler from '@/pages/api/setup/config';
 
-vi.mock('@/lib/server/env', () => ({
+vi.mock('@/lib/server/env', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/env')>()),
   persistWorkspacePath: vi.fn(),
 }));
 
@@ -37,6 +38,18 @@ describe('/api/setup/config', () => {
     appConfig.WORKSPACE_PATH = originalWorkspace;
     fs.rmSync(tempRoot, { recursive: true, force: true });
   });
+
+  it.each(['\nROOT_WORKSPACE_PATH=/', '\rROOT_IMPORT_PATH=/', '\0invalid'])(
+    'rejects configuration control characters before creating a directory: %s',
+    async (suffix) => {
+      const workspacePath = path.join(tempRoot, `new${suffix}`);
+      const { req, res } = createMocks({ method: 'POST', body: { workspacePath, create: true } });
+      await handler(req, res);
+      expect(res._getStatusCode()).toBe(400);
+      expect(persistWorkspacePath).not.toHaveBeenCalled();
+      expect(fs.readdirSync(tempRoot)).toEqual([]);
+    },
+  );
 
   it('returns 405 for unsupported methods', async () => {
     const { req, res } = createMocks({ method: 'DELETE' });

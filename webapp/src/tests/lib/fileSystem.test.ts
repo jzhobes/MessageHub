@@ -6,6 +6,7 @@ import path from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import fileSystem from '@/lib/server/fileSystem';
+import { canonicalizePath } from '@/lib/server/pathValidators';
 
 let base: string;
 let importRoot: string;
@@ -30,6 +31,25 @@ afterEach(() => {
 });
 
 describe('filesystem path boundaries', () => {
+  it('rejects an outside candidate before any filesystem probe', () => {
+    const realpath = vi.spyOn(fs, 'realpathSync');
+    const lstat = vi.spyOn(fs, 'lstatSync');
+
+    expect(() => canonicalizePath(path.join(outside, 'missing'), workspaceRoot)).toThrow('PERMISSION_DENIED');
+    expect(realpath).not.toHaveBeenCalled();
+    expect(lstat).not.toHaveBeenCalled();
+  });
+
+  it('stops at a missing root rather than probing its parent', () => {
+    const root = path.join(workspaceRoot, 'missing-root');
+    const realpath = vi.spyOn(fs, 'realpathSync');
+    const lstat = vi.spyOn(fs, 'lstatSync');
+
+    expect(() => canonicalizePath(path.join(root, 'child'), root)).toThrow('PERMISSION_DENIED');
+    expect(realpath.mock.calls.map(([candidate]) => candidate)).toEqual([path.join(root, 'child'), root]);
+    expect(lstat.mock.calls.map(([candidate]) => candidate)).toEqual([path.join(root, 'child')]);
+  });
+
   it.each(['outside', 'escaping-link', 'dangling-link'])(
     'preserves directory metadata with an invalid active workspace: %s',
     async (kind) => {
@@ -124,6 +144,25 @@ describe('filesystem path boundaries', () => {
     await expect(fileSystem.listContents(path.join(importRoot, 'escape'))).rejects.toThrow('PERMISSION_DENIED');
     await expect(fileSystem.getPathMetadata(path.join(workspaceRoot, 'escape'))).rejects.toThrow('PERMISSION_DENIED');
     await expect(fileSystem.listContents(workspaceRoot, undefined, 'workspace')).resolves.toEqual([]);
+  });
+
+  it('reuses the canonical root within a listing and refreshes it for the next operation', async () => {
+    const alias = path.join(base, 'root-alias');
+    fs.symlinkSync(importRoot, alias, 'dir');
+    vi.mocked(fileSystem.getRoot).mockReturnValue(alias);
+    fs.writeFileSync(path.join(importRoot, 'first.txt'), 'first');
+    fs.writeFileSync(path.join(importRoot, 'second.txt'), 'second');
+    const realpath = vi.spyOn(fs, 'realpathSync');
+
+    expect(await fileSystem.listContents(alias)).toHaveLength(2);
+    expect(realpath.mock.calls.filter(([candidate]) => candidate === alias)).toHaveLength(2);
+
+    fs.unlinkSync(alias);
+    fs.symlinkSync(workspaceRoot, alias, 'dir');
+    fs.writeFileSync(path.join(workspaceRoot, 'next.txt'), 'next');
+    expect(await fileSystem.listContents(alias)).toEqual([
+      { name: 'next.txt', path: path.join(workspaceRoot, 'next.txt'), type: 'file', size: 4 },
+    ]);
   });
 
   it('does not follow an external workspace database symlink for metadata', async () => {

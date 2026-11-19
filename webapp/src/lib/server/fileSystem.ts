@@ -3,7 +3,7 @@ import { readdir, stat } from 'fs/promises';
 import os from 'os';
 import path from 'path';
 
-import { canonicalizePath } from './pathValidators';
+import { createPathResolver } from './pathValidators';
 import { PathMetadata } from '../shared/types';
 
 /**
@@ -43,34 +43,7 @@ class FileSystemService {
    * @returns The canonical absolute path inside the configured root
    */
   public resolveSafePath(mode: 'import' | 'workspace', requestedPath?: string): string {
-    if (requestedPath !== undefined && (typeof requestedPath !== 'string' || requestedPath.includes('\0'))) {
-      throw new Error('PERMISSION_DENIED');
-    }
-    const root = path.resolve(this.getRoot(mode));
-    const canonicalRoot = fs.realpathSync(root);
-    const resolved = path.resolve(requestedPath || root);
-
-    // Keep containment guards beside the path they validate so static analysis can follow them.
-    const relative = path.relative(root, resolved);
-    const relativeToCanonicalRoot = path.relative(canonicalRoot, resolved);
-    if (
-      (relative === '..' || relative.startsWith('..' + path.sep) || path.isAbsolute(relative)) &&
-      (relativeToCanonicalRoot === '..' ||
-        relativeToCanonicalRoot.startsWith('..' + path.sep) ||
-        path.isAbsolute(relativeToCanonicalRoot))
-    ) {
-      throw new Error('PERMISSION_DENIED');
-    }
-    const canonical = canonicalizePath(resolved);
-    const canonicalRelative = path.relative(canonicalRoot, canonical);
-    if (
-      canonicalRelative === '..' ||
-      canonicalRelative.startsWith('..' + path.sep) ||
-      path.isAbsolute(canonicalRelative)
-    ) {
-      throw new Error('PERMISSION_DENIED');
-    }
-    return canonical;
+    return createPathResolver(this.getRoot(mode))(requestedPath);
   }
 
   /**
@@ -96,7 +69,8 @@ class FileSystemService {
    * @returns The directory entries with folders first, sorted by name
    */
   public async listContents(dirPath: string, extensions?: string[], mode: 'import' | 'workspace' = 'import') {
-    dirPath = this.resolveSafePath(mode, dirPath);
+    const resolvePath = createPathResolver(this.getRoot(mode));
+    dirPath = resolvePath(dirPath);
     const dirents = await readdir(dirPath, { withFileTypes: true });
 
     const folders = dirents
@@ -125,7 +99,7 @@ class FileSystemService {
       fileDirents.map(async (d) => {
         const filePath = path.join(dirPath, d.name);
         try {
-          const s = await stat(this.resolveSafePath(mode, filePath));
+          const s = await stat(resolvePath(filePath));
           return {
             name: d.name,
             path: filePath,
@@ -155,7 +129,8 @@ class FileSystemService {
    * Generates intelligence metadata for a path, used for validation and UI feedback.
    */
   public async getPathMetadata(dirPath: string): Promise<PathMetadata> {
-    dirPath = this.resolveSafePath('workspace', dirPath);
+    const resolvePath = createPathResolver(this.getRoot('workspace'));
+    dirPath = resolvePath(dirPath);
     let exists = false;
     let isWritable = false;
     let isEmpty = true;
@@ -169,7 +144,7 @@ class FileSystemService {
 
       try {
         const activeWorkspace = process.env.WORKSPACE_PATH || 'data';
-        const absoluteActive = this.resolveSafePath('workspace', activeWorkspace);
+        const absoluteActive = resolvePath(activeWorkspace);
 
         if (dirPath === absoluteActive) {
           isActive = true;
@@ -182,7 +157,7 @@ class FileSystemService {
 
       // Check for existing workspace signature
       try {
-        await fs.promises.access(this.resolveSafePath('workspace', path.join(dirPath, 'messagehub.db')));
+        await fs.promises.access(resolvePath(path.join(dirPath, 'messagehub.db')));
         isExistingWorkspace = true;
       } catch {}
 

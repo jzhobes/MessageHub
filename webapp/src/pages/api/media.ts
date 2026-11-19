@@ -1,6 +1,7 @@
 import { createReadStream, promises as fs } from 'fs';
 import path from 'path';
 
+import { createPathResolver, hasErrorCode } from '@/lib/server/pathValidators';
 import { fetchRemote, isBlockedRemoteUrl } from '@/lib/server/remoteFetch';
 import appConfig from '@/lib/shared/appConfig';
 
@@ -21,7 +22,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   // Normalize to single strings
-  filePath = decodeURIComponent(Array.isArray(filePath) ? filePath[0] : filePath);
+  try {
+    filePath = decodeURIComponent(Array.isArray(filePath) ? filePath[0] : filePath);
+  } catch {
+    return res.status(400).send('Invalid path');
+  }
   platform = Array.isArray(platform) ? platform[0] : platform;
 
   // Handle external URLs (for Gmail proxies, etc.)
@@ -61,95 +66,54 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).send('Invalid path');
   }
 
-  const baseDir = appConfig.WORKSPACE_PATH;
-  let relativePath = filePath;
-
-  // Platform-specific path adjustments (case-insensitive)
-  platform = platform.toLowerCase();
-  if (platform === 'facebook') {
-    relativePath = path.join(
-      'Facebook',
-      filePath.startsWith('your_facebook_activity') ? '' : 'your_facebook_activity',
-      filePath,
-    );
-  } else if (platform === 'instagram') {
-    relativePath = path.join(
-      'Instagram',
-      filePath.startsWith('your_instagram_activity') ? '' : 'your_instagram_activity',
-      filePath,
-    );
-  } else if (platform === 'google_chat') {
-    // Google Chat paths are usually in Groups or DMs subdirectory
-    const groupsPath = path.join('Google Chat/Groups', filePath);
-    const dmsPath = path.join('Google Chat/DMs', filePath);
-
-    // First check Groups
-    try {
-      await fs.access(path.join(baseDir, groupsPath));
-      relativePath = groupsPath;
-    } catch {
-      // Then check DMs
-      try {
-        await fs.access(path.join(baseDir, dmsPath));
-        relativePath = dmsPath;
-      } catch {
-        // Fallback to original
-        relativePath = path.join('Google Chat/Groups', filePath);
-      }
+  try {
+    const baseDir = appConfig.WORKSPACE_PATH;
+    const resolveWorkspacePath = createPathResolver(baseDir);
+    const candidates: string[] = [];
+    platform = platform.toLowerCase();
+    if (platform === 'facebook') {
+      candidates.push(
+        path.join('Facebook', filePath.startsWith('your_facebook_activity') ? '' : 'your_facebook_activity', filePath),
+      );
+    } else if (platform === 'instagram') {
+      candidates.push(
+        path.join(
+          'Instagram',
+          filePath.startsWith('your_instagram_activity') ? '' : 'your_instagram_activity',
+          filePath,
+        ),
+      );
+    } else if (platform === 'google_chat') {
+      candidates.push(path.join('Google Chat/Groups', filePath), path.join('Google Chat/DMs', filePath));
+    } else if (platform === 'google_voice') {
+      candidates.push(filePath.toLowerCase().startsWith('voice/') ? filePath : path.join('Voice', filePath));
+    } else if (platform === 'google_mail') {
+      candidates.push(path.join('Mail', filePath));
     }
-  } else if (platform === 'google_voice') {
-    // Google Voice paths in DB often start with "Voice/".
-    // The directory on disk is usually just "Voice/".
-    if (filePath.toLowerCase().startsWith('voice/')) {
-      relativePath = filePath;
-    } else {
-      relativePath = path.join('Voice', filePath);
-    }
-  } else if (platform === 'google_mail') {
-    relativePath = path.join('Mail', filePath);
-  }
-
-  // First try the constructed path
-  let absolutePath = path.join(baseDir, relativePath);
-
-  // Helper to check if file exists or try common extensions
-  const resolvePath = async (p: string) => {
-    try {
-      await fs.access(p);
-      return p;
-    } catch {
-      // If file doesn't exist exactly, try common extensions (especially for Google Voice)
-      const commonExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.mp3', '.mp4', '.mov', '.vcf'];
-      for (const ext of commonExtensions) {
+    candidates.push(filePath);
+    let absolutePath: string | undefined;
+    const extensions = ['', '.jpg', '.jpeg', '.png', '.gif', '.mp3', '.mp4', '.mov', '.vcf'];
+    for (const candidate of new Set(candidates)) {
+      for (const extension of extensions) {
+        const safePath = resolveWorkspacePath(path.join(baseDir, candidate + extension));
         try {
-          await fs.access(p + ext);
-          return p + ext;
-        } catch {
-          // continue
+          await fs.access(safePath);
+          absolutePath = safePath;
+          break;
+        } catch (error) {
+          if (!hasErrorCode(error, 'ENOENT') && !hasErrorCode(error, 'ENOTDIR')) {
+            throw error;
+          }
         }
       }
-      return null;
+      if (absolutePath) {
+        break;
+      }
     }
-  };
-
-  const resolved = await resolvePath(absolutePath);
-  if (resolved) {
-    absolutePath = resolved;
-  } else {
-    // Try one more time with the "altPath" (raw filePath)
-    const fallback = await resolvePath(path.join(baseDir, filePath));
-    if (fallback) {
-      absolutePath = fallback;
-    } else {
-      // Both failed, keep the original absolutePath so the 404 block below captures it
+    if (!absolutePath) {
+      return res.status(404).send('File not found');
     }
-  }
 
-  if (!absolutePath.startsWith(baseDir)) {
-    return res.status(403).send('Access denied');
-  }
-
-  try {
     const stats = await fs.stat(absolutePath);
     const ext = path.extname(absolutePath).toLowerCase();
     let contentType = 'application/octet-stream';
@@ -193,8 +157,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const stream = createReadStream(absolutePath);
     stream.pipe(res);
   } catch (e) {
-    if ((e as NodeJS.ErrnoException).code === 'ENOENT') {
-      console.error('File not found:', absolutePath);
+    if (e instanceof Error && e.message === 'PERMISSION_DENIED') {
+      return res.status(403).send('Access denied');
+    }
+    if (hasErrorCode(e, 'ENOENT')) {
       return res.status(404).send('File not found');
     }
     console.error('Error serving media:', e);

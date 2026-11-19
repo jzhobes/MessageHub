@@ -1,7 +1,7 @@
 import fs from 'fs';
 
 import db from '@/lib/server/db';
-import { persistWorkspacePath } from '@/lib/server/env';
+import { persistWorkspacePath, serializeWorkspacePath } from '@/lib/server/env';
 import fileSystem from '@/lib/server/fileSystem';
 import appConfig from '@/lib/shared/appConfig';
 
@@ -38,9 +38,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ error: 'Invalid path' });
     }
 
+    try {
+      serializeWorkspacePath(workspacePath);
+    } catch {
+      return res.status(400).json({ error: 'Invalid workspace path for configuration' });
+    }
+
     let resolved: string;
     try {
       resolved = fileSystem.resolveSafePath('workspace', workspacePath);
+      serializeWorkspacePath(resolved);
     } catch {
       return res
         .status(403)
