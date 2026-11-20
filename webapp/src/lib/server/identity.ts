@@ -1,7 +1,7 @@
 import db from './db';
 
 /**
- * Retrieves the potential names for the current user ("Me") from the identities table in the database.
+ * Read the names that can represent “Me” from the identities table.
  */
 export async function getMyNames(): Promise<string[]> {
   const myNamesSet = new Set<string>(['Me']);

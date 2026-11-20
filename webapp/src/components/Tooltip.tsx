@@ -120,7 +120,7 @@ export default function Tooltip({
           show();
         }
       } catch {
-        // Ignore in environments that do not support :focus-visible
+        // Some environments don't support :focus-visible.
       }
     },
     [show],
@@ -138,7 +138,7 @@ export default function Tooltip({
       try {
         tooltipEl.showPopover();
       } catch {
-        // Ignore if popover cannot be shown or browser lacks popover="hint" support
+        // The browser may reject showPopover or lack popover="hint" support.
       }
     }
 
@@ -172,7 +172,7 @@ export default function Tooltip({
         try {
           tooltipEl.hidePopover();
         } catch {
-          // Ignore if popover is already closed
+          // The popover may have closed already.
         }
       }
     };

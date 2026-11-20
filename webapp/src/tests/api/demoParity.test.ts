@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { createMocks } from 'node-mocks-http';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, assert, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { handleDemoFetch } from '@/lib/demo/demoRouter';
 import { setDemoDataForTest } from '@/lib/demo/demoStore';
@@ -26,6 +26,10 @@ import type {
   DemoThreadRow,
 } from '@/lib/demo/demoTypes';
 import type { NextApiRequest, NextApiResponse } from 'next';
+
+const facebookThreadId = 'cabin-weekend_1';
+const chatThreadId = 'Space Field Notes';
+const mailThreadId = 'gm_8017';
 
 function buildDemoBundleFromDb(): DemoDataBundle {
   const conn = db.get();
@@ -65,6 +69,7 @@ async function callRealGet(
     query,
   });
   await handler(req, res);
+  expect(res._getStatusCode(), urlPath).toBe(200);
   return { status: res._getStatusCode(), body: res._getJSONData() };
 }
 
@@ -79,6 +84,7 @@ async function callRealPost(
     body,
   });
   await handler(req, res);
+  expect(res._getStatusCode(), urlPath).toBe(200);
   return { status: res._getStatusCode(), body: res._getJSONData() };
 }
 
@@ -98,11 +104,13 @@ describe('Demo Router vs Real API Parity (data_samples)', () => {
   it('matches /api/status and /api/identity', async () => {
     const realStatus = await callRealGet(statusHandler, '/api/status');
     const demoStatusRes = await handleDemoFetch('/api/status');
+    expect(realStatus.body).toHaveProperty('initialized', true);
     expect(demoStatusRes.status).toBe(realStatus.status);
     expect(await demoStatusRes.json()).toEqual(realStatus.body);
 
     const realIdentity = await callRealGet(identityHandler, '/api/identity');
     const demoIdentityRes = await handleDemoFetch('/api/identity');
+    expect(realIdentity.body).toHaveProperty('names', expect.arrayContaining(['Alex Smith']));
     expect(demoIdentityRes.status).toBe(realIdentity.status);
     expect(await demoIdentityRes.json()).toEqual(realIdentity.body);
   });
@@ -119,6 +127,7 @@ describe('Demo Router vs Real API Parity (data_samples)', () => {
     for (const q of queries) {
       const real = await callRealGet(threadsHandler, q);
       const demoRes = await handleDemoFetch(q);
+      expect(real.body, q).toHaveProperty('threads.0');
       expect(demoRes.status).toBe(real.status);
       expect(await demoRes.json()).toEqual(real.body);
     }
@@ -126,37 +135,39 @@ describe('Demo Router vs Real API Parity (data_samples)', () => {
 
   it('matches /api/content and /api/media-gallery', async () => {
     const contentQueries = [
-      '/api/content?threadId=simulation_theory_888&page=1&platform=facebook',
-      '/api/content?threadId=gm_1001&page=1&platform=google_mail',
-      '/api/content?threadId=DM%20Sarah&page=1&platform=google_chat',
+      `/api/content?threadId=${facebookThreadId}&page=1&platform=facebook`,
+      `/api/content?threadId=${mailThreadId}&page=1&platform=google_mail`,
+      `/api/content?threadId=${encodeURIComponent(chatThreadId)}&page=1&platform=google_chat`,
     ];
 
     for (const q of contentQueries) {
       const real = await callRealGet(contentHandler, q);
       const demoRes = await handleDemoFetch(q);
+      expect(real.body, q).toHaveProperty('records.0');
       expect(demoRes.status).toBe(real.status);
       expect(await demoRes.json()).toEqual(real.body);
     }
 
-    const galleryUrl = '/api/media-gallery?threadId=simulation_theory_888';
+    const galleryUrl = `/api/media-gallery?threadId=${mailThreadId}`;
     const realGallery = await callRealGet(mediaGalleryHandler, galleryUrl);
     const demoGalleryRes = await handleDemoFetch(galleryUrl);
+    expect(realGallery.body).toHaveProperty('media.0');
     expect(demoGalleryRes.status).toBe(realGallery.status);
     expect(await demoGalleryRes.json()).toEqual(realGallery.body);
   });
 
   it('matches /api/jump in both messageId and date modes', async () => {
-    const simMessage = bundle.content.find((m) => m.thread_id === 'simulation_theory_888');
-    expect(simMessage).toBeDefined();
+    const message = bundle.content.find((m) => m.thread_id === facebookThreadId);
+    assert(message, `Expected a message in ${facebookThreadId}`);
 
-    const modeAUrl = `/api/jump?messageId=${simMessage!.id}`;
+    const modeAUrl = `/api/jump?messageId=${message.id}`;
     const realA = await callRealGet(jumpHandler, modeAUrl);
     const demoARes = await handleDemoFetch(modeAUrl);
     expect(demoARes.status).toBe(realA.status);
     expect(await demoARes.json()).toEqual(realA.body);
 
-    const dateStr = new Date(simMessage!.timestamp_ms).toISOString().slice(0, 10);
-    const modeBUrl = `/api/jump?threadId=simulation_theory_888&date=${dateStr}&timeZone=UTC`;
+    const dateStr = new Date(message.timestamp_ms).toISOString().slice(0, 10);
+    const modeBUrl = `/api/jump?threadId=${facebookThreadId}&date=${dateStr}&timeZone=UTC`;
     const realB = await callRealGet(jumpHandler, modeBUrl);
     const demoBRes = await handleDemoFetch(modeBUrl);
     expect(demoBRes.status).toBe(realB.status);
@@ -165,30 +176,34 @@ describe('Demo Router vs Real API Parity (data_samples)', () => {
 
   it('matches /api/search for plain, OR, platform-filtered, and no-facet queries', async () => {
     const queries = [
-      '/api/search?q=simulation',
-      '/api/search?q=coffee%20OR%20glitch',
-      '/api/search?q=simulation&platform=facebook',
-      '/api/search?q=simulation&includeFacets=0',
+      '/api/search?q=fern%20house',
+      '/api/search?q=fern%20house%20OR%20lentil',
+      '/api/search?q=fern%20house&platform=facebook',
+      '/api/search?q=fern%20house&includeFacets=0',
     ];
 
     for (const q of queries) {
       const real = await callRealGet(searchHandler, q);
       const demoRes = await handleDemoFetch(q);
+      expect(real.body, q).toHaveProperty('data.0');
       expect(demoRes.status).toBe(real.status);
       expect(await demoRes.json()).toEqual(real.body);
     }
   });
 
   it('matches DataForge Studio endpoints (/api/studio/*)', async () => {
-    vi.spyOn(Date, 'now').mockReturnValue(1735000000000);
+    vi.spyOn(Date, 'now').mockReturnValue(Date.UTC(2025, 6, 1));
+    const threadIds = [facebookThreadId, mailThreadId];
+    const identityNames = ['Alex Smith', 'alex.smith@example.com'];
 
     const dsThreadsUrl = '/api/studio/dataset-threads?platform=all';
     const realDsThreads = await callRealGet(datasetThreadsHandler, dsThreadsUrl);
     const demoDsThreadsRes = await handleDemoFetch(dsThreadsUrl);
+    expect(realDsThreads.body).toContainEqual(expect.objectContaining({ id: 'David Smith', myAvgMessageLength: 37 }));
     expect(demoDsThreadsRes.status).toBe(realDsThreads.status);
     expect(await demoDsThreadsRes.json()).toEqual(realDsThreads.body);
 
-    const threadContentBody = { ids: ['simulation_theory_888', 'alice_smith_123', 'gm_1001'] };
+    const threadContentBody = { ids: [...threadIds, chatThreadId] };
     const realThreadContent = await callRealPost(threadContentHandler, '/api/studio/thread-content', threadContentBody);
     const demoThreadContentRes = await handleDemoFetch('/api/studio/thread-content', {
       method: 'POST',
@@ -197,13 +212,15 @@ describe('Demo Router vs Real API Parity (data_samples)', () => {
     expect(demoThreadContentRes.status).toBe(realThreadContent.status);
     const demoThreadContent = (await demoThreadContentRes.json()) as Record<string, string[]>;
     const realThreadContentBody = realThreadContent.body as Record<string, string[]>;
-    expect(Object.keys(demoThreadContent).sort()).toEqual(Object.keys(realThreadContentBody).sort());
-    for (const key of Object.keys(realThreadContentBody)) {
-      // SQLite leaves equal-timestamp rows in unspecified query-plan order
+    expect(Object.keys(realThreadContentBody).sort()).toEqual([...threadContentBody.ids].sort());
+    expect(Object.keys(demoThreadContent).sort()).toEqual([...threadContentBody.ids].sort());
+    for (const key of threadContentBody.ids) {
+      expect(realThreadContentBody[key].length, key).toBeGreaterThan(0);
+      // SQLite can return rows with the same timestamp in either order.
       expect([...demoThreadContent[key]].sort()).toEqual([...realThreadContentBody[key]].sort());
     }
 
-    const sampleMsgsBody = { threadIds: ['simulation_theory_888', 'gm_1001'], limit: 50 };
+    const sampleMsgsBody = { threadIds, limit: 50 };
     const realSampleMsgs = await callRealPost(sampleMessagesHandler, '/api/studio/sample-messages', sampleMsgsBody);
     const demoSampleMsgsRes = await handleDemoFetch('/api/studio/sample-messages', {
       method: 'POST',
@@ -212,11 +229,12 @@ describe('Demo Router vs Real API Parity (data_samples)', () => {
     expect(demoSampleMsgsRes.status).toBe(realSampleMsgs.status);
     const demoSampleMsgs = (await demoSampleMsgsRes.json()) as { messages: string[] };
     const realSampleMsgsBody = realSampleMsgs.body as { messages: string[] };
+    expect(realSampleMsgsBody.messages.length).toBeGreaterThan(0);
     expect([...demoSampleMsgs.messages].sort()).toEqual([...realSampleMsgsBody.messages].sort());
 
     const sampleDaysBody = {
-      threadIds: ['simulation_theory_888', 'gm_1001'],
-      identityNames: ['John Doe'],
+      threadIds,
+      identityNames,
       timeZone: 'UTC',
     };
     const realSampleDays = await callRealPost(
@@ -228,12 +246,15 @@ describe('Demo Router vs Real API Parity (data_samples)', () => {
       method: 'POST',
       body: JSON.stringify(sampleDaysBody),
     });
+    for (const threadId of threadIds) {
+      expect(realSampleDays.body).toHaveProperty(['results', threadId, 'selectedDays', '0']);
+    }
     expect(demoSampleDaysRes.status).toBe(realSampleDays.status);
     expect(await demoSampleDaysRes.json()).toEqual(realSampleDays.body);
 
     const jsonlPreviewBody = {
-      threadIds: ['simulation_theory_888', 'gm_1001'],
-      identityNames: ['John Doe'],
+      threadIds,
+      identityNames,
       outputFormat: 'jsonl',
     };
     const realJsonlPreview = await callRealPost(previewDatasetHandler, '/api/studio/preview-dataset', jsonlPreviewBody);
@@ -241,12 +262,13 @@ describe('Demo Router vs Real API Parity (data_samples)', () => {
       method: 'POST',
       body: JSON.stringify(jsonlPreviewBody),
     });
+    expect(realJsonlPreview.body).toHaveProperty('sessions.0');
     expect(demoJsonlPreviewRes.status).toBe(realJsonlPreview.status);
     expect(await demoJsonlPreviewRes.json()).toEqual(realJsonlPreview.body);
 
     const mdPreviewBody = {
-      threadIds: ['simulation_theory_888', 'gm_1001'],
-      identityNames: ['John Doe'],
+      threadIds,
+      identityNames,
       outputFormat: 'markdown',
       datasetName: 'parity_test',
       skipSystemMessages: true,
@@ -257,6 +279,7 @@ describe('Demo Router vs Real API Parity (data_samples)', () => {
       method: 'POST',
       body: JSON.stringify(mdPreviewBody),
     });
+    expect(realMdPreview.body).toHaveProperty('files.0');
     expect(demoMdPreviewRes.status).toBe(realMdPreview.status);
     expect(await demoMdPreviewRes.json()).toEqual(realMdPreview.body);
   });

@@ -7,8 +7,8 @@ import { createPathResolver } from './pathValidators';
 import { PathMetadata } from '../shared/types';
 
 /**
- * FileSystemService manages secure file system access within the application.
- * It enforces the ROOT_IMPORT_PATH and ROOT_WORKSPACE_PATH directory boundaries.
+ * Keep filesystem access inside `ROOT_IMPORT_PATH` or `ROOT_WORKSPACE_PATH`, depending on the
+ * operation.
  */
 class FileSystemService {
   private _importRoot: string;
@@ -35,8 +35,8 @@ class FileSystemService {
   }
 
   /**
-   * Resolves a requested path and its symlinks within the allowed root for the given mode.
-   * Validates the nearest existing ancestor when the requested path does not exist yet.
+   * Resolve the requested path and its symlinks inside the allowed root. If the path doesn't exist
+   * yet, validate the nearest ancestor that does.
    *
    * @param mode - The import or workspace boundary to enforce
    * @param requestedPath - The requested path, defaulting to the configured root
@@ -47,7 +47,7 @@ class FileSystemService {
   }
 
   /**
-   * Calculates a safe parent path, returning null if the path is the allowed root.
+   * Return the parent inside the allowed root, or `null` if we're already at the root.
    */
   public getSafeParent(mode: 'import' | 'workspace', currentPath: string): string | null {
     const root = this.resolveSafePath(mode);
@@ -60,8 +60,8 @@ class FileSystemService {
   }
 
   /**
-   * Lists the contents of a directory with metadata, excluding hidden files.
-   * Optionally filters files by extensions.
+   * List visible directory entries and their metadata. Filter files by extension when requested and
+   * sort folders first, then by name.
    *
    * @param dirPath - The directory to list within the configured root
    * @param extensions - Optional filename extensions to include
@@ -87,7 +87,7 @@ class FileSystemService {
         return false;
       }
 
-      // If extensions provided, check them
+      // If extensions were supplied, only include matching files.
       if (extensions && extensions.length > 0) {
         return extensions.some((ext) => d.name.toLowerCase().endsWith(ext.toLowerCase()));
       }
@@ -126,7 +126,8 @@ class FileSystemService {
   }
 
   /**
-   * Generates intelligence metadata for a path, used for validation and UI feedback.
+   * Describe the path so the setup UI can tell whether it's an existing workspace or usable for a
+   * new one.
    */
   public async getPathMetadata(dirPath: string): Promise<PathMetadata> {
     const resolvePath = createPathResolver(this.getRoot('workspace'));
@@ -152,7 +153,7 @@ class FileSystemService {
           isNested = true;
         }
       } catch {
-        // Invalid active configuration must not hide metadata for a valid requested directory.
+        // Still return metadata for a valid requested folder if the active workspace configuration is invalid.
       }
 
       // Check for existing workspace signature

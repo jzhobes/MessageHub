@@ -7,11 +7,12 @@ export interface Job {
   total: number;
   message?: string;
   resultPath?: string;
+  downloadFileName?: string;
   error?: string;
   createdAt: number;
 }
 
-// Global store to persist across hot reloads in dev
+// Keep jobs across dev hot reloads.
 const globalWithJobs = global as typeof globalThis & {
   _jobStore: Map<string, Job>;
 };
@@ -45,9 +46,8 @@ export const jobStore = {
   },
 
   /**
-   * Evicts jobs older than `olderThanMs` (default 1 hour) from the in-memory store.
-   * Invokes `onRemove` before deleting each expired job, catching and logging callback errors
-   * so a single failed artifact cleanup does not abort the sweep.
+   * Remove jobs older than `olderThanMs` (one hour by default). Call `onRemove` before deleting
+   * each job and log cleanup errors so one failure doesn't stop the rest.
    */
   cleanup: (olderThanMs: number = 3600000, onRemove?: (job: Job) => void) => {
     // Optional: Clear old jobs

@@ -1,3 +1,10 @@
+.threadTitle {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 1.2rem;
+  overflow-wrap: anywhere;
+}
+
 .messageList {
   flex: 1;
   background-color: var(--bg-content);
@@ -7,10 +14,9 @@
 
 .selectionBar {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   justify-content: space-between;
-  gap: 12px;
-  padding: 10px 20px;
+  column-gap: 12px;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-color);
   flex-wrap: wrap;
@@ -20,9 +26,16 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  flex: 1;
+  flex: 1 1 180px;
   min-width: 0;
   flex-wrap: wrap;
+  padding: 10px 0 10px 20px;
+}
+
+.pageNavigation {
+  display: flex;
+  flex-shrink: 0;
+  margin-inline-start: auto;
 }
 
 .selectionCount {
@@ -95,29 +108,8 @@
   background: var(--bg-hover);
 }
 
-.jumpControls {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-}
-
-.jumpLabel {
-  font-size: 0.75rem;
-  color: var(--text-secondary);
-  white-space: nowrap;
-}
-
-.dateInput {
-  font-size: 0.75rem;
-  padding: 4px 8px;
-  border-radius: 6px;
-  border: 1px solid var(--border-color);
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  outline: none;
-}
-
-.dateInput:focus {
-  border-color: var(--bubble-sent-bg);
+.jumpError {
+  margin: 0;
+  padding: 8px 20px;
+  font-size: 0.8rem;
 }

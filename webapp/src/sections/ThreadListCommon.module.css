@@ -11,7 +11,7 @@
   color: var(--text-primary);
 }
 
-/* Dataset style: selected (background only), hover overrides it */
+/* In Studio, selection changes the background and hover can still override it. */
 .itemSelected {
   background-color: var(--bg-thread-item-active);
 }
@@ -24,7 +24,7 @@
   background-color: var(--bg-thread-item-hover);
 }
 
-/* MessageHub style: active (background + border), overrides hover */
+/* In MessageHub, the active row keeps its background and border on hover. */
 .itemActive {
   background-color: var(--bg-thread-item-active);
   border-left: 4px solid var(--border-thread-active);

@@ -205,7 +205,7 @@ describe('/api/setup/config', () => {
     const actual = path.join(tempRoot, 'actual');
     fs.mkdirSync(actual);
     fs.symlinkSync(actual, path.join(tempRoot, 'alias'), 'dir');
-    // The active workspace is elsewhere, so choosing this directory is not nesting.
+    // The active workspace is elsewhere, so this directory doesn't count as nested.
     process.env.WORKSPACE_PATH = path.join(tempRoot, 'active');
     const { req, res } = createMocks({ method: 'POST', body: { workspacePath: path.join(tempRoot, 'alias') } });
     await handler(req, res);

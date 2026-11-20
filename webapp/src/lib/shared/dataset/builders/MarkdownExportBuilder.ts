@@ -1,5 +1,6 @@
 import { stripCommonEmailBoilerplate, stripQuotedHistory } from '@/lib/shared/dataset/builders/EmailPairBuilder';
 import { EventRecordBuilder } from '@/lib/shared/dataset/builders/EventRecordBuilder';
+import { getDatasetBaseName } from '@/lib/shared/dataset/datasetFilename';
 import { redactPII, redactTrackingNumbers } from '@/lib/shared/piiUtils';
 import { containsHtmlOrEntities, stripHtml } from '@/lib/shared/stringUtils';
 
@@ -80,8 +81,8 @@ interface SummaryThreadStat {
 const PHONE_REGEX = /^\+?[\d\s\-()]{7,}$/;
 
 /**
- * Derives a human-readable `<PrimaryName> (self)` label from the configured identity names,
- * preferring the first entry that is not `"Me"`, an email address, or a phone number.
+ * Prefer the first identity that looks like a name over “Me,” an email address, or a phone number.
+ * If none looks like a name, use the first nonblank identity or “Self.” Add the ` (self)` suffix.
  */
 export function getSelfLabel(identityNames: string[]): string {
   const cleaned = identityNames.map((n) => n.trim()).filter(Boolean);
@@ -91,7 +92,8 @@ export function getSelfLabel(identityNames: string[]): string {
 }
 
 /**
- * Formats a Unix millisecond timestamp as a local `YYYY-MM-DD` date key.
+ * Convert a Unix millisecond timestamp to a `YYYY-MM-DD` date key in the requested time zone, or
+ * use local time by default.
  */
 export function formatDateKey(timestampMs: number, timeZone?: string): string {
   try {
@@ -112,7 +114,8 @@ export function formatDateKey(timestampMs: number, timeZone?: string): string {
 }
 
 /**
- * Formats a Unix millisecond timestamp as local 24-hour `HH:mm`.
+ * Show a Unix millisecond timestamp as 24-hour `HH:mm` in the requested time zone, or use local
+ * time by default.
  */
 export function formatTimeHHmm(timestampMs: number, timeZone?: string): string {
   try {
@@ -142,8 +145,7 @@ function getPreviousDateKey(dateKey: string): string {
 }
 
 /**
- * Detects automated platform/admin system notices that should be excluded when
- * `removeSystemMessages` is enabled.
+ * Find automated platform and admin notices to skip when `removeSystemMessages` is enabled.
  */
 export function isMarkdownSystemMessage(content: string): boolean {
   const trimmed = content.trim();
@@ -194,8 +196,8 @@ function isPlaceholderAttachmentText(content: string): boolean {
 }
 
 /**
- * Filters chronological messages to the selected local calendar days while preserving
- * continuous late-night exchanges that cross midnight (up to 04:00 within a 60-minute gap).
+ * Keep messages on the selected local dates. If an exchange continues past midnight, keep it
+ * through 04:00 as long as messages stay within an hour of each other.
  */
 export function filterMessagesBySelectedDays<T extends { timestamp_ms: number }>(
   messages: T[],
@@ -219,7 +221,7 @@ export function filterMessagesBySelectedDays<T extends { timestamp_ms: number }>
       continue;
     }
 
-    // Midnight rollover continuity: keep trailing post-midnight messages belonging to an active exchange
+    // Keep the messages after midnight if they're part of the same exchange.
     if (lastKeptTs > 0) {
       const gapMs = msg.timestamp_ms - lastKeptTs;
       const localHour = getLocalHour(msg.timestamp_ms, timeZone);
@@ -227,7 +229,7 @@ export function filterMessagesBySelectedDays<T extends { timestamp_ms: number }>
       if (isNextDay && localHour < 4 && gapMs >= 0 && gapMs <= 60 * 60 * 1000) {
         kept.push(msg);
         lastKeptTs = msg.timestamp_ms;
-        // Keep lastKeptDateKey pinned to the originating day so we only bridge across one midnight
+        // Keep the date key on the original day so we only cross midnight once.
       }
     }
   }
@@ -282,11 +284,7 @@ export class MarkdownExportBuilder {
   private readonly _summaryStats: SummaryThreadStat[] = [];
 
   constructor(opts: MarkdownExportOptions) {
-    this._datasetName =
-      (opts.datasetName || 'dataset')
-        .trim()
-        .replace(/[\\/\x00-\x1f\x7f]/g, '_')
-        .replace(/(?:\.md)+$/i, '') || 'dataset';
+    this._datasetName = getDatasetBaseName(opts.datasetName, 'markdown');
     this._selfLabel = getSelfLabel(opts.identityNames);
     this._myNamesLower = new Set(opts.identityNames.map((n) => n.toLowerCase().trim()).filter(Boolean));
     this._myNamesList = Array.from(this._myNamesLower);
@@ -341,7 +339,7 @@ export class MarkdownExportBuilder {
         addName(p);
       }
     }
-    // Also capture any speakers from messages not in participants_json
+    // Include speakers we saw in messages who are missing from participants_json.
     for (const m of messages) {
       addName(m.sender_name);
     }
@@ -512,7 +510,7 @@ export class MarkdownExportBuilder {
 
       const { replyLine, attachmentLines, reactionsLine } = this._extractAnnotations(msg, rawText);
 
-      // If placeholder attachment text had no media_json details, preserve a generic placeholder
+      // Keep a generic attachment marker if the export gave us placeholder text without media details.
       if (
         !unsent &&
         !rawText.trim() &&
@@ -530,7 +528,7 @@ export class MarkdownExportBuilder {
       const timeStr = formatTimeHHmm(msg.timestamp_ms, this._timeZone);
       const gapMs = prevTs > 0 ? msg.timestamp_ms - prevTs : 0;
 
-      // Start a new conversation section on first message, >4h break, or day change with >1h gap
+      // Start a section at the first message, after a gap over four hours, or on a new day after a gap over an hour.
       const shouldStartSection =
         prevTs < 0 || gapMs > 4 * 60 * 60 * 1000 || (dateKey !== prevDateKey && gapMs > 60 * 60 * 1000);
 

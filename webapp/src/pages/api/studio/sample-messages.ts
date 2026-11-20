@@ -5,8 +5,8 @@ import { containsHtmlOrEntities, stripHtml, stripUrls } from '@/lib/shared/strin
 import type { NextApiRequest, NextApiResponse } from 'next';
 
 /**
- * Fetches up to `limit` (default 100) cleaned, URL-stripped user messages (`POST`) across real thread
- * IDs and virtual Facebook post/event IDs for writing-style analysis.
+ * On POST, return up to `limit` messages (100 by default) from the user for writing-style analysis.
+ * Clean the text and strip URLs for both real threads and virtual Facebook post/event threads.
  */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {

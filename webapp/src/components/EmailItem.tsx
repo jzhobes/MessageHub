@@ -39,7 +39,7 @@ const EmailItem = React.memo(({ msg, isMyMsg, showAvatar, showName, isTarget, hi
 
   const bubbleClasses = [styles.emailBubble, isMyMsg ? styles.sentBubble : styles.receivedBubble].join(' ');
 
-  // Sanitize content only in browser to avoid SSR mismatch
+  // Sanitize in the browser to keep the server and client renders in sync.
   const sanitizedContent = useMemo(() => {
     return typeof window !== 'undefined' ? DOMPurify.sanitize(msg.content || '') : msg.content || '';
   }, [msg.content]);

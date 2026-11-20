@@ -79,7 +79,7 @@ const PathValidationStatus = ({
     );
   }
 
-  // 4. Not Found (Success for New - Green)
+  // A missing folder is fine when creating a workspace.
   if (serverError?.status === 404 || !metadata?.exists) {
     return (
       <div className={styles.validationRow}>
@@ -89,7 +89,7 @@ const PathValidationStatus = ({
     );
   }
 
-  // 5. Existing Workspace (Signature detected - Green)
+  // The folder has a workspace signature, so we can reuse it.
   if (metadata?.isExistingWorkspace) {
     return (
       <div className={styles.validationRow}>
@@ -99,7 +99,7 @@ const PathValidationStatus = ({
     );
   }
 
-  // 6. Not Empty (Warning - Yellow)
+  // The folder isn't empty. Show a warning before using it.
   if (!metadata?.isEmpty) {
     return (
       <div className={styles.validationRow}>
@@ -263,7 +263,7 @@ export default function DataPathStep({
                   )}
                 </>
               ) : (
-                // Spacer to maintain footer height
+                // Keep the footer height steady between steps.
                 <div>&nbsp;</div>
               )}
             </div>

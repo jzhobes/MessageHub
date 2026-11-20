@@ -54,7 +54,7 @@ describe('Tooltip', () => {
       vi.advanceTimersByTime(160);
     });
 
-    // Query with hidden: true because jsdom applies [popover]:not(:popover-open) { display: none } when showPopover is mocked
+    // Include hidden elements because our mock showPopover never puts the popover in jsdom's open state.
     const tooltip = screen.getByRole('tooltip', { hidden: true });
     expect(tooltip.textContent).toBe('Helpful tip');
     expect(tooltip.getAttribute('popover')).toBe('hint');

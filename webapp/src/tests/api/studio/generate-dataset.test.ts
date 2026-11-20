@@ -4,6 +4,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
+import JSZip from 'jszip';
 import { createMocks } from 'node-mocks-http';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -99,7 +100,10 @@ describe('/api/studio/generate-dataset', () => {
     expect(res._getJSONData()).toEqual({ error: 'Result file missing from server disk' });
   });
 
-  it('POST validates body, runs background zip job, updates jobStore, and downloads zip via GET', async () => {
+  it.each([
+    { outputFormat: 'jsonl', extension: 'jsonl' },
+    { outputFormat: 'markdown', extension: 'md' },
+  ])('generates and downloads a ZIP with the $outputFormat dataset base name', async ({ outputFormat, extension }) => {
     const missingThreads = createMocks({ method: 'POST', body: { identityNames: ['Me'] } });
     await handler(missingThreads.req, missingThreads.res);
     expect(missingThreads.res._getStatusCode()).toBe(400);
@@ -120,7 +124,8 @@ describe('/api/studio/generate-dataset', () => {
       body: {
         threadIds: ['t1'],
         identityNames: ['Me'],
-        datasetName: 'unit-ds',
+        datasetName: ` unit-ds.${extension} `,
+        outputFormat,
       },
     });
     await handler(postCall.req, postCall.res);
@@ -145,11 +150,13 @@ describe('/api/studio/generate-dataset', () => {
 
     expect(getCall.res._getStatusCode()).toBe(200);
     expect(getCall.res._getHeaders()['content-type']).toBe('application/zip');
-    expect(getCall.res._getHeaders()['content-disposition']).toBe('attachment; filename=virtual_me_dataset.zip');
+    expect(getCall.res._getHeaders()['content-disposition']).toBe(
+      'attachment; filename="unit-ds.zip"; filename*=UTF-8\'\'unit-ds.zip',
+    );
 
     const zipBuffer = getCall.res._getBuffer();
-    // ZIP magic bytes: 'PK'
-    expect(zipBuffer.subarray(0, 2).toString()).toBe('PK');
+    const zip = await JSZip.loadAsync(zipBuffer);
+    expect(zip.file(`unit-ds.${extension}`)).not.toBeNull();
   });
 
   it('marks background job as failed when generator produces zero parts and cleans up stale job files on POST', async () => {
@@ -166,7 +173,7 @@ describe('/api/studio/generate-dataset', () => {
     staleJob.resultPath = staleZipPath;
 
     vi.spyOn(DatasetGenerator.prototype, 'generateStream').mockImplementation(async function* () {
-      // Yield nothing
+      // Simulate a job that produces no files.
     });
 
     const { req, res } = createMocks({

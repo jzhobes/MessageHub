@@ -11,10 +11,11 @@ export interface ArchiveProgress {
 export type ArchiveMode = 'keep' | 'delete';
 
 /**
- * Orchestrates SSE ingestion progress (0–100%). Parses bracketed progress markers from
- * `scripts/ingest.py` (`[TotalArchives]`, `[ArchiveStarted]`, `[ArchiveProgress]`, `[MergeProgress]`,
- * `[ArchiveExtracted]`, `[TotalFiles]`, `[Ingesting]`, `[Committed]`, `[Error]`), registers a
- * `beforeunload` warning while active, and auto-reattaches on mount if a server ingestion is in flight.
+ * Turn SSE markers from `scripts/ingest.py` into 0–100% progress. Archive markers are
+ * `[TotalArchives]`, `[ArchiveStarted]`, `[ArchiveProgress]`, `[MergeProgress]`, and
+ * `[ArchiveExtracted]`. Import markers are `[TotalFiles]`, `[Ingesting]`, `[Committed]`, and
+ * `[Error]`.
+ * Warn before leaving during ingestion and reconnect on mount if the server is still working.
  */
 export function useIngestion() {
   const [isInstalling, setIsInstalling] = useState(false);
@@ -24,7 +25,7 @@ export function useIngestion() {
   const [progress, setProgress] = useState(0);
   const [activeTransfers, setActiveTransfers] = useState<Record<string, ArchiveProgress>>({});
 
-  // Use refs for counting and tracking to avoid stale closures in SSE handler
+  // Keep counts in refs so the SSE handler always reads the latest values.
   const totalArchivesRef = useRef(0);
   const extractedArchivesRef = useRef(0);
   const totalFilesRef = useRef(0);
@@ -115,7 +116,7 @@ export function useIngestion() {
         transferMapRef.current = newMap;
         setActiveTransfers(newMap);
 
-        // Extraction phase: first 30% of ingestion weight
+        // Extraction gets the first 30% of the progress bar.
         if (totalArchivesRef.current > 0) {
           const phasePct = (extractedArchivesRef.current / totalArchivesRef.current) * 0.3;
           setProgress(Math.round(phasePct * 100));
@@ -180,9 +181,8 @@ export function useIngestion() {
   }, []);
 
   /**
-   * Streams direct extraction and ingestion progress over SSE for `remoteFiles`.
-   * Passing an empty `remoteFiles` array processes workspace archives or re-attaches
-   * to an already-running server ingestion.
+   * Stream extraction and import progress over SSE. An empty `remoteFiles` array uses the workspace
+   * archives or reconnects to a job that's already running.
    */
   const runInstall = useCallback(
     async (remoteFiles: string[], archiveMode: ArchiveMode = 'keep') => {
@@ -221,7 +221,7 @@ export function useIngestion() {
               errText = data.error;
             }
           } catch {
-            // Fall back to statusText
+            // Use statusText if there's no better error message.
           }
           setError(errText);
           setStatus('Failed');
@@ -275,7 +275,7 @@ export function useIngestion() {
     transferMapRef.current = {};
   }, []);
 
-  // Prevent accidental refresh during installation and re-attach to in-flight ingestion on mount
+  // Warn before refresh during ingestion and reconnect on mount.
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (isInstalling) {
@@ -297,7 +297,7 @@ export function useIngestion() {
         if (res.ok) {
           const data = await res.json();
           if (data.isRunning) {
-            // If already running, we can "start" it with no parameters to just attach
+            // Call start with no files to attach to the running job.
             runInstall([], 'keep');
           }
         }

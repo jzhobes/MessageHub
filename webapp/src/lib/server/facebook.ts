@@ -1,6 +1,5 @@
 /**
- * Gets the headers required to mimic the Facebook Crawler.
- * This is useful for fetching OpenGraph metadata or images that are gated behind Crawler-only views.
+ * Use Facebook's crawler headers to fetch OpenGraph metadata or images served only to the crawler.
  */
 export function getFacebookCrawlerHeaders(): Record<string, string> {
   return {

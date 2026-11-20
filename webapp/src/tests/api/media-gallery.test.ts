@@ -81,7 +81,7 @@ describe('/api/media-gallery', () => {
       ]),
     });
 
-    // Invalid JSON row and another thread's media should not crash or leak
+    // Skip malformed JSON and keep media from the other thread out of this result.
     seedMessage(memDb, {
       thread_id: 't1',
       sender_name: 'Bob',

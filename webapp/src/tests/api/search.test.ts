@@ -7,10 +7,10 @@ import { createMemoryDb, seedMessage, seedThread } from '@/tests/helpers/testDb'
 
 import type Database from 'better-sqlite3';
 
-// We do NOT mock '@/lib/server/db' for integration tests; using real DB there.
+// Run the integration queries against a real database.
 
-// We still mock Identity because that depends on file permissions/user paths
-// that might vary even if workspace is fixed.
+// Mock identity lookup because host paths and permissions can vary
+// even when the workspace is fixed.
 vi.mock('@/lib/server/identity', () => ({
   getMyNames: vi.fn().mockResolvedValue(['Me', 'John Doe', 'Charlie Chen']),
 }));
@@ -54,40 +54,37 @@ describe('/api/search (Integration)', () => {
     expect(res._getStatusCode()).toBe(400);
   });
 
-  it('should find the "Simulation Theory" thread via FTS', async () => {
+  it('finds a Fern House weekend message via FTS', async () => {
     const { req, res } = createMocks({
       method: 'GET',
-      query: { q: 'matrix glitch' },
+      query: { q: 'millbrook two bedrooms' },
     });
 
     await handler(req, res);
     expect(res._getStatusCode()).toBe(200);
     const data = res._getJSONData();
 
-    // We expect to find the message we just added: "Look at this glich in the matrix..."
-    expect(data.total).toBeGreaterThan(0);
-    const match = data.data.find((m: { content?: string }) => m.content?.toLowerCase().includes('matrix'));
-    expect(match).toBeDefined();
-    expect(match.thread_id).toBe('simulation_theory_888');
+    expect(data.data).toContainEqual(
+      expect.objectContaining({
+        thread_id: 'cabin-weekend_1',
+        content: expect.stringContaining('Found Fern House in Millbrook. Two bedrooms'),
+      }),
+    );
   });
 
   it('should filter by platform=google_mail', async () => {
     const { req, res } = createMocks({
       method: 'GET',
-      query: { q: 'release', platform: 'google_mail' },
+      query: { q: 'fern house', platform: 'google_mail' },
     });
 
     await handler(req, res);
     expect(res._getStatusCode()).toBe(200);
     const data = res._getJSONData();
 
-    // From create_mail_samples.py: "Project Release Update"
     expect(data.total).toBeGreaterThan(0);
-    expect(data.data[0].platform).toBe('google_mail');
-
-    // Ensure no facebook results
-    const fbMatch = data.data.find((m: { platform?: string }) => m.platform === 'facebook');
-    expect(fbMatch).toBeUndefined();
+    expect(data.data).toContainEqual(expect.objectContaining({ thread_id: 'gm_8014' }));
+    expect(data.data.every((result: { platform: string }) => result.platform === 'google_mail')).toBe(true);
   });
 
   it('should return correct facets', async () => {
@@ -244,12 +241,12 @@ describe('/api/search (Query Semantics, Facets & Cleanup)', () => {
       content: 'hi matrix only',
     });
 
-    // Wildcard * with two 2-char parts (te*st -> non-indexable fallback) and indexable te*st
+    // Check the two short fragments in te*st through LIKE, then check an indexable wildcard.
     const { req: rWild1, res: resWild1 } = createMocks({ method: 'GET', query: { q: 'te*st' } });
     await handler(rWild1, resWild1);
     expect(resWild1._getJSONData().data.map((r: { message_id: number }) => r.message_id)).toEqual([id2, id1]);
 
-    // Wildcard ? with >=3 char part (te?ting)
+    // Use te?ting to exercise an indexable fragment with a single-character wildcard.
     const { req: rWild2, res: resWild2 } = createMocks({ method: 'GET', query: { q: 'te?ting' } });
     await handler(rWild2, resWild2);
     expect(resWild2._getJSONData().data.map((r: { message_id: number }) => r.message_id)).toEqual([id2, id1]);
@@ -259,7 +256,7 @@ describe('/api/search (Query Semantics, Facets & Cleanup)', () => {
     await handler(rWild3, resWild3);
     expect(resWild3._getJSONData().data.map((r: { message_id: number }) => r.message_id)).toEqual([id2, id1]);
 
-    // Mixed indexable + short (<3 char) AND
+    // Combine a term that hits the index with one too short for it.
     const { req: rMixed, res: resMixed } = createMocks({ method: 'GET', query: { q: 'hi matrix' } });
     await handler(rMixed, resMixed);
     expect(resMixed._getJSONData().data.map((r: { message_id: number }) => r.message_id)).toEqual([id3, id1]);
@@ -305,15 +302,15 @@ describe('/api/search (Query Semantics, Facets & Cleanup)', () => {
     expect(res._getStatusCode()).toBe(200);
     const data = res._getJSONData();
 
-    // Results, total, and senders apply both platform and category filters
+    // Apply both filters to hits, the total, and sender counts.
     expect(data.total).toBe(1);
     expect(data.data.map((r: { message_id: number }) => r.message_id)).toEqual([targetId]);
     expect(data.facets.senders).toEqual({ Bob: 1 });
 
-    // Platform facet ignores platform filter but respects category=inbox
+    // Count platforms across inbox results even with a platform selected.
     expect(data.facets.platforms).toEqual({ google_mail: 1, google_chat: 1 });
 
-    // Category facet ignores category filter but respects platform=google_mail
+    // Count categories across Gmail results even with a category selected.
     expect(data.facets.categories).toEqual({ inbox: 1, sent: 1 });
 
     // threadId filter
@@ -386,7 +383,7 @@ describe('/api/search (Query Semantics, Facets & Cleanup)', () => {
       .get();
     expect(tempAfterSuccess).toBeUndefined();
 
-    // Force a SQL execution error after temp table creation by dropping content_fts
+    // Drop content_fts so the query fails after creating its temp table.
     d.exec('DROP TABLE content_fts');
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     try {
@@ -433,7 +430,7 @@ describe('/api/search (Query Semantics, Facets & Cleanup)', () => {
     await handler(rWild, resWild);
     expect(resWild._getJSONData().data.map((r: { message_id: number }) => r.message_id)).toEqual([id1]);
 
-    // Sanity check id2 did not match 😀a
+    // Confirm id2 stays out of the results for 😀a.
     expect(id2).toBeGreaterThan(id1);
   });
 
@@ -455,7 +452,7 @@ describe('/api/search (Query Semantics, Facets & Cleanup)', () => {
       content: 'common elsewhere',
     });
 
-    // Zero-match AND inside scoped 1-message thread even though unrelated threads match both terms
+    // The scoped thread should return nothing even when another thread matches both terms.
     const { req: rZero, res: resZero } = createMocks({
       method: 'GET',
       query: { q: 'Alice common', threadId: 't_target' },
@@ -484,7 +481,7 @@ describe('/api/search (Query Semantics, Facets & Cleanup)', () => {
       senders: { Bob: 1 },
     });
 
-    // Non-existent threadId short-circuits cleanly (both with and without facets)
+    // A missing thread should return early with facets on or off.
     const { req: rMissing, res: resMissing } = createMocks({
       method: 'GET',
       query: { q: 'common', threadId: 'does_not_exist' },

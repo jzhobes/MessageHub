@@ -8,63 +8,74 @@ import { createMemoryDb, seedMessage, seedThread } from '../helpers/testDb';
 
 import type Database from 'better-sqlite3';
 
-// Using Real DB with data from samples
 vi.mock('@/lib/server/identity', () => ({
   getMyNames: vi.fn().mockResolvedValue(['Me', 'John Doe']),
 }));
 
 describe('/api/content (Integration)', () => {
-  it('should split Text+Media into two bubbles', async () => {
-    // We added a "Text + Photo" message to 'simulation_theory_888' in the sample build.
-    // Content: "Look at this glich in the matrix I found!"
-    // Photos: 1
+  const photo = { type: 'photo', uri: 'photo.jpg' };
+  let memDb: Database.Database;
 
-    const { req, res } = createMocks({
-      method: 'GET',
-      query: { threadId: 'simulation_theory_888' },
-    });
-
-    await handler(req, res);
-    expect(res._getStatusCode()).toBe(200);
-    const { records } = res._getJSONData();
-
-    // Find our specific message by content or ID pattern
-    const textPart = records.find(
-      (m: { content?: string }) => m.content === 'Look at this glich in the matrix I found!',
-    );
-    expect(textPart).toBeDefined();
-
-    // The text part should NOT have photos
-    expect(textPart.photos).toBeUndefined();
-
-    // There should be a corresponding media part (same timestamp)
-    const mediaPart = records.find(
-      (m: { timestamp_ms?: number; id?: string }) =>
-        m.timestamp_ms === textPart.timestamp_ms && m.id?.endsWith('_media'),
-    );
-
-    expect(mediaPart).toBeDefined();
-    expect(mediaPart.photos).toBeDefined();
-    expect(mediaPart.photos.length).toBe(1);
+  beforeEach(() => {
+    memDb = createMemoryDb();
+    seedThread(memDb, { id: 'photos', platform: 'facebook', labels: ['message'] });
+    vi.spyOn(db, 'exists').mockReturnValue(true);
+    vi.spyOn(db, 'get').mockReturnValue(memDb);
   });
 
-  it('should preserve Link Previews (Text + URL + 1 Photo)', async () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    memDb.close();
+  });
+
+  it('splits text and a photo into two bubbles', async () => {
+    const content = 'Look at this sunset!';
+    const messageId = seedMessage(memDb, {
+      thread_id: 'photos',
+      sender_name: 'Alice',
+      timestamp_ms: 1000,
+      content,
+      media_json: JSON.stringify([photo]),
+    });
+
     const { req, res } = createMocks({
       method: 'GET',
-      query: { threadId: 'simulation_theory_888' },
+      query: { threadId: 'photos' },
     });
 
     await handler(req, res);
     expect(res._getStatusCode()).toBe(200);
     const { records } = res._getJSONData();
 
-    expect(records.length).toBeGreaterThan(0);
-    const linkPreviewMsg = records.find((m: { content?: string }) => m.content?.includes('matrix.org/glitch'));
-    expect(linkPreviewMsg).toBeDefined();
+    expect(records).toHaveLength(2);
+    const textPart = records.find((record: { id: string }) => record.id === String(messageId));
+    expect(textPart).toMatchObject({ content, timestamp_ms: 1000 });
+    expect(textPart).not.toHaveProperty('photos');
+    const mediaPart = records.find((record: { id: string }) => record.id === `${messageId}_media`);
+    expect(mediaPart).toMatchObject({ photos: [photo], timestamp_ms: 1000 });
+    expect(mediaPart).not.toHaveProperty('content');
+  });
 
-    expect(linkPreviewMsg.content).toBeDefined();
-    expect(linkPreviewMsg.photos).toBeDefined();
-    expect(linkPreviewMsg.photos.length).toBe(1);
+  it('keeps text, a URL, and one photo together for link previews', async () => {
+    const content = 'Here is the trail map https://example.com/trail';
+    const messageId = seedMessage(memDb, {
+      thread_id: 'photos',
+      sender_name: 'Alice',
+      timestamp_ms: 1000,
+      content,
+      media_json: JSON.stringify([photo]),
+    });
+    const { req, res } = createMocks({
+      method: 'GET',
+      query: { threadId: 'photos' },
+    });
+
+    await handler(req, res);
+    expect(res._getStatusCode()).toBe(200);
+    const { records } = res._getJSONData();
+
+    expect(records).toHaveLength(1);
+    expect(records[0]).toMatchObject({ id: String(messageId), content, photos: [photo] });
   });
 });
 
@@ -146,7 +157,7 @@ describe('/api/content (Unit)', () => {
       content: 'Created Event',
       share_json: JSON.stringify({ location: 'NYC', description: 'Bring snacks' }),
     });
-    // Duplicate timestamp row for fb_event_1 should collapse under GROUP BY timestamp_ms
+    // The fb_event_1 duplicate should collapse because it shares a timestamp.
     seedMessage(memDb, {
       thread_id: 'fb_event_1',
       sender_name: 'Alice',
@@ -228,7 +239,7 @@ describe('/api/content (Unit)', () => {
 
     expect(res._getStatusCode()).toBe(200);
     const { records } = res._getJSONData();
-    // Row 1 splits into media + text bubbles (2 records); row 2 & 3 are 1 each -> 4 total
+    // The first row becomes two bubbles. The other two stay as one each, for four total.
     expect(records).toHaveLength(4);
 
     expect(records[0]).toMatchObject({

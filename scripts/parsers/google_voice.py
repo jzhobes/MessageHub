@@ -9,16 +9,16 @@ from utils import fix_text, get_media_type, parse_iso_time
 
 def ingest_google_voice_thread(cursor, thread_data):
     """
-    Ingest a single Virtual Thread of Google Voice files.
-    thread_data: tuple (thread_id, [list_of_html_paths])
+    Import one Google Voice thread assembled from HTML files.
+    thread_data contains (thread_id, list_of_html_paths).
     """
     thread_id, files = thread_data
 
     # Calculate thread title
-    # Usually the ID is "+1555..." or "John Doe" if filename was "John Doe - Text..."
+    # The ID is usually a phone number or the name before “ - Text” in the filename.
 
     # Determine participants
-    # Me + The Other Person
+    # A one-to-one thread starts with Me and the other person.
     parts = ["Me", thread_id]
     parts_json = json.dumps(parts)
 
@@ -40,16 +40,16 @@ def ingest_google_voice_thread(cursor, thread_data):
 
             messages = soup.find_all("div", class_="message")
 
-            # Handling Call Logs (Placed/Received/Missed) which might not have div.message or just one?
+            # Call logs can have one message div or none at all.
             if not messages:
-                # Is it a call log without message div?
-                # Check for <abbr class="published"> directly in body
+                # If there are no message divs, check whether the body is the call log.
+                # Look for an <abbr class="published"> in the body.
                 if soup.find("abbr", class_="published"):
-                    # Treat soup itself as the container
+                    # Use the whole document as the container in that case.
                     messages = [soup]
 
             for index, msg_el in enumerate(messages):
-                # Skip non-text call logs (e.g., Received/Placed/Missed) to exclude phone call events
+                # Skip received, placed, and missed call logs so phone call events stay out of the thread.
                 fname = fpath.name
                 if " - " in fname:
                     parts = fname.split(" - ")
@@ -65,7 +65,7 @@ def ingest_google_voice_thread(cursor, thread_data):
                 if ts_el and ts_el.get("title"):
                     ts = parse_iso_time(ts_el["title"])
 
-                # Fallback to filename timestamp for any message with missing/invalid timestamp
+                # Use the filename timestamp if the message timestamp is missing or invalid.
                 if ts == 0:
                     fname_ts = re.search(r"(\d{4}-\d{2}-\d{2}T\d{2}_\d{2}_\d{2}Z)", fpath.name)
                     if fname_ts:
@@ -80,7 +80,7 @@ def ingest_google_voice_thread(cursor, thread_data):
                 sender = "Unknown"
 
                 if "Voicemail" in fpath.name:
-                    # Look for "Voicemail from" text or specific markup
+                    # Look for “Voicemail from” or the contributor markup.
                     # <div class="contributor vcard"> ... <a class="tel" href="tel:...">
                     contrib = soup.find("div", class_="contributor")
                     if contrib:
@@ -97,12 +97,12 @@ def ingest_google_voice_thread(cursor, thread_data):
                     # Text / Call
                     sender_el = msg_el.find(class_="sender")
                     if sender_el:
-                        # Try to find class="fn" (abbr or span)
+                        # Check for class="fn" on either an abbr or a span.
                         fn_el = sender_el.find(class_="fn")
                         if fn_el:
                             sender = fn_el.get_text().strip()
                         else:
-                            # Fallback to tel link
+                            # Use the tel link if the name is missing.
                             tel_el = sender_el.find("a", class_="tel")
                             if tel_el:
                                 href = tel_el.get("href", "")
@@ -118,7 +118,7 @@ def ingest_google_voice_thread(cursor, thread_data):
                 if sender.lower() == "me":
                     sender = "Me"
                 elif not sender or sender == "Unknown":
-                    # Last ditch: if it's "Received", it's Them.
+                    # If we're out of better clues, “Received” means it came from the other person.
                     if "Received" in fpath.name or "Missed" in fpath.name:
                         sender = thread_id
 
@@ -128,7 +128,7 @@ def ingest_google_voice_thread(cursor, thread_data):
                 content_text = ""
                 q_el = msg_el.find("q")
                 if q_el:
-                    # BS4 get_text with separator handles <br> -> \n automatically
+                    # Beautiful Soup's separator turns <br> tags into line breaks for us.
                     content_text = q_el.get_text("\n").strip()
 
                 # Fallback content for call logs
@@ -139,7 +139,7 @@ def ingest_google_voice_thread(cursor, thread_data):
                         content_text = "Placed Call"
                     elif "Received" in fpath.name:
                         content_text = "Received Call"
-                    # Voicemail often has no text, just audio
+                    # Voicemail can be audio only.
 
                 # 4. Media
                 media = []
@@ -148,8 +148,8 @@ def ingest_google_voice_thread(cursor, thread_data):
                 for img in msg_el.find_all("img"):
                     src = img.get("src")
                     if src:
-                        # Google Voice HTML often lacks extensions for media.
-                        # Try to resolve it by checking disk.
+                        # Google Voice exports often leave the extension off media URLs.
+                        # Check the files on disk for the full name.
                         if "." not in src:
                             for ext in [".jpg", ".jpeg", ".png", ".gif"]:
                                 if (fpath.parent / (src + ext)).exists():
@@ -212,7 +212,7 @@ def ingest_google_voice_thread(cursor, thread_data):
 
     # Update Thread Metadata
     if msg_count > 0:
-        # Insert thread only if we actually ingested messages to avoid empty stubs
+        # Only create the thread if we imported at least one message. Otherwise we'd leave an empty stub.
         cursor.execute(
             """
             INSERT OR REPLACE INTO threads (id, platform, title, participants_json, last_activity_ms, snippet)
@@ -229,8 +229,7 @@ def ingest_google_voice_thread(cursor, thread_data):
 
 def ingest_google_voice(cursor, voice_root):
     """
-    Scans the Google Voice directory structure and ingests messages.
-    Virtualizes 'Threads' by grouping filenames by the mentioned phone number.
+    Import Google Voice messages, grouping files into threads by the phone number in the filename.
     """
 
     calls_dir = Path(voice_root) / "Calls"
@@ -239,7 +238,7 @@ def ingest_google_voice(cursor, voice_root):
 
     print("Scanning Google Voice data...")
 
-    # 1. Group files by 'Thread ID' (Phone Number)
+    # Group files by the phone number we'll use as the thread ID.
     # Filename format: "{PHONE} - {TYPE} - {TIMESTAMP}.html"
     file_groups = {}  # { "+1555...": [Path, Path] }
 
@@ -259,7 +258,7 @@ def ingest_google_voice(cursor, voice_root):
             if match_anon:
                 thread_id = "Unknown"
             else:
-                # Fallback: use prefix before first separator (e.g., "Group Conversation - 2025-...")
+                # If the standard pattern doesn't match, use the prefix before the first separator (e.g., “Group Conversation”).
                 if " - " in name:
                     thread_id = name.split(" - ", 1)[0].strip()
                 else:
@@ -293,8 +292,7 @@ def ingest_google_voice(cursor, voice_root):
 
 def discover_google_voice_identity(scan_path):
     """
-    Attempts to discover the Google Voice phone number from Phones.vcf.
-    Returns the number if found, otherwise returns None.
+    Look for the Google Voice number in Phones.vcf. Return None if it isn't there.
     """
     p = Path(scan_path) / "Voice/Phones.vcf"
     if p.exists():

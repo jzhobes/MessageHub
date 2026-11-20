@@ -1,6 +1,6 @@
 import { execFileSync } from 'child_process';
 import fs from 'fs';
-import './env'; // Ensure env is loaded securely at boot
+import './env'; // Load the environment early so startup checks use the configured values.
 
 import appConfig from '@/lib/shared/appConfig';
 
@@ -11,9 +11,9 @@ export const INSTAGRAM_AUTH_CHECK_URL = 'https://www.instagram.com/accounts/edit
 export type InstagramCheckResult = 'valid' | 'invalid' | 'checkpoint' | 'inconclusive' | 'error';
 
 /**
- * Runs server boot diagnostics: verifies `WORKSPACE_PATH` exists (on missing WSL `/mnt/<drive>/` paths,
- * attempts an interactive `sudo mount -t drvfs` and registers `SIGINT`/`SIGTERM` unmount hooks)
- * and fires a non-blocking Instagram session check when `INSTAGRAM_AUTH` is configured.
+ * Check `WORKSPACE_PATH` at boot. If a WSL path under `/mnt/<drive>/` is missing, try an
+ * interactive `sudo mount -t drvfs` and register unmount hooks for `SIGINT` and `SIGTERM`.
+ * Check the Instagram session in the background when `INSTAGRAM_AUTH` is set.
  */
 export async function runStartupChecks() {
   console.log('🔍 [Instrumentation] Running Startup Checks...');
@@ -37,7 +37,7 @@ export async function runStartupChecks() {
       console.log(`🔑 [Instrumentation] You may be prompted for your sudo password.`);
 
       try {
-        // Create dir just in case
+        // Try mounting the Windows drive from WSL.
         execFileSync('sudo', ['mkdir', '-p', mountPoint], { stdio: 'inherit' });
         // Mount
         execFileSync('sudo', ['mount', '-t', 'drvfs', `${driveLetter.toUpperCase()}:`, mountPoint], {
@@ -52,7 +52,7 @@ export async function runStartupChecks() {
             console.log(`\n🧹 [Instrumentation] Unmounting "${mountPoint}"...`);
             try {
               execFileSync('sudo', ['umount', mountPoint], { stdio: 'inherit' });
-              // Try to remove the empty dir to keep things clean
+              // Remove the mount directory if it's empty.
               execFileSync('sudo', ['rmdir', mountPoint], { stdio: 'inherit' });
               console.log(`✅ Unmounted and removed "${mountPoint}".`);
             } catch (e) {
@@ -64,7 +64,7 @@ export async function runStartupChecks() {
           process.on('SIGINT', cleanup);
           process.on('SIGTERM', cleanup);
         } else {
-          // Mount succeeded but data dir still not found? Bad mount. Cleanup.
+          // If mounting worked but the workspace is still missing, undo the mount.
           console.warn(`⚠️ [Instrumentation] Mount successful but ${dataDir} not found. Unmounting...`);
           execFileSync('sudo', ['umount', mountPoint], { stdio: 'inherit' });
           execFileSync('sudo', ['rmdir', mountPoint], { stdio: 'inherit' });
@@ -83,7 +83,7 @@ export async function runStartupChecks() {
   // 2. Check Instagram Credentials
   const igAuth = process.env.INSTAGRAM_AUTH?.trim();
   if (igAuth) {
-    // Don't await to avoid blocking server start
+    // Let the server start while the session check runs.
     void checkInstagram(igAuth);
   } else {
     console.log('ℹ️  [Instrumentation] No INSTAGRAM_AUTH in .env. Skipping Instagram validation.');
@@ -102,9 +102,8 @@ function extractRedirectPath(rawLocation: string): string {
 }
 
 /**
- * Probes `INSTAGRAM_AUTH_CHECK_URL` with `redirect: 'manual'` and a 10-second timeout,
- * classifying session cookie health into `'valid'`, `'invalid'`, `'checkpoint'`, `'inconclusive'`,
- * or `'error'` without throwing.
+ * Check the Instagram session with a 10-second timeout and `redirect: 'manual'`. Return `valid`,
+ * `invalid`, `checkpoint`, `inconclusive`, or `error` instead of throwing.
  */
 export async function checkInstagram(authEnv: string): Promise<InstagramCheckResult> {
   const headers = getInstagramHeaders(authEnv);

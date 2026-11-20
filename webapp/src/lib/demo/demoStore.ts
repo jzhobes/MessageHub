@@ -43,7 +43,7 @@ function buildStore(data: DemoDataBundle): DemoStore {
     list.push(row);
   }
 
-  // Sort each thread's messages newest-first (matching SQLite ORDER BY timestamp_ms DESC)
+  // Keep newest messages first, just like the SQLite query.
   for (const list of contentByThread.values()) {
     list.sort((a, b) => b.timestamp_ms - a.timestamp_ms || a.id - b.id);
   }
@@ -68,8 +68,8 @@ function buildStore(data: DemoDataBundle): DemoStore {
 }
 
 /**
- * Lazily fetches `/demo/data.json` once, constructs in-memory lookup indexes, and registers the
- * exported media manifest for `getMediaUrl`.
+ * Load `/demo/data.json` on first use, build the lookup indexes, and register the media manifest
+ * for `getMediaUrl`.
  */
 export async function loadDemoData(): Promise<DemoStore> {
   if (cachedStore) {
@@ -97,7 +97,7 @@ export async function loadDemoData(): Promise<DemoStore> {
 }
 
 /**
- * Injects or clears an in-memory `DemoDataBundle` directly (used by unit tests).
+ * Set or clear the in-memory `DemoDataBundle` for tests.
  */
 export function setDemoDataForTest(bundle: DemoDataBundle | null): void {
   loadPromise = null;

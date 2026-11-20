@@ -383,7 +383,7 @@ function handleJump(store: DemoStore, url: URL): Response {
   const queryDate = url.searchParams.get('date');
   const queryTimeZone = url.searchParams.get('timeZone') || undefined;
 
-  // Mode B: Jump by threadId + date (YYYY-MM-DD)
+  // Jump to a calendar day in a thread (YYYY-MM-DD).
   if (!messageIdParam && queryThreadId && queryDate) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(queryDate)) {
       return jsonResponse({ error: 'Invalid date format. Expected YYYY-MM-DD.' }, 400);
@@ -449,7 +449,7 @@ function handleJump(store: DemoStore, url: URL): Response {
     });
   }
 
-  // Mode A: Jump by messageId
+  // Jump directly to a message ID.
   if (!messageIdParam) {
     return jsonResponse({ error: 'Missing messageId' }, 400);
   }
@@ -784,7 +784,8 @@ function handleDatasetThreads(store: DemoStore, url: URL): Response {
       for (const m of msgs) {
         if (myNamesSet.has(m.sender_name) && m.content && !m.content.startsWith('http')) {
           myCount++;
-          myLenSum += m.content.length;
+          // Match SQLite LENGTH(), which counts Unicode code points.
+          myLenSum += Array.from(m.content).length;
         }
       }
       const avgLen = myCount > 0 ? myLenSum / myCount : 0;
@@ -836,7 +837,7 @@ function handleDatasetThreads(store: DemoStore, url: URL): Response {
         const ts = store.threadsById.get(m.thread_id)?.last_activity_ms ?? 0;
         return Math.max(max, ts);
       }, 0);
-      const avgLen = postMsgs.reduce((sum, m) => sum + (m.content?.length || 0), 0) / postMsgs.length;
+      const avgLen = postMsgs.reduce((sum, m) => sum + Array.from(m.content ?? '').length, 0) / postMsgs.length;
       const score = Math.min(
         Math.max(0, 20 * (1 - (now - lastTs) / TWO_YEARS)) +
           30 +
@@ -1285,7 +1286,7 @@ function handleGenerateDataset(store: DemoStore, init?: RequestInit): Response {
     return jsonResponse({ error: 'Missing identityNames' }, 400);
   }
 
-  // Revoke any older demo Blob URLs to avoid retaining generated archives in memory
+  // Revoke old Blob URLs so previous ZIPs don't stay in memory.
   for (const oldJob of demoJobs.values()) {
     if (oldJob.blobUrl) {
       URL.revokeObjectURL(oldJob.blobUrl);
@@ -1329,7 +1330,7 @@ function handleJobStatus(url: URL): Response {
 }
 
 /**
- * Creates an object URL for a completed in-browser demo dataset ZIP archive.
+ * Create a download URL for the demo ZIP built in the browser.
  */
 export function getDemoJobDownloadUrl(jobId: string): string | null {
   const job = demoJobs.get(jobId);
@@ -1343,7 +1344,7 @@ export function getDemoJobDownloadUrl(jobId: string): string | null {
 }
 
 /**
- * Handles all `/api/*` requests in static Demo Mode against the pre-exported JSON bundle.
+ * Serve static demo API requests from the exported JSON bundle.
  */
 export async function handleDemoFetch(input: string, init?: RequestInit): Promise<Response> {
   throwIfAborted(init?.signal);
@@ -1352,7 +1353,7 @@ export async function handleDemoFetch(input: string, init?: RequestInit): Promis
   const pathname = url.pathname;
   const method = (init?.method || 'GET').toUpperCase();
 
-  // Fast-path stubs that don't need demo data loaded
+  // Answer these requests without loading the demo data.
   if (pathname === '/api/setup/ingest-status') {
     return jsonResponse({ isRunning: false });
   }

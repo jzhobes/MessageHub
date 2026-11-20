@@ -1,17 +1,16 @@
 import type { ParsedToken } from '@/lib/shared/search';
 
 /**
- * Maximum message count for a thread-scoped search to bypass global FTS5 + CTEs and run
- * a direct `idx_content_thread_id` scan instead. Keeps small-thread queries sub-millisecond
- * while preserving FTS5 performance on massive threads (hundreds of thousands of messages).
+ * At or below this message count, use `idx_content_thread_id` for a thread-scoped search. That
+ * keeps small searches under a millisecond and leaves global FTS5 and the CTEs for large threads.
  */
 export const DIRECT_THREAD_SCOPE_LIMIT = 5000;
 
 /**
- * Inputs for constructing the `temp._search_base` population query.
+ * Options for the query that fills `temp._search_base`.
  */
 export interface SearchBaseQueryOptions {
-  /** Parsed boolean OR groups, where each inner array represents AND-ed query tokens. */
+  /** OR groups from the parser, with AND between tokens inside each group. */
   orGroups: ParsedToken[][];
   /** Optional list of thread IDs to restrict search scope. */
   threadIds: string[];
@@ -19,14 +18,14 @@ export interface SearchBaseQueryOptions {
   platforms: string[];
   /** Thread category/label names to filter by. */
   categories: string[];
-  /** Whether to retain self-excluding rows and flag columns for facet aggregation. */
+  /** Keep the rows and match flags needed to count each facet independently. */
   includeFacets: boolean;
-  /** When true (and `threadIds` is non-empty), scans only the scoped threads directly via `idx_content_thread_id`. */
+  /** Scan the requested threads through `idx_content_thread_id` when enabled and `threadIds` is nonempty. */
   useDirectThreadScope?: boolean;
 }
 
 /**
- * A parameterized SQL statement paired with its ordered positional bind values.
+ * A SQL statement with its positional bind values in order.
  */
 export interface BuiltSql {
   sql: string;
@@ -34,9 +33,9 @@ export interface BuiltSql {
 }
 
 /**
- * DDL for the per-request in-memory temp table holding matched message metadata and precomputed
- * platform/category match flags. Storing lightweight columns avoids reading large `content` blobs
- * across count, facet, and sort passes until the final 100-row page join.
+ * Create the request's in-memory table with message metadata and platform/category match flags.
+ * Keep it light so counts, facets, and sorting don't read large `content` blobs. Join the content
+ * for the final 100-row page.
  */
 export const CREATE_SEARCH_BASE_TEMP_TABLE_SQL = `
 CREATE TEMP TABLE _search_base (
@@ -74,9 +73,8 @@ function placeholders(count: number): string {
 }
 
 /**
- * Builds a SQL `LIKE` predicate for multiline message content using `ESCAPE '\'` to match
- * `parseSearchQuery`'s `sqlPattern`. When `isStartOfWord` (`^`) is set, matches at index 0,
- * after a space, or after a newline.
+ * Build a multiline `LIKE` predicate using the parser's `sqlPattern` and a backslash escape.
+ * With `^`, match at the start of the text or after a space or newline.
  */
 function buildContentLike(column: string, token: ParsedToken): BuiltSql {
   if (token.isStartOfWord) {
@@ -92,8 +90,9 @@ function buildContentLike(column: string, token: ParsedToken): BuiltSql {
 }
 
 /**
- * Builds a SQL `LIKE` predicate for single-line metadata fields (`threads.title`, `sender_name`)
- * using `ESCAPE '\'`. When `isStartOfWord` (`^`) is set, matches at index 0 or after a space.
+ * Build a `LIKE` predicate for single-line thread titles and sender names, using a backslash
+ * escape.
+ * With `^`, match at the start of the field or after a space.
  */
 function buildSingleLineLike(column: string, token: ParsedToken): BuiltSql {
   if (token.isStartOfWord) {
@@ -109,7 +108,7 @@ function buildSingleLineLike(column: string, token: ParsedToken): BuiltSql {
 }
 
 /**
- * Combines `m.content`, `t.title`, and `m.sender_name` `LIKE` predicates with `OR` for a single token.
+ * Match a single token against the message body, thread title, or sender name.
  */
 function buildMultiFieldLike(token: ParsedToken): BuiltSql {
   const contentLike = buildContentLike('m.content', token);
@@ -122,12 +121,11 @@ function buildMultiFieldLike(token: ParsedToken): BuiltSql {
 }
 
 /**
- * Extracts literal FTS5 `trigram` fragments (>= 3 Unicode code points) from a parsed token
- * and determines whether FTS5 rowid hits require a `LIKE` post-filter for exact wildcard or
- * `^` word-start semantics.
+ * Find literal fragments of at least three Unicode code points for the FTS5 trigram index. Flag any
+ * wildcard or `^` match that still needs a `LIKE` check.
  */
 function classifyToken(token: ParsedToken): ClassifiedToken {
-  // SQLite's trigram tokenizer counts Unicode code points rather than UTF-16 code units.
+  // SQLite counts Unicode code points here, so count those instead of UTF-16 code units.
   const ftsParts = token.clean.split(/[*?]/).filter((part) => Array.from(part.trim()).length >= 3);
   const hasWildcards = /[*?]/.test(token.clean);
   const ftsMatchExpr =
@@ -139,11 +137,9 @@ function classifyToken(token: ParsedToken): ClassifiedToken {
 }
 
 /**
- * Builds `SELECT` match flags and `WHERE` pushdowns for platform and category filters.
- *
- * When `includeFacets` is true, rows matching *either* filter are kept (if both are active)
- * so self-excluding platform and category facet counts remain accurate; when `includeFacets`
- * is false, non-matching rows are filtered out directly in `WHERE`.
+ * Build the platform/category match flags for `SELECT` and filters for `WHERE`.
+ * If facets are requested and both filters are active, keep rows that match either one. Each facet
+ * needs rows that match the other filter. Without facets, filter rows in `WHERE`.
  */
 function buildFilterClauses(platforms: string[], categories: string[], includeFacets: boolean): FilterClauses {
   const selectParams: (string | number)[] = [];
@@ -163,7 +159,7 @@ function buildFilterClauses(platforms: string[], categories: string[], includeFa
       selectParams.push(...categories);
     }
     if (platforms.length > 0 && categories.length > 0) {
-      // Rows matching neither active filter cannot contribute to either self-excluding facet.
+      // If a row misses both filters, neither facet needs it.
       whereConditions.push(
         `(t.platform IN (${placeholders(platforms.length)}) OR EXISTS (SELECT 1 FROM thread_labels tl WHERE tl.thread_id = m.thread_id AND tl.label IN (${placeholders(categories.length)})))`,
       );
@@ -192,8 +188,8 @@ function buildFilterClauses(platforms: string[], categories: string[], includeFa
 }
 
 /**
- * Builds a single boolean DNF predicate (`OR` of `AND`-ed multi-field `LIKE` groups)
- * for small thread-scoped scans that bypass FTS5 and CTEs.
+ * Combine the multi-field `LIKE` groups into one OR-of-ANDs predicate for small thread searches
+ * that skip FTS5 and CTEs.
  */
 function buildGroupLikeClause(orGroups: ParsedToken[][]): BuiltSql {
   const params: (string | number)[] = [];
@@ -213,9 +209,10 @@ function buildGroupLikeClause(orGroups: ParsedToken[][]): BuiltSql {
 }
 
 /**
- * Builds index-driven CTEs (`_tok_*`, `_grp_*`, `_candidates`) that discover matching `content.id`
- * values across `content_fts`, `threads.title`, and `content.sender_name` without falling back
- * to full-table `LIKE` scans when indexable (>= 3 code-point) fragments exist.
+ * Build the `_tok_*`, `_grp_*`, and `_candidates` CTEs to find matching `content.id` values across
+ * FTS5, thread titles, and sender names.
+ * Use the indexes when a fragment has at least three code points so we can skip a full-table `LIKE`
+ * scan.
  */
 function buildCandidateCtes(orGroups: ParsedToken[][], threadIds: string[]): CandidateCteResult {
   const ctes: string[] = [];
@@ -243,14 +240,14 @@ function buildCandidateCtes(orGroups: ParsedToken[][], threadIds: string[]): Can
       if (!item.needsContentLikeRefinement) {
         contentBranchSql = `SELECT rowid AS id FROM content_fts WHERE content_fts MATCH ?`;
       } else {
-        // Post-filter FTS5 rowids so wildcards and ^ word-start constraints remain exact.
+        // Recheck FTS5 hits with LIKE so wildcards and ^ behave exactly as the query asks.
         const contentLike = buildContentLike('m.content', item.token);
         contentBranchSql = `SELECT m.id FROM content_fts JOIN content m ON m.id = content_fts.rowid WHERE content_fts MATCH ? AND ${contentLike.sql}`;
         contentBranchParams.push(...contentLike.params);
       }
 
-      // Push threadIds into title and sender branches on large thread-scoped queries to avoid
-      // expanding matching threads/senders from unrelated conversations.
+      // Limit the title and sender branches to the requested thread IDs.
+      // That keeps matches from other conversations out of large thread-scoped queries.
       const titleBranchSql =
         threadIds.length > 0
           ? `SELECT id FROM content WHERE thread_id IN (SELECT id FROM threads WHERE id IN (${placeholders(threadIds.length)}) AND ${titleLike.sql})`
@@ -263,8 +260,8 @@ function buildCandidateCtes(orGroups: ParsedToken[][], threadIds: string[]): Can
           : `SELECT id FROM content WHERE sender_name IN (SELECT s FROM _distinct_senders WHERE s IS NOT NULL AND ${senderLike.sql})`;
       const senderBranchParams = threadIds.length > 0 ? [...senderLike.params, ...threadIds] : senderLike.params;
 
-      // Wrap each token's UNION inside its own CTE because SQLite gives UNION and INTERSECT
-      // equal left-to-right precedence.
+      // Give each token's UNION its own CTE.
+      // SQLite evaluates UNION and INTERSECT left to right at the same precedence.
       ctes.push(
         `${cteName}(id) AS (\n    ${contentBranchSql}\n    UNION\n    ${titleBranchSql}\n    UNION\n    ${senderBranchSql}\n  )`,
       );
@@ -274,7 +271,7 @@ function buildCandidateCtes(orGroups: ParsedToken[][], threadIds: string[]): Can
     }
 
     if (indexable.length > 0 && nonIndexable.length === 0) {
-      // All tokens in this OR group are indexable: intersect their candidate ID sets directly.
+      // If every token is indexed, just intersect their candidate IDs.
       if (tokenCteNames.length === 1) {
         groupCteNames.push(tokenCteNames[0]);
       } else {
@@ -284,7 +281,7 @@ function buildCandidateCtes(orGroups: ParsedToken[][], threadIds: string[]): Can
         groupCteNames.push(grpName);
       }
     } else if (indexable.length > 0 && nonIndexable.length > 0) {
-      // Mixed group: intersect indexable tokens first, then apply LIKE only to that narrowed set.
+      // For a mix of tokens, intersect the indexed matches first and run LIKE on those rows.
       let idxCteName = tokenCteNames[0];
       if (tokenCteNames.length > 1) {
         idxCteName = `_grp_${groupIdx}_idx`;
@@ -304,7 +301,7 @@ function buildCandidateCtes(orGroups: ParsedToken[][], threadIds: string[]): Can
       );
       groupCteNames.push(grpName);
     } else {
-      // No indexable tokens (< 3 code-point terms or short wildcard fragments): fall back to LIKE.
+      // Use LIKE if all terms or wildcard fragments are too short for the index.
       const grpName = `_grp_${groupIdx}`;
       const whereParts: string[] = [];
       for (const item of nonIndexable) {
@@ -331,8 +328,8 @@ function buildCandidateCtes(orGroups: ParsedToken[][], threadIds: string[]): Can
   }
 
   if (usesDistinctSenders) {
-    // Loose index scan over idx_content_sender_name visits each distinct sender via O(distinct) B-tree probes
-    // rather than scanning all rows in the content table/index.
+    // Walk distinct sender names through idx_content_sender_name.
+    // That takes one B-tree probe per distinct sender instead of scanning every message.
     const distinctSendersCte = `_distinct_senders(s) AS MATERIALIZED (
     SELECT min(sender_name) FROM content WHERE sender_name IS NOT NULL
     UNION ALL
@@ -352,11 +349,10 @@ function buildCandidateCtes(orGroups: ParsedToken[][], threadIds: string[]): Can
 }
 
 /**
- * Builds the parameterized SQL statement that populates `temp._search_base` with matched message rows
- * and precomputed platform/category match flags for facet and page queries.
- *
- * Uses a direct `idx_content_thread_id` scan when `useDirectThreadScope` is enabled for small
- * thread-scoped queries, and index-driven FTS5/loose-index CTEs otherwise.
+ * Build the parameterized INSERT that fills `temp._search_base` with matching messages and flags
+ * for facets and pagination.
+ * Small thread searches can use `idx_content_thread_id` directly through `useDirectThreadScope`.
+ * Otherwise use FTS5 and the loose-index CTEs.
  *
  * @param options - Parsed query tokens, scope/facet filters, and execution strategy flags.
  * @returns The SQL `INSERT` statement and ordered bind parameters.
@@ -373,7 +369,7 @@ export function buildPopulateSearchBaseQuery(options: SearchBaseQueryOptions): B
   const { threadIds, platforms, categories, includeFacets, useDirectThreadScope = false } = options;
   const filters = buildFilterClauses(platforms, categories, includeFacets);
 
-  // Fast path for small thread scopes: scan only that thread's rows via idx_content_thread_id.
+  // For a small thread scope, go straight to its rows via idx_content_thread_id.
   if (useDirectThreadScope && threadIds.length > 0) {
     const groupLike = buildGroupLikeClause(nonEmptyGroups);
     const whereConditions = [
@@ -410,7 +406,7 @@ WHERE ${whereConditions.join('\n  AND ')}`.trim();
     };
   }
 
-  // Standard path: discover candidate message IDs via FTS5 + indexed title/sender CTEs.
+  // Use FTS5 and the title/sender indexes to find candidate message IDs.
   const candidate = buildCandidateCtes(nonEmptyGroups, threadIds);
   const whereConditions: string[] = [];
   const whereParams: (string | number)[] = [];

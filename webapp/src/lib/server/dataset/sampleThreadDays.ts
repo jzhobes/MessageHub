@@ -12,8 +12,8 @@ export { sampleThreadRows, selectBestDays };
 export type { DaySummaryStat, RawScanRow, ThreadDaySampleResult };
 
 /**
- * Aggregates per-day stats for a single thread in SQLite within `dateRange`
- * and selects a representative set of days targeting `targetMessages`.
+ * Get daily stats for one thread from SQLite within `dateRange`, then pick representative days to
+ * get close to `targetMessages`.
  */
 export function sampleThreadDays(
   dbInstance: Database.Database,
@@ -25,7 +25,7 @@ export function sampleThreadDays(
     targetMessages?: number;
   } = {},
 ): ThreadDaySampleResult {
-  // Events are exported as a timeline without day slicing
+  // Events get a full timeline, so skip day selection.
   if (threadId.startsWith('fb-event-')) {
     const cat = threadId.replace('fb-event-', '');
     const statuses = cat === 'owned' ? ['Created Event'] : ['Joined Event', 'Interested in Event'];

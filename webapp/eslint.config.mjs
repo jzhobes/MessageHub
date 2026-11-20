@@ -7,7 +7,7 @@ const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
   prettierConfig,
-  // Override default ignores of eslint-config-next.
+  // Replace the default ignores from eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:
     '.next/**',
@@ -21,7 +21,7 @@ const eslintConfig = defineConfig([
   {
     rules: {
       curly: ['error', 'all'],
-      '@next/next/no-img-element': 'off', // Using custom API route for dynamic media serving
+      '@next/next/no-img-element': 'off', // Media goes through our API route so we can serve it dynamically.
       'react/jsx-sort-props': [
         'error',
         {

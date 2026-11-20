@@ -31,25 +31,25 @@ if ENV_FILE.exists():
 
 
 def get_workspace_path():
-    """Resolve data directory from root .env or fallback."""
+    """Read the data directory from the root .env file and use the fallback if needed."""
     workspace_path = os.environ.get("WORKSPACE_PATH")
 
     if workspace_path:
-        # Handle Windows paths (e.g. D:\Projects) when running in POSIX (WSL/Mac)
+        # Handle Windows paths like D:\Projects on POSIX hosts such as WSL and macOS.
         if os.name == "posix" and (":" in workspace_path or "\\" in workspace_path):
             try:
-                # Treat the string specifically as a Windows path
+                # Parse it as a Windows path so the drive and folders stay separate.
                 win_path = PureWindowsPath(workspace_path)
 
                 # If absolute Windows path with drive (e.g. D:/Project)
                 if win_path.drive:
                     drive_letter = win_path.drive.rstrip(":").lower()
-                    # Convert remainder to posix style slashes (e.g. \Projects -> /Projects)
-                    # as_posix() on the relative part preserves hierarchy
+                    # Convert the path after the drive to forward slashes (e.g., \Projects becomes /Projects).
+                    # as_posix() keeps the folder structure intact.
                     rel_path = win_path.relative_to(win_path.anchor).as_posix()
                     return f"/mnt/{drive_letter}/{rel_path}"
                 else:
-                    # Just normal slash conversion if no drive letter
+                    # With no drive letter, just convert the slashes.
                     return win_path.as_posix()
             except Exception:
                 # Fallback if parsing fails
@@ -69,15 +69,14 @@ print(f"Using Workspace: {WORKSPACE_PATH}")
 # -----------------------------------------------------------------------------
 def fix_text(text):
     """
-    Fixes Latin-1 encoding issues common in Meta/Facebook/Instagram exports.
-    Also normalizes emoji (like the heart symbol).
+    Fix Latin-1 mojibake in Meta exports and normalize emoji such as the heart.
     """
     if not text:
         return ""
     try:
         # Re-interpret bytes as UTF-8
         decoded = text.encode("latin1").decode("utf8")
-        # Fix heart emoji (U+2764) to be followed by VS-16 (U+FE0F) if not already
+        # Add VS-16 (U+FE0F) after the heart (U+2764) if it doesn't already have one.
         decoded = re.sub(r"\u2764(?!\uFE0F)", "\u2764\ufe0f", decoded)
         return decoded.strip()
     except Exception:
@@ -86,7 +85,7 @@ def fix_text(text):
 
 def parse_iso_time(iso_str):
     """
-    Parses timestamps (Google Chat ISO, Google Voice ISO, etc) to milliseconds using dateutil.
+    Use dateutil to convert export timestamps, including Google Chat and Voice ISO dates, to milliseconds.
     """
     if not iso_str:
         return 0
@@ -101,7 +100,7 @@ def parse_iso_time(iso_str):
 
 def get_media_type(filename, default="file"):
     """
-    Determines MessageHub media type (photo, video, gif, audio) based on filename extension.
+    Map the filename extension to a MessageHub media type (photo, video, gif, or audio).
     """
     if not filename:
         return default
@@ -121,11 +120,9 @@ def get_media_type(filename, default="file"):
 
 def clean_json_messages(directory, platforms=None):
     """
-    Recursively deletes message JSON files from the specified directory
-    to save space / cleanup after ingestion.
-
-    platforms: List of strings (e.g. ["facebook", "instagram"]).
-               If None or empty, defaults to ["all"].
+    Remove message JSON below this directory to recover space after ingestion.
+    Pass platform names such as ["facebook", "instagram"] to limit cleanup. None or an empty list means
+    ["all"].
     """
     directory = Path(directory)
     if not directory.exists():
@@ -147,7 +144,7 @@ def clean_json_messages(directory, platforms=None):
     for root, dirs, files in os.walk(directory):
         root_path = Path(root)
 
-        # Filter by platform folder heuristic if specific platforms requested
+        # If the caller picked platforms, only clean folders that look like those exports.
         if not check_all:
             # Check if current path belongs to a requested platform
             path_str = str(root_path).lower()
@@ -183,10 +180,10 @@ def clean_json_messages(directory, platforms=None):
 
 def clean_google_voice_files(data_dir=WORKSPACE_PATH):
     """
-    Deletes processed Google Voice files (HTML and VCF) to save space.
+    Remove processed Google Voice HTML and VCF files to free up space.
     """
     voice_root = Path(data_dir) / "Voice"
-    # Also check nested Takeout
+    # Look under Takeout too.
     if not voice_root.exists():
         sub = Path(data_dir) / "Takeout" / "Voice"
         if sub.exists():
@@ -233,7 +230,7 @@ def clean_google_voice_files(data_dir=WORKSPACE_PATH):
 
 def clean_google_mail_files(data_dir=WORKSPACE_PATH):
     """
-    Deletes processed Google Mail mbox files to save space.
+    Remove processed Google Mail mbox files to free up space.
     """
     mail_root = Path(data_dir) / "Mail"
     if not mail_root.exists():
@@ -261,9 +258,9 @@ def clean_google_mail_files(data_dir=WORKSPACE_PATH):
 
 def merge_folders(src, dst):
     """
-    Recursively merges src directory into dst directory with progress reporting.
-    Deletes src only after every file is successfully merged.
-    Returns True if all files merged cleanly (or src did not exist), False otherwise.
+    Merge src into dst recursively and report progress.
+    Remove src only after every file has moved successfully. Return True when the merge succeeds or src is
+    already gone, and False otherwise.
     """
     src = Path(src)
     dst = Path(dst)
@@ -271,13 +268,13 @@ def merge_folders(src, dst):
     if not src.exists():
         return True
 
-    # Phase 1: Count total files (Discovery)
+    # Count files first so we can report progress.
     total_files = 0
     for root, _, filenames in os.walk(src):
         total_files += len(filenames)
 
     if total_files == 0:
-        # Just clean up the empty folder
+        # If there are no files, just remove the empty folder.
         try:
             shutil.rmtree(src)
         except Exception as e:
@@ -298,11 +295,11 @@ def merge_folders(src, dst):
             src_file = Path(root) / f
             dst_file = target_dir / f
 
-            # Move atomically on the same filesystem without pre-deleting dst_file
+            # On the same filesystem, replace the destination atomically so we don't have to delete it first.
             try:
                 os.replace(str(src_file), str(dst_file))
             except Exception:
-                # Fallback to copy + unlink if cross-device or replace fails
+                # If the move crosses filesystems or replace fails, copy the file and unlink the source.
                 try:
                     shutil.copy2(str(src_file), str(dst_file))
                     src_file.unlink()
@@ -314,7 +311,7 @@ def merge_folders(src, dst):
             if current_count % 100 == 0 or current_count == total_files:
                 print(f"[MergeProgress]: {folder_name}|{current_count}|{total_files}")
 
-    # Phase 3: Cleanup empty directories only; preserve failed inputs
+    # Remove empty folders and leave any files we couldn't move.
     if failed_files:
         print(f"Warning: Preserving {src}; {len(failed_files)} file(s) failed to merge.")
         for root, _, _ in os.walk(src, topdown=False):

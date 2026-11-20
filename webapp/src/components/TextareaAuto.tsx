@@ -24,17 +24,17 @@ export default function TextareaAuto({
       return;
     }
 
-    // Reset height to auto to get the correct scrollHeight on shrink
+    // Reset the height first so scrollHeight can shrink with the text.
     textarea.style.height = 'auto';
 
-    const lineHeight = 20; // Approx based on font-size
+    const lineHeight = 20; // Estimate the line height from the font size.
     const minHeight = minRows * lineHeight;
     const maxHeight = maxRows * lineHeight;
 
     const newHeight = Math.min(Math.max(textarea.scrollHeight, minHeight), maxHeight);
 
     textarea.style.height = `${newHeight}px`;
-    textarea.style.overflowY = textarea.scrollHeight > maxHeight ? 'auto' : 'hidden'; // Scroll only if maxed out
+    textarea.style.overflowY = textarea.scrollHeight > maxHeight ? 'auto' : 'hidden'; // Only scroll once the textarea reaches its height limit.
   }, [minRows, maxRows]);
 
   useEffect(() => {

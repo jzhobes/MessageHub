@@ -4,10 +4,10 @@ import { parseFragment } from 'parse5';
 import type { DefaultTreeAdapterMap } from 'parse5';
 
 /**
- * Decodes one layer of HTML5 entities without reprocessing decoded output.
- * Requires semicolons and preserves unknown or malformed entities.
- * Replaces lone Unicode surrogates with the replacement character.
- * This decodes text; it does not sanitize HTML.
+ * Decode one layer of HTML5 entities. Keep unknown, malformed, and unterminated entities as
+ * written.
+ * Replace lone Unicode surrogates with the replacement character. Treat the result as text.
+ * Rendering it as HTML requires separate sanitization.
  *
  * @param str - The text containing HTML entities
  * @returns The text with each supported entity decoded once
@@ -52,9 +52,9 @@ const TEXT_BREAK_ELEMENTS = new Set([
 ]);
 
 /**
- * Extracts plain text from HTML, excluding script and style contents.
- * Preserves block and line breaks and decodes entities once during parsing.
- * The result is text, not sanitized HTML, and must be rendered as text.
+ * Extract plain text from HTML, skipping script and style contents. Keep block and line breaks and
+ * decode entities once during parsing.
+ * Render the result as text.
  *
  * @param html - The HTML document or fragment to extract text from
  * @returns Plain text with normalized whitespace
@@ -65,7 +65,7 @@ export const stripHtml = (html: string): string => {
   }
 
   const chunks: string[] = [];
-  // An explicit stack avoids recursive traversal limits on deeply nested input.
+  // Use a stack so deeply nested HTML can't run us into recursion limits.
   const pending: (DefaultTreeAdapterMap['node'] | string)[] = [parseFragment(html)];
   while (pending.length > 0) {
     const node = pending.pop()!;
@@ -100,15 +100,14 @@ export const stripHtml = (html: string): string => {
 };
 
 /**
- * Heuristic check to see if a string likely contains HTML tags or entities.
- * Used to avoid running heavy strip/decode logic on plain text.
+ * Check for likely tags or entities before doing the heavier HTML cleanup.
  */
 export const containsHtmlOrEntities = (str: string): boolean => {
   return /<[a-z!/][^>]*>/i.test(str) || /&([a-z0-9]+|#[0-9]+|#x[0-9a-f]+);/i.test(str);
 };
 
 /**
- * Removes URLs from a string.
+ * Strip URLs from the text.
  */
 export const stripUrls = (str: string): string => {
   const urlRegex = /https?:\/\/[^\s]+/gi;
@@ -116,8 +115,8 @@ export const stripUrls = (str: string): string => {
 };
 
 /**
- * Generates a snippet from content that centers on the search query match.
- * If the query is found, extracts a window around it. Otherwise, returns the start of the content.
+ * Center the snippet on the first query match when there is one. If the query doesn't match, take
+ * the start of the content.
  *
  * @param content - The full text content to extract a snippet from
  * @param query - The search query to look for
@@ -139,7 +138,7 @@ export const generateContextSnippet = (content: string, query: string, maxLength
   const matchIndex = lowerContent.indexOf(lowerQuery);
 
   if (matchIndex === -1) {
-    // No match found, return start of content
+    // With no match, show the beginning of the message.
     const snippet = content.substring(0, maxLength);
     return snippet.length < content.length ? snippet + '...' : snippet;
   }
@@ -149,14 +148,14 @@ export const generateContextSnippet = (content: string, query: string, maxLength
   let start = Math.max(0, matchIndex - halfWindow);
   let end = Math.min(content.length, matchIndex + query.length + halfWindow);
 
-  // Adjust if we're near the boundaries
+  // Slide the window if it runs past either end.
   if (start === 0) {
     end = Math.min(content.length, maxLength);
   } else if (end === content.length) {
     start = Math.max(0, content.length - maxLength);
   }
 
-  // Try to break at word boundaries for cleaner snippets
+  // Try to start and end on whole words.
   if (start > 0) {
     const spaceAfterStart = content.indexOf(' ', start);
     if (spaceAfterStart !== -1 && spaceAfterStart < start + 20) {

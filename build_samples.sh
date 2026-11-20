@@ -1,12 +1,12 @@
 #!/bin/bash
-# Script to build a sample database from the golden archives in /samples
+# Build the data_samples/ workspace from the archives in samples/.
 
 PROJECT_ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 SAMPLES_DIR="$PROJECT_ROOT/samples"
 DATA_SAMPLES_DIR="$PROJECT_ROOT/data_samples"
 
 
-# Check for venv, run setup if missing
+# Run setup first if the virtual environment is missing.
 if [ ! -d "$PROJECT_ROOT/venv" ]; then
     echo "⚠️  Virtual environment not found. Running setup..."
     "$PROJECT_ROOT/setup.sh"
@@ -14,11 +14,11 @@ fi
 
 echo "==> Building sample workspace in $DATA_SAMPLES_DIR..."
 
-# Clean and recreate samples workspace
+# Start with a clean sample workspace.
 rm -rf "$DATA_SAMPLES_DIR"
 mkdir -p "$DATA_SAMPLES_DIR"
 
-# Copy samples into the workspace
+# Copy the archives in so ingestion can work on the copies.
 cp "$SAMPLES_DIR/facebook_sample.zip" "$DATA_SAMPLES_DIR/"
 cp "$SAMPLES_DIR/instagram_sample.zip" "$DATA_SAMPLES_DIR/"
 cp "$SAMPLES_DIR/google_chat_sample.zip" "$DATA_SAMPLES_DIR/"

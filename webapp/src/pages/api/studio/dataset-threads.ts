@@ -16,10 +16,10 @@ interface ThreadStatsRow {
 }
 
 /**
- * Computes per-thread stats and a 0–100 heuristic quality score (combining 2-year recency,
- * participation ratio, log message length, and sqrt volume; zeroed when fewer than 5 user messages
- * exist), appends virtual Facebook post/event threads when applicable, and returns threads sorted
- * by descending quality score.
+ * Build a 0–100 score for each thread using two-year recency, participation, log message length,
+ * and square-root volume.
+ * Threads with fewer than five user messages score zero. Add virtual Facebook post/event threads
+ * where applicable, then return highest scores first.
  */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { platform } = req.query;
@@ -49,7 +49,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     JOIN content m ON m.thread_id = t.id
   `;
 
-  const params: (string | number)[] = [...myNames, ...myNames]; // User names are used twice in the CASE statements
+  const params: (string | number)[] = [...myNames, ...myNames]; // Bind the identity names twice because both CASE expressions use them.
 
   const conditions = [
     "EXISTS (SELECT 1 FROM thread_labels tl WHERE tl.thread_id = t.id AND tl.label IN ('message', 'inbox', 'sent'))",
@@ -84,7 +84,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       const ratio = myCount / total; // 0.0 to 1.0
 
-      // Heuristic Scoring (0 - 100)
+      // Combine the signal scores on a 0–100 scale.
       const age = Date.now() - row.timestamp;
       const TWO_YEARS = 63113904000; // 2 years in ms
       const recencyScore = Math.max(0, 20 * (1 - age / TWO_YEARS));
@@ -114,7 +114,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       };
     });
 
-    // 3. Add Virtual Threads (Posts, Check-ins, Events) if applicable
+    // Add virtual Facebook timelines for posts, check-ins, and events where applicable.
     if (!platformStr || platformStr === 'all' || platformStr === 'facebook') {
       // Posts
       const postStats = dbInstance
@@ -154,7 +154,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         });
       }
 
-      // Events - Simplified aggregation for Studio
+      // Group events into timelines for Studio.
       const eventCats = [
         { id: 'fb-event-owned', title: 'Your Events', status: ['Created Event'] },
         { id: 'fb-event-joined', title: 'Joined Events', status: ['Joined Event', 'Interested in Event'] },

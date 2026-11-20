@@ -43,7 +43,7 @@
 .content {
   padding: 24px;
   flex: 1;
-  min-height: 0; /* Critical: allows children to shrink and handle scrolling */
+  min-height: 0; /* Let children shrink so their contents can scroll. */
   display: flex;
   flex-direction: column;
 }
@@ -107,7 +107,7 @@
 
 .button {
   composes: btn-primary from global;
-  padding: 8px 16px; /* Ensure padding stays if global reset wins */
+  padding: 8px 16px; /* Keep this padding even if the global reset takes precedence. */
   cursor: pointer;
   border-radius: var(--radius-1);
 }
@@ -304,7 +304,7 @@
   padding: 30px 0;
   display: flex;
   flex-direction: column;
-  min-height: 0; /* Critical: allow sidebar to be constrained */
+  min-height: 0; /* Let the sidebar shrink to fit the modal. */
 }
 
 .sidebarItem {
@@ -389,19 +389,19 @@
 
 .actionButtonActive {
   font-weight: bold;
-  color: #2563eb;
-  background-color: rgba(37, 99, 235, 0.1);
+  color: var(--toggle-selected-text);
+  background-color: var(--toggle-selected-bg);
 }
 
 .actionButtonActive:hover {
-  background-color: rgba(37, 99, 235, 0.15);
+  background-color: var(--toggle-selected-hover-bg);
 }
 
 .stepContainerFull {
   display: flex;
   flex-direction: column;
   flex: 1;
-  min-height: 0; /* Critical: allows flex child to shrink */
+  min-height: 0; /* Let this flex child shrink below its content width. */
 }
 
 .explorerContainer {
@@ -415,7 +415,7 @@
 }
 
 .explorerActionBtn {
-  height: 100.5%; /* Slight overlap to hide adornment border-left */
+  height: 100.5%; /* Overlap the edge just enough to hide the adornment's left border. */
   margin: -1px; /* Absorb container border */
   border-top-left-radius: 0 !important;
   border-bottom-left-radius: 0 !important;
@@ -862,7 +862,7 @@
 
 .wizardContent {
   flex: 1;
-  min-height: 0; /* Critical: allows child to control scrolling */
+  min-height: 0; /* Let the child handle scrolling. */
   display: flex;
   flex-direction: column;
   padding: 40px;

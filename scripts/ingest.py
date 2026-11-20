@@ -66,24 +66,24 @@ def handle_facebook(cursor, p_root, scan_path, discovered_identities):
     print(f"[Ingesting]: Facebook - {p_root.name}")
     count, skipped = ingest_facebook_entry(cursor, p_root)
 
-    # Special activity ingestion (once per scan)
+    # Import account activity once per scan.
     facebook_workspace = scan_path / "Facebook"
     if facebook_workspace.exists() and "facebook_activity" not in discovered_identities:
         print("[Ingesting]: Facebook Social Activity (Events, Posts, Check-ins)...")
         my_full_name = discover_facebook_identity(scan_path)
 
-        # Cleanup legacy hashed IDs to prevent "doubles"
+        # Remove legacy hashed IDs so the same activity doesn't show up twice.
         print("  Cleaning up legacy social activity records...")
         for prefix in ["fb_event_", "fb_post_", "fb_ci_"]:
-            # Delete threads that follow the old pattern: prefix + timestamp + _ + hash
-            # New pattern is just prefix + timestamp
+            # Old IDs end in a timestamp and a hash.
+            # Current IDs stop at the timestamp.
             cursor.execute(f"SELECT id FROM threads WHERE id LIKE '{prefix}%' AND id GLOB '{prefix}*[0-9]_*'")
             legacy_ids = [row[0] for row in cursor.fetchall()]
             if legacy_ids:
                 placeholders = ",".join(["?"] * len(legacy_ids))
                 cursor.execute(f"DELETE FROM content WHERE thread_id IN ({placeholders})", legacy_ids)
                 cursor.execute(f"DELETE FROM threads WHERE id IN ({placeholders})", legacy_ids)
-                # Labels will cascade if foreign keys are active, but safe to do manually
+                # Delete labels explicitly in case foreign-key cascades are off.
                 cursor.execute(f"DELETE FROM thread_labels WHERE thread_id IN ({placeholders})", legacy_ids)
 
         ec, es = ingest_facebook_events(cursor, scan_path, my_full_name)
@@ -124,7 +124,7 @@ PLATFORM_HANDLERS = {
 
 # --- Core Ingestion Logic ---
 def scan_directory(scan_path, db_path, platform_filter="all", limit_platforms=None):
-    """Recursively scans the provided directory for chat export data."""
+    """Look through this directory and its subdirectories for chat exports."""
     conn = get_db_connection(db_path)
     conn.execute("PRAGMA journal_mode=WAL;")
     cursor = conn.cursor()
@@ -134,7 +134,7 @@ def scan_directory(scan_path, db_path, platform_filter="all", limit_platforms=No
 
     files_to_process = []
 
-    # 1. Google Voice check (structural)
+    # Recognize Google Voice by its folder structure.
     if platform_filter in ("all", "google_voice"):
         possible_roots = [scan_path / "Voice", scan_path / "Takeout/Voice", scan_path]
         for p in possible_roots:
@@ -143,7 +143,7 @@ def scan_directory(scan_path, db_path, platform_filter="all", limit_platforms=No
                     files_to_process.append((999, p, "google_voice"))
                     break
 
-    # 2. Google Mail check (mbox)
+    # Look for Google Mail mbox files.
     if platform_filter in ("all", "google_mail"):
         possible_roots = [scan_path / "Mail", scan_path / "Takeout/Mail", scan_path]
         for p in possible_roots:
@@ -151,7 +151,7 @@ def scan_directory(scan_path, db_path, platform_filter="all", limit_platforms=No
                 if limit_platforms is None or "google_mail" in limit_platforms:
                     files_to_process.append((10, mbox, "google_mail"))
 
-    # 3. Recursive check for standard chat platforms
+    # Walk the remaining folders for standard chat exports.
     platform_map = {
         "google chat": "google_chat",
         "facebook": "facebook",
@@ -165,7 +165,7 @@ def scan_directory(scan_path, db_path, platform_filter="all", limit_platforms=No
             if limit_platforms is None or "facebook" in limit_platforms:
                 files_to_process.extend((4, Path(root) / f, "facebook_e2e") for f in files if f.endswith('.json'))
             continue
-        # Look for message threads OR identity files
+        # A folder can have message threads, identity files, or both.
         if not any(
             f in files
             for f in [

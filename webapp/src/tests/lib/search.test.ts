@@ -41,7 +41,7 @@ describe('parseSearchQuery', () => {
     const result = parseSearchQuery('^test');
     expect(result.orGroups[0][0].isStartOfWord).toBe(true);
     expect(result.orGroups[0][0].clean).toBe('test');
-    expect(result.orGroups[0][0].regexPattern).toMatch(/^\(\?:\^/); // Should start with word boundary
+    expect(result.orGroups[0][0].regexPattern).toMatch(/^\(\?:\^/); // Match only at the start of a word.
   });
 
   it('should convert glob wildcards to SQL patterns', () => {
@@ -54,7 +54,7 @@ describe('parseSearchQuery', () => {
 
   it('should convert glob wildcards to regex patterns', () => {
     const result = parseSearchQuery('test*');
-    // The implementation uses .*? but the ? gets escaped to . in the final pattern
+    // The intermediate .*? becomes the final pattern asserted below.
     expect(result.orGroups[0][0].regexPattern).toBe('test.*?');
 
     const result2 = parseSearchQuery('te?t');

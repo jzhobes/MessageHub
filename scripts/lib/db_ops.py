@@ -98,7 +98,7 @@ def init_db(db_path):
 
 
 def save_identity(cursor, platform, id_type, id_value, is_me=False, metadata=None):
-    """Inserts or updates an identity record safely."""
+    """Insert the identity or update it if it already exists."""
     cursor.execute(
         """
         INSERT OR REPLACE INTO identities (platform, id_type, id_value, is_me, metadata_json)
@@ -109,7 +109,7 @@ def save_identity(cursor, platform, id_type, id_value, is_me=False, metadata=Non
 
 
 def finalize_gmail_identity(cursor, gmail_identity_stats):
-    """Determines the most likely owner of the Gmail account based on 'To' field counts."""
+    """Use the counts from the To field to pick the most likely Gmail account owner."""
     result = discover_google_mail_identity(gmail_identity_stats)
     if not result:
         return
@@ -119,6 +119,6 @@ def finalize_gmail_identity(cursor, gmail_identity_stats):
 
     save_identity(cursor, "google_mail", "email", best_email, is_me=True, metadata={"count": count, "names": names})
 
-    # Also register the names as 'Me' for this platform
+    # Register those names as “Me” for this platform too.
     for name in names:
         save_identity(cursor, "google_mail", "name", name, is_me=True)

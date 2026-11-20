@@ -63,7 +63,7 @@ describe('useDatasetGeneration', () => {
     const { result } = renderHook(() => useDatasetGeneration(5));
 
     await act(async () => {
-      await result.current.generate(samplePayload, 'my_dataset');
+      await result.current.generate(samplePayload);
     });
 
     expect(pollCount).toBe(2);
@@ -90,7 +90,7 @@ describe('useDatasetGeneration', () => {
     const { result } = renderHook(() => useDatasetGeneration(5));
 
     await act(async () => {
-      await result.current.generate(samplePayload, 'my_dataset');
+      await result.current.generate(samplePayload);
     });
 
     expect(result.current.generating).toBe(false);
@@ -122,7 +122,7 @@ describe('useDatasetGeneration', () => {
 
     let pendingGen: Promise<void>;
     act(() => {
-      pendingGen = result.current.generate(samplePayload, 'my_dataset');
+      pendingGen = result.current.generate(samplePayload);
     });
 
     await waitFor(() => {

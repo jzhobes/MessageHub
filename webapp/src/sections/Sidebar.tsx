@@ -50,19 +50,12 @@ export default function Sidebar({ activePlatform, availability, collapsed, onPla
       </div>
 
       <Tooltip content={collapsed ? 'DataForge AI' : null} placement="right" className={styles.tooltipTrigger}>
-        <div className={styles.navItem}>
-          <Link
-            href="/studio"
-            className={styles.sidebarButton}
-            style={{ textDecoration: 'none', color: 'inherit' }}
-            aria-label="DataForge AI"
-          >
-            <span className={styles.sidebarIconWrapper}>
-              <FaRobot color="#666" size={20} />
-            </span>
-            <span className={styles.sidebarLabel}>DataForge AI</span>
-          </Link>
-        </div>
+        <Link href="/studio" className={`${styles.navItem} ${styles.sidebarLink}`} aria-label="DataForge AI">
+          <span className={styles.sidebarIconWrapper}>
+            <FaRobot color="#666" size={20} />
+          </span>
+          <span className={styles.sidebarLabel}>DataForge AI</span>
+        </Link>
       </Tooltip>
 
       <div style={{ flex: 1 }} />

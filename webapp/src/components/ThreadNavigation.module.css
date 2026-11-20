@@ -1,0 +1,135 @@
+.triggerButton {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding-inline: 20px;
+  color: var(--text-primary);
+  transition: background-color 0.2s ease;
+}
+
+.triggerButton:hover,
+.triggerButton[aria-expanded='true'] {
+  background: var(--bg-hover);
+}
+
+.triggerButton:focus-visible {
+  outline: 2px solid var(--bubble-sent-bg);
+  outline-offset: -2px;
+}
+
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.menu:popover-open {
+  padding-block: 0;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  font-size: 0.8rem;
+}
+
+.row {
+  display: flex;
+  gap: 8px;
+  min-height: 35px;
+}
+
+.heading {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  border-radius: var(--radius-1);
+  background: var(--bg-secondary);
+}
+
+.tabs button {
+  flex: 1;
+  padding: 7px 12px;
+  border: 0;
+  border-radius: var(--radius-1);
+  background: transparent;
+  color: color-mix(in srgb, var(--text-secondary), var(--text-primary) 35%);
+  font: inherit;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.tabs button:not(:disabled):hover {
+  background-color: var(--bg-hover);
+}
+
+.tabs button[aria-pressed='true'] {
+  background-color: var(--toggle-selected-bg);
+  color: var(--toggle-selected-text);
+  font-weight: bold;
+}
+
+.tabs button[aria-pressed='true']:not(:disabled):hover {
+  background-color: var(--toggle-selected-hover-bg);
+}
+
+.jumpField {
+  flex: 1;
+  min-width: 0;
+}
+
+.jumpField input {
+  padding: 8px 10px;
+  font: inherit;
+}
+
+.jumpField input[type='number'] {
+  text-align: right;
+}
+
+.pageAdornment {
+  padding: 0 10px;
+  white-space: nowrap;
+}
+
+.goButton {
+  composes: btn-primary from global;
+  font-size: inherit;
+}
+
+.shortcuts {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin: 0 -12px -12px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+}
+
+.shortcutButton {
+  composes: btn-secondary from global;
+}
+
+.shortcuts .shortcutButton {
+  padding: 4px 10px;
+  background: var(--bg-primary);
+  font-size: 0.75rem;
+}
+
+.tabs button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

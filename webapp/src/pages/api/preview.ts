@@ -18,7 +18,7 @@ interface PreviewMetadata {
 }
 
 /**
- * Parses HTML content to extract OpenGraph and other metadata.
+ * Read OpenGraph and other preview metadata from the page HTML.
  */
 function parseMetadata(html: string): { title: string | null; image: string | null; description: string | null } {
   const metadata = new Map<string, string>();
@@ -47,7 +47,7 @@ function parseMetadata(html: string): { title: string | null; image: string | nu
 }
 
 /**
- * Detects the platform of a given URL.
+ * Identify which platform the URL belongs to.
  */
 function detectPlatform(url: string): { isFacebook: boolean; isInstagram: boolean; isReddit: boolean } {
   try {
@@ -65,30 +65,32 @@ function detectPlatform(url: string): { isFacebook: boolean; isInstagram: boolea
 }
 
 /**
- * Gets the absolute path to the preview cache file within the current workspace.
+ * Locate the preview cache in the active workspace.
  */
 function getCachePath(): string {
   return path.join(appConfig.WORKSPACE_PATH, 'preview_cache.json');
 }
 
 /**
- * Reads the preview cache from disk.
+ * Load the saved previews from disk.
+ *
  * @returns A promise that resolves to the cache object.
  */
 async function readCache(): Promise<Record<string, PreviewMetadata>> {
   try {
     const cachePath = getCachePath();
-    // Only try to read if file exists (catch error)
+    // Try loading the existing cache.
     const data = await fs.readFile(cachePath, 'utf8');
     return JSON.parse(data);
   } catch {
-    // Ignore ENOENT (file not found), log others if strict
+    // Start with an empty cache if the file is missing or unreadable.
   }
   return {};
 }
 
 /**
- * Writes the preview cache to disk.
+ * Save the preview cache to disk.
+ *
  * @param data - The cache data to write.
  */
 async function writeCache(data: Record<string, PreviewMetadata>) {
@@ -101,8 +103,8 @@ async function writeCache(data: Record<string, PreviewMetadata>) {
 }
 
 /**
- * API Handler to fetch OpenGraph preview data for a URL.
- * Checks a local JSON cache first before making a network request.
+ * Return OpenGraph preview data for the URL. Use the workspace's JSON cache before making a network
+ * request.
  *
  * @param req - Next.js API request
  * @param res - Next.js API response
@@ -140,7 +142,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const { isFacebook, isInstagram, isReddit } = detectPlatform(targetUrl);
 
-    // Reddit strategy: fetch JSON
+    // Use Reddit's JSON response for its previews.
     if (isReddit) {
       try {
         const u = new URL(targetUrl);
@@ -165,7 +167,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     }
 
-    // HTML fetch strategy (Facebook, Instagram, General)
+    // Read page HTML for Facebook, Instagram, and other sites.
     if (!title) {
       let headers: Record<string, string> = {};
 
@@ -190,7 +192,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           image = meta.image;
           description = meta.description;
 
-          // Facebook Proxy for Lookaside
+          // Route Facebook lookaside images through our proxy.
           if (isFacebook && image && image.includes('lookaside')) {
             image = `/api/fb-image-proxy?url=${encodeURIComponent(image)}`;
           }
@@ -219,8 +221,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     res.status(200).json(result);
 
-    // Update cache in the background. Since res.json() has already been called,
-    // these awaits won't delay the response to the client.
+    // Save the cache after sending the response.
+    // The client already has the preview by the time we await the write.
     try {
       const freshCache = await readCache();
       freshCache[targetUrl] = result;

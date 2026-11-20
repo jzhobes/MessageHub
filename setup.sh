@@ -1,14 +1,32 @@
 #!/bin/bash
-# MessageHub Setup Script (Mac/Linux)
+# Set up MessageHub on macOS, Linux, or WSL.
 set -e
 trap "exit" INT
 
-# Get the directory where this script is located
+# Resolve paths from the directory this script lives in.
 PROJECT_ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+# Verify Python 3.12+ is available
+if ! command -v python3 >/dev/null 2>&1; then
+    echo "❌ Python 3.12+ is required, but 'python3' was not found on PATH." >&2
+    exit 1
+fi
+
+if ! python3 -c "import sys; sys.exit(0 if sys.version_info >= (3, 12) else 1)"; then
+    echo "❌ Python 3.12+ is required (found $(python3 --version)). Please upgrade Python." >&2
+    exit 1
+fi
 
 echo "==> Setting up MessageHub environment in $PROJECT_ROOT..."
 
-# 1. Create venv if it doesn't exist
+# Create the virtual environment if it's missing. Recreate it if it's broken or outdated.
+if [ -d "$PROJECT_ROOT/venv" ]; then
+    if [ ! -x "$PROJECT_ROOT/venv/bin/python" ] || ! "$PROJECT_ROOT/venv/bin/python" -c "import sys; sys.exit(0 if sys.version_info >= (3, 12) else 1)"; then
+        echo "Existing virtual environment is broken or uses Python < 3.12. Recreating 'venv'..."
+        rm -rf "$PROJECT_ROOT/venv"
+    fi
+fi
+
 if [ ! -d "$PROJECT_ROOT/venv" ]; then
     echo "Creating virtual environment 'venv'..."
     python3 -m venv "$PROJECT_ROOT/venv"
@@ -16,12 +34,9 @@ else
     echo "Found existing virtual environment."
 fi
 
-# 2. Activate and install requirements
-# Note: This activates it only for this script execution
-source "$PROJECT_ROOT/venv/bin/activate"
-
+# Install requirements using the venv's Python
 echo "Installing dependencies from $PROJECT_ROOT/scripts/requirements.txt..."
-pip install -r "$PROJECT_ROOT/scripts/requirements.txt"
+"$PROJECT_ROOT/venv/bin/python" -m pip install -r "$PROJECT_ROOT/scripts/requirements.txt"
 
 echo ""
 echo "✅ Setup Complete!"

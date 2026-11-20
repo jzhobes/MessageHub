@@ -8,7 +8,7 @@ describe('Theme Variable Integrity', () => {
   const cssContent = fs.readFileSync(globalsPath, 'utf-8');
 
   function extractVariables(selector: string, content: string): string[] {
-    // This is a simplified parser for variables inside a specific selector block
+    // Read custom properties from the requested selector block. This test only needs simple blocks.
     const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const regex = new RegExp(`${escapedSelector}\\s*\\{([^}]*)\\}`, 'g');
     let variables: string[] = [];
@@ -29,9 +29,8 @@ describe('Theme Variable Integrity', () => {
     const rootVars = extractVariables(':root', cssContent).filter((v) => !v.startsWith('--radius-'));
     const darkVars = extractVariables("[data-theme='dark']", cssContent);
 
-    // Filter out variables that are clearly not theme-dependent (like radii)
-    // although in a perfect world, even radii could be themed.
-    // For now, let's assume all of them should be defined.
+    // Check that the dark theme defines the same variables.
+    // Shared border radii were already excluded above.
     const missingInDark = rootVars.filter((v) => !darkVars.includes(v));
 
     expect(

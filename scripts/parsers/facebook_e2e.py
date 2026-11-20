@@ -1,4 +1,4 @@
-"""Messenger secure-storage exports, which do not supply stable thread IDs."""
+"""Import Messenger secure-storage exports. They don't come with stable thread IDs."""
 import hashlib
 import json
 import re
@@ -21,7 +21,7 @@ def ingest_e2e(cursor, source):
     participants = sorted(set(data['participants']))
     title = re.sub(r'_\d+$', '', data['threadName'])
     first = min(m['timestamp'] for m in messages)
-    # An unchanged history keeps its identity even if the export filename changes.
+    # The same history keeps its ID even if the filename changes.
     seed = json.dumps([participants, title, first], ensure_ascii=False)
     thread_id = 'fb-e2e-' + hashlib.sha256(seed.encode()).hexdigest()[:24]
     candidates = []
@@ -36,7 +36,7 @@ def ingest_e2e(cursor, source):
             if senders <= set(participants) and last is not None and last < first:
                 candidates.append(candidate)
         elif 'e2e' in labels:
-            # Overlap also handles partial exports and changed names/suffixes.
+            # Use message overlap to match partial exports or histories whose names or suffixes changed.
             if any(cursor.execute('SELECT 1 FROM content WHERE thread_id=? AND sender_name=? AND timestamp_ms=? AND content IS ? LIMIT 1',
                                   (candidate, m['senderName'], m['timestamp'], ('[Deleted message]' if m.get('isUnsent') else m.get('text') or ''))).fetchone()
                    for m in messages):
@@ -69,7 +69,7 @@ def ingest_e2e(cursor, source):
 
 
 def reconcile_cutovers(cursor):
-    """Link previously imported E2E histories when standard data arrives later."""
+    """Link E2E histories we've already imported when the standard export comes in later."""
     rows = cursor.execute("SELECT t.id,t.participants_json FROM threads t JOIN thread_labels l ON l.thread_id=t.id WHERE l.label='e2e' AND t.id LIKE 'fb-e2e-%'").fetchall()
     for source, people in rows:
         participants = json.loads(people)

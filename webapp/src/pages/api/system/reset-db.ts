@@ -7,8 +7,7 @@ import appConfig from '@/lib/shared/appConfig';
 import type { NextApiRequest, NextApiResponse } from 'next';
 
 /**
- * API Handler to reset (delete) the message database.
- * This is a destructive action and requires a POST request.
+ * Clear the message database and imported workspace data. Requires POST with `confirm: "RESET"`.
  */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -40,7 +39,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           await fs.promises.unlink(file);
           console.log(`[Reset] Deleted file: ${file}`);
         } catch (e) {
-          // Just skip if file doesn't exist (ENOENT)
+          // Keep going if the file is already gone.
           if (e && typeof e === 'object' && 'code' in e && e.code !== 'ENOENT') {
             console.warn('[Reset] Could not delete file %s:', file, e);
           }

@@ -1,8 +1,8 @@
 import { IS_DEMO_MODE } from '@/lib/client/env';
 
 /**
- * Unified API fetch wrapper. Delegates straight to `globalThis.fetch` in normal local mode
- * (tree-shaking out the demo router) and routes to the in-memory `demoRouter` in static Demo Mode.
+ * Use `globalThis.fetch` locally and keep the demo router out of that bundle. In static Demo Mode,
+ * handle API calls through the in-memory `demoRouter`.
  */
 export async function apiFetch(input: string, init?: RequestInit): Promise<Response> {
   if (!IS_DEMO_MODE) {
@@ -14,8 +14,8 @@ export async function apiFetch(input: string, init?: RequestInit): Promise<Respo
 }
 
 /**
- * Resolves a completed dataset generation download URL: returns an in-browser Blob URL in Demo Mode
- * or `null` in local mode (where the caller downloads directly from `/api/studio/generate-dataset`).
+ * Return a browser Blob URL for a completed demo download. In local mode, return `null` so the
+ * caller can download from `/api/studio/generate-dataset`.
  */
 export async function resolveDemoDownloadUrl(jobId: string): Promise<string | null> {
   if (!IS_DEMO_MODE) {

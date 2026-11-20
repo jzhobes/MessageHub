@@ -1,12 +1,10 @@
 /**
- * NOTE: We import from CDN here because Next.js sometimes struggles to bundle
- * complex binary dependencies like ONNX runtime inside Web Workers at build-time.
- * Using the CDN version ensures reliable loading across all environments.
+ * Load the model dependencies from the CDN. Next.js can have trouble bundling native dependencies
+ * like ONNX Runtime for workers.
  */
 import { env, pipeline } from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1';
-// import { env, pipeline } from '@huggingface/transformers';
 
-// Skip local model check since we are in the browser
+// We're in the browser, so skip the local model lookup.
 env.allowLocalModels = false;
 env.useBrowserCache = true;
 
@@ -28,7 +26,7 @@ const LABELS = [
 const CONFIDENCE_THRESHOLD = 0.35;
 
 /**
- * Consistently prepares an array of messages for the AI model.
+ * Prepare messages in the format the classifier expects.
  */
 function sampleMessages(messages, limit = 10, maxChars = 1000) {
   if (!messages || !Array.isArray(messages)) {
@@ -38,14 +36,16 @@ function sampleMessages(messages, limit = 10, maxChars = 1000) {
 }
 
 /**
- * Handles worker commands backed by a lazily initialized `Xenova/mobilebert-uncased-mnli` zero-shot
- * classifier (WebGPU with WASM fallback):
- * - `'preload'`: warms up the model cache and posts `preload:complete`.
- * - `'filter_threads'`: classifies sampled messages per thread against `labels`, posting
- *   `filter:status`, `filter:match`, `filter:progress`, and `filter:complete`.
- * - default (`'analyze'`): classifies `messages` against `LABELS`, posting `analyze:status` and
+ * Run commands against a lazily loaded `Xenova/mobilebert-uncased-mnli` classifier. Try WebGPU
+ * first and fall back to WASM.
+ *
+ * - `preload` warms the model cache and posts `preload:complete`.
+ * - `filter_threads` checks each thread's samples against `labels` and posts `filter:status`,
+ *   `filter:match`, `filter:progress`, and `filter:complete`.
+ * - `analyze` is the default. It checks `messages` against `LABELS` and posts `analyze:status` and
  *   `analyze:result`.
- * Emits `progress` during model downloads (>200ms) and `error` on failure.
+ *
+ * The worker posts `progress` for downloads that take over 200ms and `error` if work fails.
  */
 self.onmessage = async (e) => {
   const { type, messages, threads, labels: targetLabels, isLast } = e.data;
@@ -56,13 +56,13 @@ self.onmessage = async (e) => {
 
       let progressStart = 0;
       classifier = await pipeline('zero-shot-classification', 'Xenova/mobilebert-uncased-mnli', {
-        device: 'webgpu', // Try WebGPU first, will fallback to wasm
+        device: 'webgpu', // Try WebGPU first and fall back to WASM.
         progress_callback: (data) => {
           if (data.status === 'progress') {
             if (!progressStart) {
               progressStart = Date.now();
             }
-            // Only show progress if it takes longer than 200ms
+            // Show download progress only if it's still loading after 200ms.
             if (Date.now() - progressStart < 200) {
               return;
             }
@@ -82,13 +82,13 @@ self.onmessage = async (e) => {
     }
 
     if (type === 'preload') {
-      // Just warm up the cache
+      // Load the model now so the first scan can use the cache.
       self.postMessage({ type: 'preload:complete' });
       return;
     }
 
     if (type === 'filter_threads') {
-      // New Mode: Filter Scan
+      // Scan threads against the selected labels.
       self.postMessage({ type: 'filter:status', message: 'Scanning threads...' });
 
       const matches = [];
@@ -98,7 +98,6 @@ self.onmessage = async (e) => {
       for (let i = 0; i < total; i++) {
         const item = threads[i];
         const textToAnalyze = sampleMessages(item.messages);
-        // console.info('Analyzing:\r\n', textToAnalyze);
 
         if (!textToAnalyze || textToAnalyze.length < 10) {
           continue;
@@ -120,7 +119,7 @@ self.onmessage = async (e) => {
           matches.push(item.id);
         }
 
-        // Progress update (less frequently to save bridge traffic)
+        // Send fewer progress events so we don't flood the worker bridge.
         if (i % 10 === 0 || i === total - 1) {
           self.postMessage({
             type: 'filter:progress',
@@ -133,11 +132,10 @@ self.onmessage = async (e) => {
       // Final done message
       self.postMessage({ type: 'filter:complete', count: matches.length, labels: targetLabels, isLast });
     } else {
-      // Default Mode: Generate Persona Tags
+      // Generate persona tags for the supplied messages.
       self.postMessage({ type: 'analyze:status', message: 'Analyzing style...' });
 
       const textToAnalyze = sampleMessages(messages);
-      // console.info('Analyzing:\r\n', textToAnalyze);
 
       const result = await classifier(textToAnalyze, LABELS, {
         multi_label: true,

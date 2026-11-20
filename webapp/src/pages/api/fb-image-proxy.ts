@@ -6,9 +6,10 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 const FACEBOOK_CDN_DOMAINS = ['facebook.com', 'fb.com', 'fbsbx.com', 'fbcdn.net'];
 
 /**
- * Proxies images from an allowlist of Facebook CDN domains using crawler headers to bypass hotlink
- * and lookaside restrictions. Rejects disallowed hosts (`403`) and non-`image/*` responses (`415`),
- * and caches valid images as immutable.
+ * Fetch images from allowed Facebook CDN hosts using crawler headers so hotlink and lookaside URLs
+ * work.
+ * Return 403 for other hosts and 415 for responses outside `image/*`. Cache valid images as
+ * immutable.
  */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { url } = req.query;

@@ -2,24 +2,23 @@ import fs from 'fs';
 import path from 'path';
 
 /**
- * Resolves the absolute project root directory.
+ * Get the absolute path to the project root.
  */
 export function getProjectRoot(): string {
   const currentDir = process.cwd();
-  // If we are running inside the webapp subfolder, project root is one level up
+  // When running from webapp, the project root is one level up.
   return path.basename(currentDir) === 'webapp' ? path.resolve(currentDir, '..') : currentDir;
 }
 
 /**
- * Resolves the absolute path to the Python ingestion script.
+ * Get the absolute path to the Python ingestion script.
  */
 export function getIngestScriptPath(): string {
   return path.join(getProjectRoot(), 'scripts', 'ingest.py');
 }
 
 /**
- * Resolves the best available Python executable path.
- * Prefers the project's virtual environment (venv) if it exists.
+ * Use the project's virtual environment when available. Fall back to system Python.
  */
 export async function getPythonPath(): Promise<string> {
   const projectRoot = getProjectRoot();

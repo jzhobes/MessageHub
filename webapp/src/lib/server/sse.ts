@@ -1,23 +1,21 @@
 import { NextApiResponse } from 'next';
 
 /**
- * Interface for the return value of initSSE
+ * Helpers returned for an open SSE response.
  */
 export interface SSEStream {
   /**
-   * Sends a structured data event to the client.
-   * Format: data: {"type": "type", "payload": payload} \n\n
+   * Send one structured event as `data: {"type": "type", "payload": payload}\n\n`.
    */
   send: (type: string, payload: unknown) => void;
   /**
-   * Cleans up resources (e.g. heartbeat) and closes the response stream.
+   * Stop the heartbeat and close the response stream.
    */
   close: () => void;
 }
 
 /**
- * Initializes a NextApiResponse for Server-Sent Events (SSE).
- * Sets proper headers and provides a convenience helper for sending events.
+ * Set up a Next.js response for SSE and return helpers for sending events and closing the stream.
  */
 export function setupSSE(res: NextApiResponse, options: { heartbeat?: boolean } = {}): SSEStream {
   res.setHeader('Content-Type', 'text/event-stream');
@@ -33,7 +31,7 @@ export function setupSSE(res: NextApiResponse, options: { heartbeat?: boolean } 
   if (options.heartbeat) {
     heartbeatInterval = setInterval(() => {
       res.write(': keepalive\n\n');
-    }, 5000); // 5s is usually sufficient for keeping connection alive
+    }, 5000); // A heartbeat every 5 seconds is usually enough to keep the connection open.
   }
 
   const close = () => {

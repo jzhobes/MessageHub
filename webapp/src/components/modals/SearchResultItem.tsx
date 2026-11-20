@@ -20,9 +20,8 @@ interface SearchResultItemProps {
 }
 
 /**
- * Splits `text` into plain strings and highlighted `<span>` elements matching terms parsed by
- * `parseSearchQuery` across all `OR` groups. Strips `*` and `?` wildcards so only literal query terms
- * are highlighted rather than wildcard expansions.
+ * Highlight the literal terms from every `OR` group as `<span>` elements. Strip `*` and `?` so only
+ * the typed parts of wildcard terms are highlighted.
  */
 function highlightText(text: string, query: string) {
   if (!query.trim()) {
@@ -39,8 +38,8 @@ function highlightText(text: string, query: string) {
     return text;
   }
 
-  // Build regex pattern using the CLEAN terms (without wildcards)
-  // This highlights just the literal search terms, not the wildcard matches
+  // Build the regex from the terms with wildcards removed.
+  // Highlight the parts the user actually typed.
   const cleanTerms = allTokens.map((t) => {
     // Remove wildcards and escape regex special chars
     const term = t.clean.replace(/[*?]/g, '').replace(/[.+^${}()|[\]\\]/g, '\\$&');

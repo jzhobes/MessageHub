@@ -78,7 +78,7 @@ export default function SearchModal({ isOpen, onClose, onNavigate }: SearchModal
         q: searchQuery,
         page: pageNum.toString(),
       });
-      // Infinite scroll appends results without updating facet counts, so skip facets after page 1.
+      // Only fetch facets on page 1. Scrolling adds results and keeps the existing counts.
       if (pageNum > 1) {
         params.set('includeFacets', '0');
       }
@@ -121,7 +121,7 @@ export default function SearchModal({ isOpen, onClose, onNavigate }: SearchModal
     setLoading(false);
   };
 
-  // Debounce effect for Query/Filters
+  // Wait for typing and filter changes to settle before fetching.
   useEffect(() => {
     if (!isOpenRef.current) {
       console.log('Search is closed');

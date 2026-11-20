@@ -8,7 +8,7 @@ interface RemoteFetchOptions extends Pick<GuardedFetchOptions, 'headers' | 'allo
 }
 
 /**
- * Checks whether a remote request was rejected by the URL safety policy.
+ * Check whether the URL safety policy rejected a remote request.
  *
  * @param error - The error thrown by the remote request
  * @returns Whether the URL was invalid or blocked
@@ -23,9 +23,8 @@ export function isBlockedRemoteUrl(error: unknown): boolean {
 }
 
 /**
- * Fetches a public HTTP or HTTPS URL with SSRF protection.
- * Applies a single deadline to DNS resolution, redirects, and body reads,
- * and limits the number of response bytes buffered by readBody.
+ * Fetch a public HTTP or HTTPS URL with SSRF protection. DNS, redirects, and body reads share one
+ * deadline. `readBody` also caps the number of bytes it buffers.
  *
  * @param url - The remote URL to fetch
  * @param options - Request headers, allowed hosts, cookies, and response limits

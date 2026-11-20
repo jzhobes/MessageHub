@@ -99,7 +99,7 @@ describe('/api/studio/sample-thread-days', () => {
     });
     seedMessage(memDb, { thread_id: 'chat_1', sender_name: 'Alice', timestamp_ms: day2 + 3000, content: 'Yep!' });
 
-    // Virtual Facebook event thread to also exercise multi-thread iteration (setImmediate yield)
+    // Add a virtual event thread so we also exercise the event-loop yield between threads.
     seedThread(memDb, {
       id: 'evt_1',
       platform: 'facebook',

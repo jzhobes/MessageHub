@@ -22,10 +22,10 @@ interface SearchRow {
 }
 
 /**
- * Executes index-driven FTS5 + SQL `LIKE` search across message content, thread titles, and sender names
- * using `parseSearchQuery` (`OR` groups, quoted phrases, `^` word-start, `*`/`?` wildcards).
- * Materializes candidate IDs once per request in a temp table and returns paginated HTML-stripped context snippets
- * alongside optional self-excluding platform/category facets and top-20 consolidated sender counts.
+ * Search message bodies, thread titles, and sender names with FTS5 and `LIKE`. The parser handles
+ * `OR`, quotes, `^` word starts, and `*`/`?` wildcards.
+ * Collect candidate IDs once in a temp table. Return a page of plain-text snippets and, when
+ * requested, self-excluding platform/category facets and the top 20 consolidated sender counts.
  */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { q, page = '1', platform, threadId } = req.query;
@@ -39,7 +39,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const PAGE_SIZE = 100;
   const offset = (pageNum - 1) * PAGE_SIZE;
 
-  // Scroll pagination passes includeFacets=0 to skip redundant facet aggregations after page 1.
+  // Scroll requests pass includeFacets=0 because page 1 already has the counts.
   const includeFacetsParam = Array.isArray(req.query.includeFacets)
     ? req.query.includeFacets[0]
     : req.query.includeFacets;
@@ -84,8 +84,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     let useDirectThreadScope = false;
     if (validThreadIds.length > 0) {
-      // Bounded covering-index probe on idx_content_thread_id: short-circuits empty/missing
-      // threads immediately and routes small thread scopes away from global FTS5 + CTE work.
+      // Check the thread through idx_content_thread_id with a bounded probe.
+      // That catches empty or missing threads and lets small ones skip global FTS5 and the CTEs.
       const threadPlaceholders = validThreadIds.map(() => '?').join(',');
       const probeRow = dbInstance
         .prepare(
@@ -118,8 +118,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     let senderRows: { sender_name: string; count: number }[] = [];
     let dataRows: SearchRow[] = [];
 
-    // Execute all temp-table DDL/queries synchronously before any `await` so the singleton DB connection
-    // never overlaps temp._search_base across requests.
+    // Finish all temp-table work before the first await.
+    // That keeps requests from overlapping on temp._search_base on the shared SQLite connection.
     try {
       dbInstance.exec('DROP TABLE IF EXISTS temp._search_base');
       dbInstance.exec(CREATE_SEARCH_BASE_TEMP_TABLE_SQL);
@@ -128,8 +128,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       if (insertInfo.changes > 0) {
         if (includeFacets) {
-          // Self-excluding facets: platform counts ignore the platform filter (only checking category),
-          // and category counts ignore the category filter (only checking platform).
+          // Count platforms using the category filter only.
+          // Count categories using the platform filter only.
           platformRows = dbInstance
             .prepare(
               `SELECT platform, count(*) as count
@@ -150,8 +150,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             .all() as { label: string; count: number }[];
 
           if (validDbPlatforms.length === 0) {
-            // When no platform filter is active, matches_platform is 1 for all rows, so total
-            // equals the sum of the platform facet counts without running another count query.
+            // With no platform filter, every row has matches_platform = 1.
+            // Sum the platform facets for the total and skip a separate count query.
             total = platformRows.reduce((sum, r) => sum + r.count, 0);
           } else {
             const countResult = dbInstance
@@ -179,8 +179,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
 
         if (total > 0 && offset < total) {
-          // Paginate temp._search_base before joining content so large HTML bodies are read only
-          // for the current page; repeat ORDER BY on the outer query since SQLite join order is unspecified.
+          // Page the temp table first so we only read HTML bodies for this page.
+          // Repeat ORDER BY outside the join because SQLite can reorder joined rows.
           dataRows = dbInstance
             .prepare(
               `SELECT m.id, m.thread_id, m.sender_name, m.timestamp_ms, m.content, s.platform, t.title as thread_title
@@ -202,7 +202,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       try {
         dbInstance.exec('DROP TABLE IF EXISTS temp._search_base');
       } catch {
-        // Ignore cleanup errors to preserve any primary query exception.
+        // Keep the original query error if cleanup also fails.
       }
     }
 
@@ -226,11 +226,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     let sortedSenders: Record<string, number> = {};
     if (includeFacets && senderRows.length > 0) {
-      // Process Senders (Me vs Others)
+      // Group sender aliases under Me or the matching participant.
       const myNames = await getMyNames();
       const myNamesSet = new Set(myNames.map((n) => n.toLowerCase()));
 
-      // Prefer human-readable names over emails/phones for display
+      // Prefer a readable name over an email address or phone number.
       const humanReadableNames = myNames.filter((n) => !n.includes('@') && !n.startsWith('+'));
       const meDisplayName =
         (humanReadableNames.length > 0
@@ -256,12 +256,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const results = dataRows.map((row) => {
       let snippet = row.content || '';
 
-      // Clean HTML for Gmail and HTML-heavy content
+      // Strip markup from Gmail and other HTML-heavy messages.
       if (row.platform === 'google_mail' || snippet.includes('<') || snippet.includes('&')) {
         snippet = stripHtml(snippet);
       }
 
-      // Generate context-aware snippet that centers on the search query
+      // Put the match in context so the snippet shows why it came back.
       snippet = generateContextSnippet(snippet, queryStr, 300);
 
       return {

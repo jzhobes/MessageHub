@@ -8,11 +8,12 @@ import appConfig from '@/lib/shared/appConfig';
 import type { NextApiRequest, NextApiResponse } from 'next';
 
 /**
- * Manages workspace path configuration.
- * - `GET`: validates the active `WORKSPACE_PATH` against the allowed workspace root and reports existence.
- * - `POST`: validates safety, nesting, and writability for `workspacePath`, optionally creates the
- *   directory (`create: true`), closes the active SQLite connection before updating `appConfig`, and
- *   persists the setting to `.env`.
+ * Read or change the workspace path.
+ *
+ * - GET checks the active `WORKSPACE_PATH` against the workspace root and reports whether it
+ *   exists.
+ * - POST checks the requested path for safety, nesting, and write access. Set `create: true` to
+ *   create the folder. Close SQLite before switching `appConfig` and save the path to .env.
  */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === 'GET') {
@@ -67,7 +68,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // 2. Active path check
-    // If user re-sets the same path, we allow it to refresh state and persist.
+    // Reusing the current path is fine. Refresh and save the configuration again.
 
     // 3. Writability check
     if (meta.exists && !meta.isWritable) {
@@ -78,7 +79,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     let finalExists = exists;
     let finalEmpty = isEmpty;
 
-    // Handle Creation if not exists
+    // Create the folder if it's missing and creation was requested.
     if (!finalExists && create) {
       try {
         resolved = fileSystem.resolveSafePath('workspace', resolved);
@@ -93,9 +94,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     }
 
-    // Update runtime config only if valid (exists)
+    // Switch the active workspace once the path exists and passes validation.
     if (finalExists) {
-      // Close active connection before changing path to prevent zombie instances
+      // Close SQLite first so the old workspace connection doesn't stick around.
       db.close();
       appConfig.WORKSPACE_PATH = resolved;
       try {

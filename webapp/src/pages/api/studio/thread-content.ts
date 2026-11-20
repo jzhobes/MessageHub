@@ -5,9 +5,9 @@ import { containsHtmlOrEntities, stripHtml, stripUrls } from '@/lib/shared/strin
 import type { NextApiRequest, NextApiResponse } from 'next';
 
 /**
- * Batch-fetches cleaned, URL-stripped message samples (`POST`) keyed by thread ID for client-side
- * persona classification: up to 15 user messages per real thread and up to 20 context-prefixed items
- * for virtual Facebook post/event IDs.
+ * On POST, return clean, URL-free samples keyed by thread ID for the browser's persona classifier.
+ * Take up to 15 user messages from a real thread or 20 items with context prefixes from a virtual
+ * Facebook post/event thread.
  */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -25,7 +25,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const myNames = await getMyNames();
     const dbInstance = db.get();
 
-    // Initialize all requested IDs with empty arrays
+    // Give each requested thread an array, even if we find no samples for it.
     const result = ids.reduce(
       (acc, id) => {
         acc[id] = [];

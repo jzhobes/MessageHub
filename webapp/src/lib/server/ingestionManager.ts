@@ -62,7 +62,7 @@ export const ingestionManager = {
         for (const line of lines) {
           if (line.trim()) {
             state.logs.push({ type, payload: line.trim() });
-            // Limit buffer size to last 500 lines
+            // Keep the latest 500 lines for clients that reconnect.
             if (state.logs.length > 500) {
               state.logs.shift();
             }

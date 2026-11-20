@@ -81,7 +81,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           });
         }
       } catch {
-        // Skip invalid JSON
+        // Skip rows with malformed media JSON.
       }
     });
 

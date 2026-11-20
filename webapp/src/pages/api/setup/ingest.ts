@@ -5,10 +5,10 @@ import { setupSSE } from '@/lib/server/sse';
 import type { NextApiRequest, NextApiResponse } from 'next';
 
 /**
- * Starts or attaches to the singleton ingestion process over SSE (`POST`), replaying buffered logs
- * and streaming live stdout/stderr. Optional `files` in the request body are jailed to
- * `ROOT_IMPORT_PATH` and extracted directly without copying. Client disconnects detach listeners
- * without terminating the underlying child process.
+ * Start ingestion with POST or reconnect to the job already running. Replay buffered logs, then
+ * stream stdout and stderr over SSE.
+ * Extract any supplied `files` in place from within `ROOT_IMPORT_PATH`. When the client
+ * disconnects, detach its listeners and leave ingestion running.
  */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -42,19 +42,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const child = await ingestionManager.start(deleteArchives, resolvedFiles);
   const initialState = ingestionManager.getState();
 
-  // 1. Replay buffered logs
+  // Send what happened before this client connected.
   for (const log of initialState.logs) {
     stream.send(log.type, log.payload);
   }
 
-  // 2. Already done?
+  // Check whether ingestion finished before we attached.
   if (!initialState.isRunning && initialState.isComplete) {
     stream.send('done', { code: initialState.exitCode });
     stream.close();
     return;
   }
 
-  // 3. Attach current listeners
+  // Forward new events to this client.
   const onStdout = (data: Buffer | string) => {
     const lines = data.toString().split('\n');
     for (const line of lines) {
@@ -83,7 +83,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   child.on('close', onClose);
 
   req.on('close', () => {
-    // Only remove local listeners, DON'T kill the child.
+    // Detach this client's listeners and let the child process keep running.
     child.stdout?.removeListener('data', onStdout);
     child.stderr?.removeListener('data', onStderr);
     child.removeListener('close', onClose);

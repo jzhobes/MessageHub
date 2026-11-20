@@ -56,7 +56,7 @@ describe('/api/studio/thread-content', () => {
     seedThread(memDb, { id: 'post_1', platform: 'facebook', title: 'Post', labels: ['post'] });
     seedThread(memDb, { id: 'evt_1', platform: 'facebook', title: 'Tech Meetup', labels: ['event'] });
 
-    // Seed 18 messages for real thread -> capped at 15, plus one URL-only HTML message skipped after cleaning
+    // Seed 18 messages to exercise the 15-message cap. Add URL-only HTML to check that cleaning drops it.
     seedMessage(memDb, {
       thread_id: 't_real',
       sender_name: 'Me',
@@ -72,7 +72,7 @@ describe('/api/studio/thread-content', () => {
       });
     }
 
-    // Seed 22 post rows -> capped at 20 with 'Social post: ' prefix
+    // Seed 22 posts to check the 20-item cap and “Social post: ” prefix.
     for (let i = 1; i <= 22; i++) {
       seedMessage(memDb, {
         thread_id: 'post_1',

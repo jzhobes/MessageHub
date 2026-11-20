@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { apiFetch, resolveDemoDownloadUrl } from '@/lib/client/apiClient';
 import { IS_DEMO_MODE } from '@/lib/client/env';
+import { getDatasetBaseName } from '@/lib/shared/dataset/datasetFilename';
 
 export interface DatasetGenerationPayload {
   threadIds: string[];
@@ -43,8 +44,8 @@ function waitWithAbort(ms: number, signal: AbortSignal): Promise<void> {
 }
 
 /**
- * Owns the asynchronous dataset generation lifecycle: job creation, sequential non-overlapping
- * status polling, browser download trigger on completion, and cancellation on unmount or re-run.
+ * Start a dataset job, poll one request at a time, and download the result when it's ready. Cancel
+ * tracking on unmount or when a new run starts.
  */
 export function useDatasetGeneration(pollIntervalMs = 1000) {
   const [generating, setGenerating] = useState(false);
@@ -65,7 +66,7 @@ export function useDatasetGeneration(pollIntervalMs = 1000) {
   }, []);
 
   const generate = useCallback(
-    async (payload: DatasetGenerationPayload, downloadFileName: string) => {
+    async (payload: DatasetGenerationPayload) => {
       abortControllerRef.current?.abort();
       const controller = new AbortController();
       abortControllerRef.current = controller;
@@ -130,7 +131,7 @@ export function useDatasetGeneration(pollIntervalMs = 1000) {
               }
               const a = document.createElement('a');
               a.href = downloadUrl;
-              a.download = `${downloadFileName || 'virtual_me'}.zip`;
+              a.download = `${getDatasetBaseName(payload.datasetName, payload.outputFormat)}.zip`;
               document.body.appendChild(a);
               a.click();
               document.body.removeChild(a);

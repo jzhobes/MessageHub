@@ -49,7 +49,7 @@ describe('/api/jump', () => {
     memDb = createMemoryDb();
     seedThread(memDb, { id: 'chat_1', platform: 'instagram', labels: ['dm', 'message'] });
 
-    // Seed 102 messages: first 2 share oldest timestamp 1000; remaining 100 have higher timestamps
+    // Seed two rows at the oldest timestamp and 100 newer ones.
     const firstId = seedMessage(memDb, {
       thread_id: 'chat_1',
       sender_name: 'Alice',
@@ -73,7 +73,7 @@ describe('/api/jump', () => {
 
     vi.spyOn(db, 'get').mockReturnValue(memDb);
 
-    // secondSameTsId has 100 newer rows -> rank 101 -> page 2
+    // There are 100 newer rows, so secondSameTsId is 101st and lands on page 2.
     const callPage2 = createMocks({ method: 'GET', query: { messageId: String(secondSameTsId) } });
     await handler(callPage2.req, callPage2.res);
     expect(callPage2.res._getStatusCode()).toBe(200);
@@ -85,7 +85,7 @@ describe('/api/jump', () => {
       category: 'message',
     });
 
-    // firstId has same timestamp as secondSameTsId (higher id) + 100 newer -> rank 102 -> page 2
+    // firstId is 102nd because the other row at that timestamp sorts ahead of it.
     const callTieBreaker = createMocks({ method: 'GET', query: { messageId: String(firstId) } });
     await handler(callTieBreaker.req, callTieBreaker.res);
     expect(callTieBreaker.res._getJSONData().page).toBe(2);

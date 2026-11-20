@@ -74,7 +74,7 @@ export default function MediaPanel({ threadId, platform, isOpen, onClose, onMedi
     };
   }, [isOpen, threadId]);
 
-  // Flatten media with month headers for VirtuosoGrid
+  // Flatten the items and month headers into one list for VirtuosoGrid.
   const gridData = useMemo(() => {
     const data: Array<{ type: 'header'; monthName: string } | { type: 'item'; item: MediaItem }> = [];
 

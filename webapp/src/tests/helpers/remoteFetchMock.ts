@@ -2,7 +2,7 @@ import dns from 'node:dns';
 
 import { beforeEach, vi } from 'vitest';
 
-// Exercise the real URL/redirect policy while replacing only DNS and the HTTP transport.
+// Keep the real URL and redirect checks in play. Stub DNS and the HTTP transport.
 vi.mock('guarded-fetch', async (importOriginal) => {
   const actual = await importOriginal<typeof import('guarded-fetch')>();
   return {

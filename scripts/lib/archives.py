@@ -16,9 +16,10 @@ FALLBACK_COMPRESSED_MULTIPLIER = 2.5
 
 def estimate_required_disk_space(archives):
     """
-    Estimates peak workspace disk space (in bytes) required to extract and index `archives`.
-    Uses exact uncompressed central-directory sizes (+20% DB/index headroom) for `.zip` files,
-    falling back to `2.5x` compressed size for `.tar.gz`/`.tgz` or unreadable zips.
+    Estimate peak workspace space in bytes, including extraction and indexing.
+    For ZIPs, use the uncompressed sizes from the central directory and add 20% for the database and
+    indexes.
+    For tarballs and ZIPs we can't read, use 2.5 times the compressed size.
     """
     required_bytes = 0.0
     for archive in archives:
@@ -37,10 +38,9 @@ def estimate_required_disk_space(archives):
 
 def extract_archives_found(search_dirs, target_root, platform_filter="all"):
     """
-    Scans specified directories for .zip/.tar.gz files and extracts them
-    into a subdirectory of target_root named after the zip file.
-    Returns: tuple (processed_count, set_of_platforms_detected, archive_moves)
-    archive_moves: list of (original_Path, processed_Path)
+    Find ZIP and .tar.gz files and unpack them into archive-named folders under target_root.
+    Return (processed_count, set_of_platforms_detected, archive_moves). Each move is (original_Path,
+    processed_Path).
     """
     return extract_archives_found_with_opts(search_dirs, target_root, platform_filter, False)
 
@@ -49,12 +49,11 @@ def extract_archives_found_with_opts(
     search_dirs, target_root, platform_filter="all", delete_after=False, explicit_archives=None
 ):
     """
-    Scans specified directories (and any explicit archive paths) for .zip/.tar.gz/.tgz files
-    and extracts them into target_root (or platform subdirectories).
-    Explicit archives are left untouched in place when delete_after=False, and deleted after
-    successful extraction when delete_after=True.
-    Returns: tuple (processed_count, set_of_platforms_detected, archive_moves)
-    archive_moves: list of (original_Path, processed_Path_or_None)
+    Find .zip, .tar.gz, and .tgz files in the given directories or explicit paths.
+    Unpack them under target_root or its platform folders. Keep explicit archives in place unless
+    delete_after is True, then delete them after successful extraction.
+    Return (processed_count, set_of_platforms_detected, archive_moves). Each move is (original_Path,
+    processed_Path_or_None).
     """
     processed = 0
     target_root = Path(target_root)
@@ -94,8 +93,7 @@ def extract_archives_found_with_opts(
 
     def process_archive(archive_path):
         """
-        Worker function to extract a single archive.
-        Returns (success_bool, detected_platform_set, move_info)
+        Extract one archive and report (success_bool, detected_platform_set, move_info).
         """
         local_detected = set()
         is_zip = archive_path.suffix == ".zip"
@@ -186,7 +184,7 @@ def extract_archives_found_with_opts(
                 print(f"  Skipping {archive_path.name}: Unknown structure.")
                 return False, None, None
 
-            # Prepare destination directory (Locked)
+            # Hold the lock while preparing the destination.
             with extraction_lock:
                 if not dest_dir.exists():
                     dest_dir.mkdir(parents=True, exist_ok=True)
@@ -194,7 +192,7 @@ def extract_archives_found_with_opts(
                     print(f"  [Error] Cannot extract to {dest_dir}: file already exists with this name.")
                     return False, None, None
 
-            # Perform Extraction (Unlocked for Parallelism)
+            # Release the lock for extraction so workers can run in parallel.
             members = archive_obj.namelist() if is_zip else archive_obj.getmembers()
             total_members = len(members)
             print(f"[ArchiveStarted]: {archive_path.name}|{total_members}")
@@ -205,7 +203,7 @@ def extract_archives_found_with_opts(
             for i, member in enumerate(members):
                 member_name = member if is_zip else member.name
                 try:
-                    # Security Check: Prevent Zip Slip (path traversal)
+                    # Keep archive entries inside the destination to prevent Zip Slip.
                     target_path = os.path.realpath(os.path.join(dest_dir_real, member_name))
                     try:
                         is_safe = os.path.commonpath([dest_dir_real, target_path]) == dest_dir_real
@@ -241,7 +239,7 @@ def extract_archives_found_with_opts(
                 except Exception:
                     pass
 
-        # Post-Processing: Delete, Preserve (explicit), or Move to .processed
+        # Delete the archive, leave an explicit input in place, or move it to .processed.
         try:
             with extraction_lock:
                 if delete_after:
@@ -260,7 +258,7 @@ def extract_archives_found_with_opts(
                         timestamp = int(time.time() * 1000)
                         destination = processed_dir / f"{archive_path.stem}_{timestamp}{archive_path.suffix}"
 
-                    # Double check archive still exists
+                    # Check again in case the archive disappeared during extraction.
                     if not archive_path.exists():
                         return True, local_detected, None
 
@@ -285,7 +283,7 @@ def extract_archives_found_with_opts(
                 if move_info:
                     archive_moves.append(move_info)
 
-    # Post-Extraction Structural Cleanup (Sequential)
+    # Consolidate platform folders after all extraction workers finish.
     # Google Voice
     if "google_voice" in detected_platforms:
         src = target_root / "Takeout" / "Voice"
@@ -313,7 +311,7 @@ def extract_archives_found_with_opts(
             if not merge_folders(src, dst):
                 print(f"  Warning: Incomplete consolidation for {src}; failed source files were preserved.")
 
-    # Final cleanup: remove empty Takeout folder
+    # Remove the Takeout folder once it's empty.
     takeout_root = target_root / "Takeout"
     if takeout_root.exists() and not any(takeout_root.iterdir()):
         try:

@@ -6,8 +6,7 @@ import { getPlatformDbValue } from '@/lib/shared/platforms';
 import type { NextApiRequest, NextApiResponse } from 'next';
 
 /**
- * API Handler to list message threads for a specific platform.
- * Reads from the SQLite database.
+ * Read the selected platform's threads from SQLite.
  */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { platform, type } = req.query;
@@ -19,10 +18,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const platformInputs = platform ? (Array.isArray(platform) ? platform : [platform]) : [];
   const validDbPlatforms = platformInputs.map(getPlatformDbValue).filter(Boolean);
 
-  // Retrieve 'My Names' for title filtering
+  // Load the user's identities so we can leave them out of inferred titles.
   const myNames = await getMyNames();
 
-  // Use correlated subquery to get content record count efficiently
+  // Count each thread's content rows in a correlated subquery.
   let query = `
     SELECT t.*, EXISTS(SELECT 1 FROM thread_labels el WHERE el.thread_id=t.id AND el.label='e2ee_cutover') as e2ee_cutover, EXISTS(SELECT 1 FROM thread_labels al WHERE al.thread_id=t.id AND al.label='archived') as archived, (SELECT COUNT(*) FROM content c WHERE c.thread_id = t.id) as msg_count
     FROM threads t
@@ -66,7 +65,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const rows = dbInstance.prepare(query).all(...params) as ThreadRow[];
     const PAGE_SIZE = 100;
 
-    // 2. Get category counts for the current platform filter using labels
+    // Count labels within the current platform selection.
     const counts: Record<string, number> = {
       message: 0,
       event: 0,

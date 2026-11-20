@@ -4,18 +4,18 @@ import path from 'path';
 
 import { vi } from 'vitest';
 
-// Set Workspace Path to the sample data created by build_samples.sh
+// Point the test workspace at the output of build_samples.sh.
 const samplesDir = path.resolve(__dirname, '../data_samples');
 process.env.WORKSPACE_PATH = samplesDir;
 
-// Verify DB exists
+// Check that the sample database is ready.
 const dbPath = path.join(samplesDir, 'messagehub.db');
 if (!fs.existsSync(dbPath)) {
   console.log('⚠️ Sample database not found. Building it now...');
   try {
     const projectRoot = path.resolve(__dirname, '..');
 
-    // 2. Run build samples
+    // Build the sample workspace if the database is missing.
     execSync('./build_samples.sh', {
       cwd: projectRoot,
       stdio: 'inherit',
@@ -26,7 +26,7 @@ if (!fs.existsSync(dbPath)) {
   }
 }
 
-// Mock HTMLDialogElement methods for JSDOM
+// Provide the dialog methods jsdom is missing.
 if (typeof HTMLDialogElement !== 'undefined') {
   HTMLDialogElement.prototype.showModal = vi.fn(function (this: HTMLDialogElement) {
     this.open = true;
@@ -36,7 +36,7 @@ if (typeof HTMLDialogElement !== 'undefined') {
   });
 }
 
-// Mock Popover API methods if they don't exist in JSDOM
+// Fill in Popover API methods only when jsdom doesn't provide them.
 if (typeof HTMLElement !== 'undefined') {
   if (!HTMLElement.prototype.showPopover) {
     HTMLElement.prototype.showPopover = vi.fn();

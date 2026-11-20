@@ -1,7 +1,6 @@
 /**
- * Infers a display title for a thread.
- * If the title is missing (common in 1:1 chats), it generates one based on participants,
- * excluding the user's own identities.
+ * Use the stored thread title when available. If it's missing, build one from the other
+ * participants' names, which is common for one-to-one chats.
  *
  * @param originalTitle - The raw title from the database
  * @param participants - List of participant names
@@ -20,7 +19,7 @@ export function inferThreadTitle(
     const others = participants.filter((p) => !myNames.includes(p));
 
     if (others.length === 0) {
-      // Talking to self or only me in list
+      // If only my names remain, this is a thread with myself.
       title = `${myNames[0] || 'Me'} (You)`;
     } else {
       title = others.join(', ');

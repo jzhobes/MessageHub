@@ -42,10 +42,9 @@ interface PlatformSelectionDropdownProps {
 }
 
 /**
- * Hierarchical platform and category multi-select dropdown where empty `selectedPlatforms` and
- * `selectedCategories` sets represent "All Platforms". Toggling a parent platform toggles all of its
- * child categories; unchecking only a subset of child categories keeps the parent ID in
- * `selectedPlatforms` and renders the parent checkbox as indeterminate.
+ * Select platforms and categories together. Empty selections mean “All Platforms.”
+ * Toggling a platform toggles all its categories. If only some categories are checked, keep the
+ * platform ID selected and show a mixed checkbox.
  */
 export default function PlatformSelectionDropdown({
   open,
@@ -86,9 +85,9 @@ export default function PlatformSelectionDropdown({
     if (nextCategories.has(categoryId)) {
       nextCategories.delete(categoryId);
 
-      // If no categories left for this platform, should we uncheck platform?
-      // In hierarchy mode, if any category is off, the platform is Indeterminate
-      // We keep the platform ID in the set if it's partially checked
+      // Recheck the parent's selection after changing a category.
+      // A platform with only some categories checked is indeterminate.
+      // Keep its ID selected while at least one category is checked.
     } else {
       nextCategories.add(categoryId);
       // Ensure platform is in current set if a child is checked
@@ -147,7 +146,7 @@ export default function PlatformSelectionDropdown({
 
             {platform.categories?.map((cat) => {
               const catCount = counts?.categories?.[cat.id] ?? 0;
-              // For FB messages specifically, we sometimes have it as facebook:message in counts
+              // Facebook message counts can come back under facebook:message.
               const displayCount = catCount || (counts?.categories?.[`${platform.id}:${cat.id}`] ?? 0);
 
               return (

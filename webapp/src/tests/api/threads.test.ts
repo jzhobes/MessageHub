@@ -100,7 +100,7 @@ describe('/api/threads', () => {
       labels: ['message'],
     });
 
-    // 105 messages in gm_1 -> pageCount 2
+    // The 105 messages in gm_1 should span two pages.
     for (let i = 0; i < 105; i++) {
       seedMessage(memDb, { thread_id: 'gm_1', sender_name: 'Alice', timestamp_ms: 100 + i, content: `m${i}` });
     }
@@ -108,7 +108,7 @@ describe('/api/threads', () => {
     vi.spyOn(db, 'exists').mockReturnValue(true);
     vi.spyOn(db, 'get').mockReturnValue(memDb);
 
-    // Display label 'Gmail' maps to 'google_mail', filtered by type='inbox'
+    // “Gmail” should resolve to google_mail and still honor the inbox filter.
     const inboxCall = createMocks({ method: 'GET', query: { platform: 'Gmail', type: 'inbox' } });
     await handler(inboxCall.req, inboxCall.res);
 

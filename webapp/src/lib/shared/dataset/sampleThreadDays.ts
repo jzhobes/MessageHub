@@ -49,8 +49,8 @@ function daysBetween(dateA: string, dateB: string): number {
 }
 
 /**
- * Scores eligible calendar days and picks a time-diverse set of days targeting
- * ~100 total messages (85–120 soft window).
+ * Score eligible days and spread the picks across time. Aim for 100 messages, with 85–120 as a soft
+ * range.
  */
 export function selectBestDays(
   days: DaySummaryStat[],
@@ -144,7 +144,7 @@ export function selectBestDays(
           continue;
         }
       }
-      // Avoid blowing far past softMax if we already have a decent sample
+      // If we already have enough messages, skip days that would take us well over softMax.
       if (totalMsgs >= Math.round(target * 0.6) && totalMsgs + candidate.totalMsgs > softMax) {
         continue;
       }
@@ -156,13 +156,13 @@ export function selectBestDays(
     }
   };
 
-  // Pass 1: Spread across distinct months / >= 14 days apart
+  // Start with different months or dates at least two weeks apart.
   tryPick(true);
-  // Pass 2: Fill remaining budget from any remaining high-scoring days
+  // Use the remaining high-scoring days to fill the rest of the budget.
   if (totalMsgs < softMin) {
     tryPick(false);
   }
-  // Pass 3: Always pick at least the single best day if nothing was picked
+  // If nothing made the cut, keep the best day.
   if (picked.length === 0 && sorted.length > 0) {
     picked.push(sorted[0]);
   }
@@ -172,7 +172,7 @@ export function selectBestDays(
 }
 
 /**
- * Pure aggregation and day-selection logic shared between SQLite and in-memory demo stores.
+ * Share the same daily counts and selection rules between SQLite and the in-memory demo.
  */
 export function sampleThreadRows(
   rows: RawScanRow[],

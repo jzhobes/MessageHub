@@ -87,19 +87,9 @@
   flex-shrink: 0;
 }
 
-.sidebarButton {
-  background: none;
-  border: none;
-  width: 100%;
-  text-align: left;
-  font: inherit;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  color: inherit;
-  white-space: nowrap;
+.sidebarLink {
+  text-decoration: none;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .tooltipTrigger {

@@ -15,7 +15,6 @@
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  padding-inline: 0 20px;
   font-weight: 600;
   font-size: 1.1rem;
   color: var(--text-primary);
@@ -34,10 +33,9 @@
 }
 
 .pageIndicator {
-  font-size: 0.8rem;
-  color: var(--text-secondary);
-  margin-inline-start: 10px;
-  margin-left: auto;
+  display: flex;
+  align-self: stretch;
+  margin-inline-start: auto;
   flex-shrink: 0;
 }
 
@@ -79,7 +77,7 @@
   font-size: 1.2rem;
 }
 
-/* Bubble Grouping Logic via Nesting */
+/* Group adjacent message bubbles using nested selectors. */
 .messageAlignLeft {
   :global(.messageBubble),
   :global(.eventContainer),
@@ -250,7 +248,7 @@
   overflow-y: auto;
 }
 
-/* Studio Project Mode Day Header Bar (only rendered when onToggleDay is passed) */
+/* Show this Studio day header only when onToggleDay is supplied. */
 .dayHeaderBar {
   display: flex;
   align-items: center;

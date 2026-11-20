@@ -24,9 +24,9 @@ export class EventRecordBuilder {
   }
 
   /**
-   * Sorts collected event entries chronologically, groups them under `## <year>` Markdown headings,
-   * and wraps them with a timeline preamble and voice-interpretation notes.
-   * Returns an empty string if no entries were added.
+   * Write the events in date order under Markdown headings for each year. Include the timeline
+   * intro and notes on how to read it as voice context.
+   * Return an empty string when there are no entries.
    */
   public finalize(): string {
     if (this.entries.length === 0) {
@@ -96,7 +96,7 @@ When referencing this timeline:
       }
       if (c === 'Created Event') {
         return 'Joined and later created';
-      } // Common FB pattern for self-owned events
+      } // Facebook often uses this wording for events the user owns.
     }
 
     if (c.toLowerCase().includes('joined')) {

@@ -7,9 +7,16 @@ import appConfig from '@/lib/shared/appConfig';
 
 import type { NextApiRequest, NextApiResponse } from 'next';
 
+export const config = {
+  api: {
+    // Media often goes over Next.js's default 4 MB warning threshold.
+    responseLimit: false,
+  },
+};
+
 /**
- * API Handler to serve media files (images, videos) from the local data directory.
- * Prevents path traversal and handles platform-specific path structures.
+ * Serve media from the local workspace. Resolve platform-specific paths and keep file access inside
+ * the workspace.
  *
  * @param req - Next.js API request containing 'path' and 'platform' query parameters.
  * @param res - Next.js API response
@@ -21,7 +28,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).send('Missing path or platform');
   }
 
-  // Normalize to single strings
+  // Read one value per query parameter.
   try {
     filePath = decodeURIComponent(Array.isArray(filePath) ? filePath[0] : filePath);
   } catch {
@@ -29,7 +36,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
   platform = Array.isArray(platform) ? platform[0] : platform;
 
-  // Handle external URLs (for Gmail proxies, etc.)
+  // Some attachments point to external URLs, such as Gmail proxies.
   if (filePath.startsWith('http')) {
     try {
       const { response, readBody } = await fetchRemote(filePath, {
@@ -61,7 +68,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
   }
 
-  // SECURITY: Prevent path traversal
+  // Keep resolved paths inside the workspace to prevent path traversal.
   if (filePath.includes('..')) {
     return res.status(400).send('Invalid path');
   }

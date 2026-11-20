@@ -23,7 +23,7 @@ export interface SeedMessageInput {
 }
 
 /**
- * Creates an in-memory SQLite database matching the production schema in data_samples/messagehub.db.
+ * Create an in-memory SQLite database using the schema in `data_samples/messagehub.db`.
  */
 export function createMemoryDb(): Database.Database {
   const db = new Database(':memory:');
@@ -74,7 +74,7 @@ export function createMemoryDb(): Database.Database {
 }
 
 /**
- * Inserts a thread row and optional labels into the given SQLite database.
+ * Add a thread and any supplied labels to the test database.
  */
 export function seedThread(db: Database.Database, input: SeedThreadInput): void {
   db.prepare(
@@ -101,7 +101,7 @@ export function seedThread(db: Database.Database, input: SeedThreadInput): void 
 }
 
 /**
- * Inserts a content message row and returns its autoincrement row ID.
+ * Add a message and return its generated row ID.
  */
 export function seedMessage(db: Database.Database, input: SeedMessageInput): number {
   const result = db

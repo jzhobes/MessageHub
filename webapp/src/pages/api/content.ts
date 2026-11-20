@@ -6,10 +6,10 @@ import { ContentRecord } from '@/lib/shared/types';
 import type { NextApiRequest, NextApiResponse } from 'next';
 
 /**
- * Fetches paginated content records (`PAGE_SIZE = 100`, newest first) for a real `threadId` or
- * virtual Facebook aggregate IDs (`fb-event-*`, `fb-post-all`, `fb-checkin-all`). Reclassifies generic
- * `file` attachments by extension and splits mixed text+media rows into separate media and text bubbles
- * unless the row looks like a single-photo link preview.
+ * Return 100 messages per page, newest first, for a real thread or a virtual Facebook thread
+ * (`fb-event-*`, `fb-post-all`, `fb-checkin-all`).
+ * Use file extensions to identify generic attachments. Split text and media into separate bubbles
+ * unless they make up a single-photo link preview.
  */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { threadId, page = '1' } = req.query;

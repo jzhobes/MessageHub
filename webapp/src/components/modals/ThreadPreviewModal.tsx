@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 
 import BaseModal, { BaseModalProps, ModalHeader } from '@/components/modals/BaseModal';
+import ThreadNavigation from '@/components/ThreadNavigation';
 import Tooltip from '@/components/Tooltip';
 
 import { apiFetch } from '@/lib/client/apiClient';
@@ -42,17 +43,18 @@ export default function ThreadPreviewModal({
   onClose,
   onAfterClose,
 }: ThreadPreviewModalProps) {
-  // State matching Home page usage of ChatWindow
+  // Use the same ChatWindow state as the home page.
   const [messages, setMessages] = useState<ContentRecord[] | null>(null);
+  const [chipJumpError, setChipJumpError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [jumping, setJumping] = useState(false);
   const [pageRange, setPageRange] = useState({ min: 1, max: 1 });
+  const [visibleTimestamp, setVisibleTimestamp] = useState<number | undefined>();
   const [visiblePage, setVisiblePage] = useState(1);
   const [hasMoreOld, setHasMoreOld] = useState(false);
   const [hasMoreNew, setHasMoreNew] = useState(false);
   const [targetTimestamp, setTargetTimestamp] = useState<number | null>(null);
+  const [timelineReset, setTimelineReset] = useState(0);
   const [highlightToken, setHighlightToken] = useState(0);
-  const [jumpDateInput, setJumpDateInput] = useState('');
 
   const threadId = thread?.id;
   const threadPlatform = thread?.platform || '';
@@ -60,22 +62,24 @@ export default function ThreadPreviewModal({
   const isEventThread = !!threadId?.startsWith('fb-event-');
   const showSelectionUI = selectionEnabled && !isEventThread && !!onToggleDay;
 
-  // Track latest request to avoid race conditions
+  // Keep track of the latest request so older responses can't replace it.
   const latestRequestRef = useRef<symbol | null>(null);
 
   const openKey = isOpen && threadId ? threadId : null;
   const [prevOpenKey, setPrevOpenKey] = useState<string | null>(null);
   if (openKey !== prevOpenKey) {
     setPrevOpenKey(openKey);
+    setChipJumpError(null);
     if (openKey) {
       setVisiblePage(1);
+      setVisibleTimestamp(undefined);
       setMessages(null);
       setHasMoreOld(false);
       setHasMoreNew(false);
       setPageRange({ min: 1, max: 1 });
       setTargetTimestamp(null);
       setHighlightToken(0);
-      setJumpDateInput('');
+      setTimelineReset((value) => value + 1);
     }
   }
 
@@ -164,7 +168,7 @@ export default function ThreadPreviewModal({
           const isFullPage = newMsgs.length >= 100;
 
           setMessages(newMsgs);
-          // Assume page 1. Since it's a preview, we start at 1.
+          // Start the preview at page 1.
           setHasMoreOld(hasData && isFullPage);
           setHasMoreNew(false);
           setPageRange({ min: 1, max: 1 });
@@ -212,30 +216,21 @@ export default function ThreadPreviewModal({
     loadMessages(thread.id, next, 'newer');
   };
 
-  const handleJumpToDate = useCallback(
-    async (dateStr: string) => {
-      if (!threadId || !dateStr) {
+  const loadJumpTarget = useCallback(
+    async (resolveTarget: () => Promise<{ page: number; timestamp?: number }>, onError?: (error: unknown) => void) => {
+      if (!threadId) {
         return;
       }
-      const requestId = Symbol('jumpToDate');
+      setChipJumpError(null);
+      const requestId = Symbol('jump');
       latestRequestRef.current = requestId;
-      setJumping(true);
       setLoading(true);
 
       try {
-        const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
-        const jumpRes = await apiFetch(
-          `/api/jump?threadId=${encodeURIComponent(threadId)}&date=${encodeURIComponent(dateStr)}&timeZone=${encodeURIComponent(tz)}`,
-        );
+        const { page, timestamp } = await resolveTarget();
         if (latestRequestRef.current !== requestId) {
           return;
         }
-        if (!jumpRes.ok) {
-          return;
-        }
-        const jumpData = await jumpRes.json();
-        const page = jumpData.page || 1;
-        const ts = jumpData.timestamp || null;
 
         const contentRes = await apiFetch(
           `/api/content?threadId=${encodeURIComponent(threadId)}&page=${page}&platform=${encodeURIComponent(threadPlatform)}`,
@@ -243,29 +238,60 @@ export default function ThreadPreviewModal({
         if (latestRequestRef.current !== requestId) {
           return;
         }
-        if (contentRes.ok) {
-          const data = await contentRes.json();
-          const newMsgs = data.records || [];
-          const isFullPage = newMsgs.length >= 100;
-          setMessages(newMsgs);
-          setPageRange({ min: page, max: page });
-          setVisiblePage(page);
-          setHasMoreOld(newMsgs.length > 0 && isFullPage);
-          setHasMoreNew(page > 1);
-          setTargetTimestamp(ts);
+        if (!contentRes.ok) {
+          throw new Error('Unable to load messages.');
+        }
+        const data = await contentRes.json();
+        if (latestRequestRef.current !== requestId) {
+          return;
+        }
+        const newMsgs = data.records || [];
+        const isFullPage = newMsgs.length >= 100;
+        setMessages(newMsgs);
+        setPageRange({ min: page, max: page });
+        setVisiblePage(page);
+        setHasMoreOld(newMsgs.length > 0 && isFullPage);
+        setHasMoreNew(page > 1);
+        setTargetTimestamp(timestamp ?? null);
+        setTimelineReset((value) => value + 1);
+        if (timestamp != null) {
           setHighlightToken((prev) => prev + 1);
         }
-      } catch (e) {
-        console.error('Failed to jump to date:', e);
+      } catch (error) {
+        if (latestRequestRef.current !== requestId) {
+          return;
+        }
+        if (!onError) {
+          throw error;
+        }
+        onError(error);
       } finally {
         if (latestRequestRef.current === requestId) {
-          setJumping(false);
           setLoading(false);
         }
       }
     },
     [threadId, threadPlatform],
   );
+
+  const navigateToPage = (page: number, timestamp?: number) => loadJumpTarget(async () => ({ page, timestamp }));
+
+  const handleJumpToDate = (date: string) => {
+    if (!threadId) {
+      return;
+    }
+    return loadJumpTarget(
+      async () => {
+        const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        const response = await apiFetch(`/api/jump?${new URLSearchParams({ threadId, date, timeZone })}`);
+        if (!response.ok) {
+          throw new Error('Unable to find messages for this date.');
+        }
+        return response.json();
+      },
+      (error) => setChipJumpError(error instanceof Error ? error.message : 'Unable to jump to this date.'),
+    );
+  };
 
   const sortedSelectedDays = selectedDays ? Array.from(selectedDays).sort().reverse() : [];
   const selectedMsgCount = sortedSelectedDays.reduce((sum, d) => sum + (dayStats?.[d]?.totalMsgs || 0), 0);
@@ -282,70 +308,70 @@ export default function ThreadPreviewModal({
       }}
     >
       <ModalHeader onClose={onClose}>
-        <h2 style={{ margin: 0, fontSize: '1.2rem', color: 'var(--text-primary)' }}>
-          {thread?.title || 'Thread Preview'}
-        </h2>
+        <h2 className={styles.threadTitle}>{thread?.title || 'Thread Preview'}</h2>
         <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
-          {thread?.platform && <span>{getPlatformLabel(thread.platform)} </span>}
-          <span style={{ opacity: 0.7 }}>
-            • Page {visiblePage?.toLocaleString()} of {totalPages.toLocaleString()}
-          </span>
+          {thread?.platform && getPlatformLabel(thread.platform)}
         </div>
       </ModalHeader>
-      {showSelectionUI && (
+      {(showSelectionUI || threadId) && (
         <div className={styles.selectionBar}>
-          <div className={styles.selectionSummary}>
-            <span className={styles.selectionCount}>
-              {sortedSelectedDays.length > 0
-                ? `${sortedSelectedDays.length} ${sortedSelectedDays.length === 1 ? 'day' : 'days'} · ${selectedMsgCount.toLocaleString()} msgs`
-                : 'No days selected'}
-            </span>
-            {sortedSelectedDays.length > 0 && (
-              <div className={styles.chipList}>
-                {sortedSelectedDays.map((dayKey) => (
-                  <span key={dayKey} className={styles.dayChip}>
-                    <Tooltip content={`Jump to ${dayKey}`}>
-                      <button type="button" className={styles.dayChipJump} onClick={() => handleJumpToDate(dayKey)}>
-                        {formatShortChipDate(dayKey)}
+          {showSelectionUI && (
+            <div className={styles.selectionSummary}>
+              <span className={styles.selectionCount}>
+                {sortedSelectedDays.length > 0
+                  ? `${sortedSelectedDays.length} ${sortedSelectedDays.length === 1 ? 'day' : 'days'} · ${selectedMsgCount.toLocaleString()} msgs`
+                  : 'No days selected'}
+              </span>
+              {sortedSelectedDays.length > 0 && (
+                <div className={styles.chipList}>
+                  {sortedSelectedDays.map((dayKey) => (
+                    <span key={dayKey} className={styles.dayChip}>
+                      <Tooltip content={`Jump to ${dayKey}`}>
+                        <button
+                          type="button"
+                          className={styles.dayChipJump}
+                          onClick={() => void handleJumpToDate(dayKey)}
+                        >
+                          {formatShortChipDate(dayKey)}
+                        </button>
+                      </Tooltip>
+                      <button
+                        type="button"
+                        className={styles.dayChipRemove}
+                        aria-label={`Remove ${dayKey}`}
+                        onClick={() => onToggleDay?.(dayKey)}
+                      >
+                        &times;
                       </button>
-                    </Tooltip>
-                    <button
-                      type="button"
-                      className={styles.dayChipRemove}
-                      aria-label={`Remove ${dayKey}`}
-                      onClick={() => onToggleDay?.(dayKey)}
-                    >
-                      &times;
+                    </span>
+                  ))}
+                  {onClearDays && (
+                    <button type="button" className={styles.clearBtn} onClick={onClearDays}>
+                      Clear
                     </button>
-                  </span>
-                ))}
-                {onClearDays && (
-                  <button type="button" className={styles.clearBtn} onClick={onClearDays}>
-                    Clear
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-          <div className={styles.jumpControls}>
-            <label htmlFor="previewJumpDate" className={styles.jumpLabel}>
-              {jumping ? 'Jumping...' : 'Jump to:'}
-            </label>
-            <input
-              id="previewJumpDate"
-              type="date"
-              className={styles.dateInput}
-              value={jumpDateInput}
-              onChange={(e) => {
-                const val = e.target.value;
-                setJumpDateInput(val);
-                if (val) {
-                  handleJumpToDate(val);
-                }
-              }}
-            />
-          </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+          {threadId && (
+            <div className={styles.pageNavigation}>
+              <ThreadNavigation
+                key={threadId}
+                threadId={threadId}
+                currentPage={visiblePage}
+                currentTimestamp={visibleTimestamp}
+                totalPages={totalPages}
+                onNavigate={navigateToPage}
+              />
+            </div>
+          )}
         </div>
+      )}
+      {chipJumpError && (
+        <p className={styles.jumpError} role="alert">
+          {chipJumpError}
+        </p>
       )}
       <div className={styles.messageList}>
         <ThreadContent
@@ -358,6 +384,7 @@ export default function ThreadPreviewModal({
           targetMessageId={null}
           targetTimestamp={targetTimestamp}
           highlightToken={highlightToken}
+          timelineReset={timelineReset}
           initializing={loading && messages === null}
           selectedDays={showSelectionUI ? selectedDays : undefined}
           dayStats={showSelectionUI ? dayStats : undefined}
@@ -365,7 +392,10 @@ export default function ThreadPreviewModal({
           onToggleDay={showSelectionUI ? onToggleDay : undefined}
           onStartReached={handleLoadOld}
           onEndReached={handleLoadNew}
-          onPageChange={setVisiblePage}
+          onPageChange={(page, timestamp) => {
+            setVisiblePage(page);
+            setVisibleTimestamp(timestamp);
+          }}
         />
       </div>
     </BaseModal>

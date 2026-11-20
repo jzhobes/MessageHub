@@ -34,7 +34,7 @@ function resolvePlatform(candidate: string | undefined, availableMap: Record<str
       return p;
     }
   }
-  // Fallback to candidate or default if nothing is available
+  // Use the requested candidate or the default when no platform has data.
   return candidate || platformPreference[0];
 }
 
@@ -64,7 +64,7 @@ export default function Home() {
   const [showMedia, setShowMedia] = useState(false);
   const [prevWindowWidth, setPrevWindowWidth] = useState(0);
 
-  // Auto-collapse sidebar on initial client measurement or viewport threshold crossing
+  // Collapse the sidebar on the first client measurement or when the viewport crosses the breakpoint.
   const sidebarThreshold = showMedia ? 1350 : 1024;
   if (windowWidth !== prevWindowWidth) {
     if (prevWindowWidth === 0 && windowWidth > 0) {
@@ -139,14 +139,17 @@ export default function Home() {
 
   const parsedPage = pageParam ? parseInt(pageParam, 10) : 1;
   const startPage = Number.isNaN(parsedPage) || parsedPage < 1 ? 1 : parsedPage;
+  const [pageLoadFailed, setPageLoadFailed] = useState(false);
+  const [reloadPageToken, setReloadPageToken] = useState(0);
   const targetLoadKey =
     activeThreadId && (!threadIdParam || threadIdParam === activeThreadId)
-      ? `${activePlatform}:${activeThreadId}:${startPage}`
+      ? `${activePlatform}:${activeThreadId}:${startPage}:${reloadPageToken}`
       : '';
 
   const [prevLoadKey, setPrevLoadKey] = useState('');
   if (targetLoadKey !== prevLoadKey) {
     setPrevLoadKey(targetLoadKey);
+    setPageLoadFailed(false);
     if (targetLoadKey) {
       setPageRange({ min: startPage, max: startPage });
       setMessages(null);
@@ -172,7 +175,7 @@ export default function Home() {
         query.page = pageNum.toString();
       }
 
-      router.push(
+      return router.push(
         {
           pathname: '/',
           query: query,
@@ -213,7 +216,7 @@ export default function Home() {
           `/api/content?threadId=${encodeURIComponent(threadId)}&page=${pageNum}&platform=${encodeURIComponent(activePlatform)}`,
         );
 
-        // Drop responses for superseded requests
+        // Ignore a response if a newer request took over.
         if (latestRequestRef.current !== requestId) {
           return;
         }
@@ -247,7 +250,7 @@ export default function Home() {
       } catch (e) {
         console.error(e);
       } finally {
-        // Only turn off loading if this is still the latest request
+        // Leave the spinner to the current request if this one was superseded.
         if (latestRequestRef.current === requestId) {
           setLoading(false);
         }
@@ -255,6 +258,28 @@ export default function Home() {
     },
     [activePlatform, activeThreadId, activeThreadPageCount],
   );
+
+  const handleThreadNavigate = async (page: number, timestamp?: number) => {
+    if (!activeThreadId) {
+      return;
+    }
+
+    setTargetMessageId(null);
+    setTargetTimestamp(timestamp ?? null);
+    if (timestamp != null) {
+      setHighlightToken((value) => value + 1);
+    }
+
+    if (page === startPage && threadIdParam === activeThreadId) {
+      // Scrolling can move away from the URL's page without changing the URL.
+      setReloadPageToken((value) => value + 1);
+      return;
+    }
+    const navigated = await updateUrl(activePlatform, activeThreadId, page, activeCategory);
+    if (!navigated) {
+      throw new Error('Unable to open this page.');
+    }
+  };
 
   const handlePlatformSelect = useCallback(
     (p: string) => {
@@ -274,7 +299,7 @@ export default function Home() {
       }
 
       // 2. Changing Platform or Category:
-      // Full reset. Threads will be re-fetched because activePlatform or activeCategory will change.
+      // Reset the selection. Changing the platform or category will fetch the new threads.
       setThreads(null);
       setMessages(null);
       updateUrl(safePlatform, undefined, undefined, defaultCategory);
@@ -311,13 +336,13 @@ export default function Home() {
         return;
       }
       setMessages(null);
-      // Don't set loading(true) here, as messages=null handles the spinner
+      // Setting messages to null already turns on the spinner.
       setHasMoreOld(false);
       setHasMoreNew(false);
       setPageRange({ min: 1, max: 1 });
       setTargetMessageId(null);
       setTargetTimestamp(null);
-      updateUrl(activePlatform, t.id, undefined, activeCategory); // Page undefined -> 1
+      updateUrl(activePlatform, t.id, undefined, activeCategory); // Use page 1 if no page was requested.
     },
     [activeThreadId, activePlatform, activeCategory, updateUrl],
   );
@@ -370,7 +395,7 @@ export default function Home() {
 
   // --- Effects ---
 
-  // 1. One-time Check for Background Jobs on Mount
+  // Check for background jobs once on mount.
   useEffect(() => {
     const checkIngest = async () => {
       if (IS_DEMO_MODE || hasCheckedBgIngestRef.current) {
@@ -394,7 +419,7 @@ export default function Home() {
     checkIngest();
   }, []);
 
-  // 2. Load Threads on activePlatform / activeCategory change
+  // Reload the threads when the platform or category changes.
   useEffect(() => {
     if (!router.isReady) {
       return;
@@ -410,7 +435,6 @@ export default function Home() {
         if (res.ok) {
           const data = await res.json();
           if (!ignore) {
-            // Data now contains { threads, counts }
             setThreads(data.threads);
             setCategoryCounts(data.counts || {});
           }
@@ -430,14 +454,14 @@ export default function Home() {
     };
   }, [activePlatform, activeCategory, router.isReady]);
 
-  // 3. Auto-write first thread ID to URL on desktop when none is selected
+  // On desktop, put the first thread in the URL if there isn't a selection yet.
   useEffect(() => {
     if (router.isReady && !isMobile && !threadIdParam && threads?.length) {
       updateUrl(activePlatform, threads[0].id, undefined, activeCategory);
     }
   }, [router.isReady, isMobile, threadIdParam, threads, activePlatform, activeCategory, updateUrl]);
 
-  // 4. Initial Load / Reset Messages when Active Thread or Page changes
+  // Load fresh messages when the selected thread or page changes.
   useEffect(() => {
     if (!targetLoadKey || !activeThreadId) {
       return;
@@ -472,9 +496,10 @@ export default function Home() {
 
           setMessages(newMsgs);
           setHasMoreNew(startPage > 1);
-          setHasMoreOld(hasData && isFullPage);
+          setHasMoreOld(activeThreadPageCount ? startPage < activeThreadPageCount : hasData && isFullPage);
           setPageRange({ min: startPage, max: startPage });
         } else {
+          setPageLoadFailed(true);
           setMessages([]);
         }
       } catch (e) {
@@ -483,6 +508,7 @@ export default function Home() {
         }
         console.error(e);
         if (latestRequestRef.current === requestId) {
+          setPageLoadFailed(true);
           setMessages([]);
         }
       } finally {
@@ -497,7 +523,7 @@ export default function Home() {
     return () => {
       controller.abort();
     };
-  }, [targetLoadKey, activeThreadId, activePlatform, startPage]);
+  }, [targetLoadKey, activeThreadId, activePlatform, activeThreadPageCount, startPage]);
 
   if (!router.isReady) {
     return <div>Loading...</div>;
@@ -512,11 +538,11 @@ export default function Home() {
   const collapsed = !showSidebar;
   const isSetupOpen = showSetup || isInitialized === false;
 
-  // Derive initialization state to prevent flickering during transitions
-  // We are initializing if:
-  // 1. A threadId is in the URL but we haven't loaded it into state yet
-  // 2. We're on desktop, no thread is active, and we're currently loading threads (threads === null)
-  // 3. We're on desktop, no thread is active, but threads have arrived and are waiting to be auto-selected (threads.length > 0)
+  // Keep showing the loading state while navigation catches up so the UI doesn't flicker.
+  // We're still loading in three cases.
+  // The thread in the URL hasn't made it into state yet.
+  // We're on desktop with no selected thread and the list is still loading.
+  // The desktop list arrived, but the first thread hasn't been selected yet.
   const isInitializing =
     (!!threadIdParam && !activeThread && availability[activePlatform]) ||
     (!isMobile && !activeThread && (threads === null || !!threads?.length));
@@ -661,6 +687,7 @@ export default function Home() {
 
           {showThreadContent && (
             <div className={styles.threadContentWrapper} style={{ flex: 1 }}>
+              {pageLoadFailed && <div role="alert">Unable to load this page.</div>}
               <ThreadContent
                 activeThread={activeThread}
                 messages={messages}
@@ -671,8 +698,10 @@ export default function Home() {
                 targetMessageId={targetMessageId}
                 targetTimestamp={targetTimestamp}
                 highlightToken={highlightToken}
+                timelineReset={targetLoadKey}
                 initializing={isInitializing}
                 showMedia={showMedia}
+                onNavigate={handleThreadNavigate}
                 onStartReached={handleLoadOld}
                 onEndReached={handleLoadNew}
                 onShowMediaChange={handleShowMediaChange}

@@ -6,8 +6,7 @@ import Database from 'better-sqlite3';
 import appConfig from '@/lib/shared/appConfig';
 
 /**
- * DatabaseService manages the connection to the SQLite database.
- * It ensures a single instance (singleton) is used throughout the application.
+ * Share one SQLite connection across the app.
  */
 class DatabaseService {
   private _instance: Database.Database | null = null;
@@ -22,8 +21,7 @@ class DatabaseService {
   }
 
   /**
-   * Retrieves the active database connection.
-   * Opens a new connection if none exists.
+   * Return the active connection or open it on first use.
    */
   public get(): Database.Database {
     if (this._instance) {
@@ -50,7 +48,7 @@ class DatabaseService {
   }
 
   /**
-   * Closes the database connection and resets the singleton instance.
+   * Close the connection so the next access opens a new one.
    */
   public close(): void {
     if (this._instance) {
@@ -70,6 +68,6 @@ class DatabaseService {
   }
 }
 
-// Export a single instance of the database service as default
+// Share this instance across imports.
 const db = new DatabaseService();
 export default db;

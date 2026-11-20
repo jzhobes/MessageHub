@@ -2,6 +2,7 @@ import EmailPairBuilder, { Msg } from '@/lib/shared/dataset/builders/EmailPairBu
 import { EventRecordBuilder } from '@/lib/shared/dataset/builders/EventRecordBuilder';
 import { MarkdownExportBuilder, MarkdownMessageRow } from '@/lib/shared/dataset/builders/MarkdownExportBuilder';
 import { MessageSessionBuilder } from '@/lib/shared/dataset/builders/MessageSessionBuilder';
+import { getDatasetBaseName } from '@/lib/shared/dataset/datasetFilename';
 import { ThreadDaySampleResult } from '@/lib/shared/dataset/sampleThreadDays';
 import { redactPII } from '@/lib/shared/piiUtils';
 import { PlatformMap } from '@/lib/shared/platforms';
@@ -101,7 +102,7 @@ export class DatasetCore {
     this._personaTag = opts.personaTag;
     this._customInstructions = opts.customInstructions;
     this._skipSystemMessages = opts.skipSystemMessages;
-    this._datasetName = opts.datasetName || 'dataset';
+    this._datasetName = getDatasetBaseName(opts.datasetName, opts.outputFormat);
     this._outputFormat = opts.outputFormat || 'jsonl';
     this._selectedDaysByThread = opts.selectedDaysByThread;
     this._timeZone = opts.timeZone;
@@ -113,8 +114,8 @@ export class DatasetCore {
   }
 
   /**
-   * Streams structured dataset records (training sessions and optional Markdown history)
-   * without coupling consumers to SQLite or file packaging. Requires `setDataSource()` first.
+   * Stream training sessions and optional Markdown history. Call `setDataSource()` first. The
+   * caller supplies the data and decides how to package it.
    */
   public async *generateRecords(
     threadIds: string[],
@@ -142,7 +143,7 @@ export class DatasetCore {
         onProgress(threadIdx, threadIds.length);
       }
 
-      // Yield to event loop AFTER EVERY THREAD to keep runtime responsive
+      // Give the event loop a turn after each thread so the app stays responsive.
       await new Promise((resolve) => setTimeout(resolve, 0));
 
       let isGroup = false;
@@ -296,7 +297,7 @@ export class DatasetCore {
           }
         }
 
-        // KNOWLEDGE MODE: Events go to history.md
+        // Put events in history.md in knowledge mode.
         if (isEvent && historyBuilder) {
           historyBuilder.addLine(cleanedContent, msg.timestamp_ms, platform, msg.thread_title ?? undefined);
           continue;
@@ -390,7 +391,7 @@ export class DatasetCore {
       await new Promise((resolve) => setTimeout(resolve, 0));
 
       const explicitDays = this._selectedDaysByThread?.[threadId];
-      // Only bound by dateRange when using auto-scan; explicit user-picked days may be older than recencyFilter
+      // Use dateRange for auto-scans. Manually picked days can predate the recency filter.
       const effectiveDateRange = dateRange && (!explicitDays || explicitDays.length === 0) ? dateRange : undefined;
 
       if (threadId === 'fb-post-all') {
@@ -474,8 +475,7 @@ export class DatasetCore {
   }
 
   /**
-   * Streams formatted dataset files for the selected thread IDs.
-   * Requires `setDataSource()` to be called first.
+   * Stream formatted files for the selected thread IDs. Call `setDataSource()` first.
    */
   public async *generateStream(
     threadIds: string[],
@@ -494,14 +494,14 @@ export class DatasetCore {
       }
     }
 
-    // Yield Remainder JSONL
+    // Flush the last partial JSONL file.
     if (batchState.sessions.length > 0) {
       const content = batchState.sessions.map((s) => JSON.stringify(s)).join('\n');
       const suffix = batchState.fileIndex === 1 ? '' : `.part${batchState.fileIndex}`;
       yield { fileName: `${this._datasetName}${suffix}.jsonl`, content, tokenCount: batchState.tokens };
     }
 
-    // Yield All Markdown Records
+    // Write the collected Markdown records.
     for (const md of markdownRecords) {
       yield {
         fileName: md.fileName,

@@ -7,8 +7,8 @@ import appConfig from '@/lib/shared/appConfig';
 import type { NextApiRequest, NextApiResponse } from 'next';
 
 /**
- * Closes the active DB connection and, if `messagehub.db` does not yet exist, synchronously runs
- * `scripts/ingest.py` so Python initializes the authoritative SQLite schema before returning.
+ * Close SQLite and make sure `messagehub.db` exists before returning. If it's missing, run
+ * `scripts/ingest.py` synchronously so Python creates the authoritative schema.
  */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -22,15 +22,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    // 1. Close current DB connection so Python can safely "touch" the file
+    // Close our connection before Python opens the DB.
     db.close();
 
-    // 2. Ensure DB file exists (using Python as source of truth for schema)
+    // Let Python initialize the schema if the database is missing.
     if (!db.exists()) {
       const pythonPath = await getPythonPath();
       const scriptPath = getIngestScriptPath();
 
-      // Use spawnSync here because finalize needs to be done before we return
+      // Wait for Python to finish so the database is ready when this request returns.
       const result = spawnSync(pythonPath, [scriptPath], {
         env: { ...process.env, WORKSPACE_PATH: currentPath, PYTHONUNBUFFERED: '1' },
       });

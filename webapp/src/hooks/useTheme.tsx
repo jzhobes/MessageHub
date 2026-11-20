@@ -46,7 +46,7 @@ function notifyThemeListeners() {
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  // Always initialize server snapshot to 'light' to match SSR and avoid hydration mismatch
+  // Start the server snapshot in light mode to match SSR and avoid a hydration mismatch.
   const theme = useSyncExternalStore(subscribeTheme, getClientTheme, getServerTheme);
   const mounted = useSyncExternalStore(
     emptySubscribe,

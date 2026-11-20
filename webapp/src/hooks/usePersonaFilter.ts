@@ -5,7 +5,7 @@ import { withBasePath } from '@/lib/client/env';
 import { Thread } from '@/lib/shared/types';
 
 /**
- * Pure helper that returns a new persona cache map with `matches` added to a cloned `Set` for `id`.
+ * Add `matches` to a copy of the label set for `id` and return a new cache map.
  */
 export function mergePersonaCacheMatches(
   prev: Record<string, Set<string>>,
@@ -28,11 +28,11 @@ interface UsePersonaFilterProps {
 }
 
 /**
- * Manages incremental client-side persona filtering via `/workers/style-worker.js`.
- * Toggling a label on fetches uncached thread samples in batches of 20 from `/api/studio/thread-content`,
- * caches matched labels per thread, and adds matches to `setSelectedIds`; toggling a label off cancels
- * remaining batches and deselects threads that no longer match any active label. Automatically scans
- * newly visible threads whenever `visibleThreads` changes.
+ * Filter threads in the browser with `/workers/style-worker.js`. When a label turns on, fetch
+ * uncached samples 20 threads at a time from `/api/studio/thread-content`, cache the matches, and
+ * select those threads.
+ * Turning the label off cancels remaining batches and clears selections that no longer match an
+ * active label. Scan newly visible threads as the list changes.
  */
 export function usePersonaFilter({
   visibleThreads,
@@ -44,7 +44,7 @@ export function usePersonaFilter({
   const [activePersonas, setActivePersonas] = useState<Set<string>>(new Set());
   const [scanningLabels, setScanningLabels] = useState<Set<string>>(new Set());
 
-  // Refs for logic that needs current state without triggering re-renders
+  // Use refs for values the worker needs without triggering a render.
   const activePersonasRef = useRef(new Set<string>());
   const batchCountsRef = useRef<Record<string, number>>({});
   const scannedIdsRef = useRef<Record<string, Set<string>>>({});
@@ -64,7 +64,7 @@ export function usePersonaFilter({
         const { type, id, matches, labels: echoedLabels, message, progress } = e.data;
 
         if (type === 'filter:match') {
-          // Update Cache without mutating prior Set instances
+          // Copy each label set before updating the cache.
           setPersonaCache((prev) => mergePersonaCacheMatches(prev, id, matches as string[]));
         } else if (type === 'filter:complete') {
           if (echoedLabels) {
@@ -81,7 +81,7 @@ export function usePersonaFilter({
                 return next;
               });
 
-              // Check if we were pending completion (scan loop finished)
+              // Finish only after the scan loop and its outstanding batches are done.
               if (pendingCompletionRef.current.has(label)) {
                 pendingCompletionRef.current.delete(label);
               }
@@ -162,7 +162,7 @@ export function usePersonaFilter({
 
       (async () => {
         for (let i = 0; i < allIds.length; i += BATCH_SIZE) {
-          // Cancellation Check
+          // Stop here if the label was toggled off.
           if (!activePersonasRef.current.has(label)) {
             pendingCompletionRef.current.delete(label);
             break;
@@ -186,7 +186,7 @@ export function usePersonaFilter({
 
             if (!res.ok) {
               console.error('Scan fetch failed:', res.status, await res.text());
-              continue; // Skip and retry later (not marked as scanned)
+              continue; // Leave failed fetches unmarked so the next pass can retry them.
             }
 
             const contentMap = await res.json();
@@ -196,7 +196,7 @@ export function usePersonaFilter({
               messages: contentMap[id] || [],
             }));
 
-            // Mark as scanned immediately (optimistic)
+            // Mark these IDs now so a second pass doesn't queue them again.
             batchIds.forEach((id) => scannedIdsRef.current[label].add(id));
 
             // Increment pending count
@@ -206,7 +206,7 @@ export function usePersonaFilter({
               type: 'filter_threads',
               threads: threadPayload,
               labels: [label],
-              // isLast is handled by pendingCompletionRef now
+              // Use pendingCompletionRef to tell when the scan is done.
             });
 
             await new Promise((r) => setTimeout(r, 50));
@@ -215,11 +215,11 @@ export function usePersonaFilter({
           }
         }
 
-        // Loop Finished Check (if still active)
+        // Mark the loop done if the label is still active.
         if (activePersonasRef.current.has(label)) {
           pendingCompletionRef.current.add(label);
 
-          // If nothing is pending (e.g. all skipped), finish immediately
+          // Finish now if there are no batches left to wait for.
           if ((batchCountsRef.current[label] || 0) === 0) {
             setScanningLabels((prev) => {
               const next = new Set(prev);
@@ -243,12 +243,12 @@ export function usePersonaFilter({
         // Toggling OFF
         nextActive.delete(label);
         setActivePersonas(nextActive);
-        activePersonasRef.current = nextActive; // Immediate sync for cancellation
+        activePersonasRef.current = nextActive; // Update the ref now so the scan can see the cancellation.
 
         // Remove from pending completion if cancelled
         pendingCompletionRef.current.delete(label);
 
-        // Remove selection for threads that matched THIS label but no other active label
+        // Deselect threads that only matched the label we just turned off.
         setSelectedIds((prev) => {
           const next = new Set(prev);
           for (const [id, labels] of Object.entries(personaCache)) {
@@ -271,9 +271,9 @@ export function usePersonaFilter({
         // Toggling ON
         nextActive.add(label);
         setActivePersonas(nextActive);
-        activePersonasRef.current = nextActive; // Immediate sync for startup
+        activePersonasRef.current = nextActive; // Update the ref before starting the scan.
 
-        // Scan (idempotent due to scannedIdsRef)
+        // scannedIdsRef keeps repeat calls from rescanning the same threads.
         if (!scanningLabels.has(label)) {
           scanLabel(label);
         }
@@ -292,7 +292,7 @@ export function usePersonaFilter({
     pendingCompletionRef.current.clear();
   }, []);
 
-  // Auto-scan on visible thread list changes (tracks thread IDs, not just count)
+  // Watch the visible IDs themselves. A new list can have the same count.
   const visibleThreadIdsKey = useMemo(() => visibleThreads.map((t) => t.id).join('\0'), [visibleThreads]);
   const previousVisibleIdsKeyRef = useRef(visibleThreadIdsKey);
   useEffect(() => {

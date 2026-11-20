@@ -35,7 +35,7 @@ function parseSSEFrame(rawFrame: string): SSEEvent | null {
 }
 
 /**
- * Creates a stateful SSE parser that buffers incomplete frames across arbitrary network chunks.
+ * Buffer partial SSE frames so a network chunk can end anywhere.
  */
 export function createSSEParser(): SSEParser {
   let buffer = '';
@@ -73,7 +73,8 @@ export function createSSEParser(): SSEParser {
 }
 
 /**
- * Reads an SSE `ReadableStreamDefaultReader` using a buffered parser until EOF or `onEvent` returns `false`.
+ * Read SSE chunks until the stream ends or `onEvent` returns `false`. Keep partial frames between
+ * reads.
  */
 export async function readSSEStream(
   reader: ReadableStreamDefaultReader<Uint8Array>,

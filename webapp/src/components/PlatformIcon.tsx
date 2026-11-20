@@ -24,7 +24,7 @@ export const PLATFORM_COLORS: Record<string, string> = {
 export function PlatformIcon({ platform, size = 20, active = true, color, className, style }: PlatformIconProps) {
   const p = platform?.toLowerCase() || '';
 
-  // Priority: 1. explicit color prop, 2. platform-specific color if active, 3. fallback gray
+  // Use the supplied color first, then the active platform color, then gray.
   const iconColor =
     color || (active ? PLATFORM_COLORS[p] || (p.endsWith('mail') ? PLATFORM_COLORS.gmail : '#666') : '#666');
 

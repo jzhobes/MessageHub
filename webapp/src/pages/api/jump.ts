@@ -3,20 +3,20 @@ import db from '@/lib/server/db';
 
 import type { NextApiRequest, NextApiResponse } from 'next';
 
-const PAGE_SIZE = 100; // Must match api/content.ts
+const PAGE_SIZE = 100; // Keep this page size in sync with api/content.ts.
 
 /**
- * Resolves either:
- * - `?messageId=...` into its navigation target (`threadId`, `platform`, `page`, `timestamp`, `category`), or
- * - `?threadId=...&date=YYYY-MM-DD[&timeZone=...]` into the page containing the first message on that
- *   local calendar day (or the nearest active day in that thread).
+ * Find the page for a message ID or the first message on a local calendar day.
+ * With `messageId`, return its thread, platform, page, timestamp, and category. With `threadId` and
+ * `date` (YYYY-MM-DD, optional `timeZone`), use the nearest active day if the requested day has no
+ * messages.
  */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { messageId, threadId: queryThreadId, date: queryDate, timeZone: queryTimeZone } = req.query;
 
   const dbInstance = db.get();
 
-  // Mode B: Jump by threadId + date (YYYY-MM-DD)
+  // Find the page for a local day in this thread.
   if (!messageId && queryThreadId && queryDate) {
     const tid = Array.isArray(queryThreadId) ? queryThreadId[0] : queryThreadId;
     const dateStr = Array.isArray(queryDate) ? queryDate[0] : queryDate;
@@ -156,7 +156,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    // 1. Get the target content record details
+    // Look up the message we're jumping to.
     interface ContentRow {
       id: number;
       thread_id: string;
@@ -169,8 +169,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(404).json({ error: 'Content not found' });
     }
 
-    // 2. Calculate Rank (1-based index in DESC order)
-    // We count how many records are "newer" (timestamp > target OR same timestamp but higher ID)
+    // Find its 1-based position in newest-first order.
+    // Count later timestamps and rows with the same timestamp and a higher ID.
     interface CountRow {
       count: number;
     }
@@ -187,7 +187,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const newerCount = row.count;
     let rank = newerCount + 1;
-    // 3. Get Platform and Category info for context switching
+    // Return the platform and category so navigation can switch views.
     interface ThreadRow {
       platform: string;
     }
@@ -209,10 +209,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     let threadId = record.thread_id;
 
-    // Handle Virtual Aggregated Views (Posts, Check-ins, Events)
+    // Posts, check-ins, and events use virtual timelines.
     if (category === 'post') {
       threadId = 'fb-post-all';
-      // Calculate rank in the global post timeline (Grouped by timestamp)
+      // Count distinct timestamps ahead of this post in the global timeline.
       const postRow = dbInstance
         .prepare(
           `
@@ -238,7 +238,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         .get(record.timestamp_ms) as CountRow;
       rank = checkinRow.count + 1;
     } else if (category === 'event') {
-      // Find which event bucket this belongs to
+      // Find the event bucket that contains this message.
       interface ContentDetail {
         content: string;
       }

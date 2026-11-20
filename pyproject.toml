@@ -1,4 +1,4 @@
 [tool.ruff]
-# Same as Black.
+# Match Black's line length.
 line-length = 120
-select = ["I"] # Enable isort rules
+select = ["I"] # Check import order with isort rules.

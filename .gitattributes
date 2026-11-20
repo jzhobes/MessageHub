@@ -1,11 +1,11 @@
 # Handle line endings automatically
 * text=auto
 
-# Force shell scripts to always use LF (so they never break in WSL/Linux/Mac)
+# Keep shell scripts on LF so they run on WSL, Linux, and macOS.
 *.sh text eol=lf
 
 
-# Ensure common text files are handled correctly
+# Treat these extensions as text when normalizing line endings.
 *.py text
 *.ts text
 *.tsx text

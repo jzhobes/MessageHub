@@ -40,7 +40,7 @@ export default function SetupModal({
   );
   const [prevOpen, setPrevOpen] = useState(isOpen);
 
-  // Sync tab when modal re-opens (Adjusting state during rendering pattern)
+  // Pick up the new tab during render when the modal reopens.
   if (isOpen && !prevOpen) {
     setPrevOpen(true);
     setActiveTab(TAB_MAP[initialStep] || (isFirstRun ? 'welcome' : 'path'));
@@ -90,14 +90,14 @@ export default function SetupModal({
     }
   };
 
-  // Auto-switch to scan tab if ingestion starts or re-attaches
+  // Switch to Scan when ingestion starts or we reconnect to it.
   useEffect(() => {
     if (isInstalling) {
       setActiveTab((prev) => (prev !== 'scan' ? 'scan' : prev)); // eslint-disable-line react-hooks/set-state-in-effect
     }
   }, [isInstalling]);
 
-  // Side-effect: Load config on open
+  // Load the current config when the modal opens.
   useEffect(() => {
     if (!isOpen) {
       return;
@@ -120,7 +120,7 @@ export default function SetupModal({
   const isFastFinish = isPathTab && isFirstRun && isExistingWorkspace;
   const isFullyDone = isComplete || (isScanTab && remoteFiles.length === 0 && !hasExistingArchives);
 
-  // Background Finalization: Automatic finalization when first-run ingestion completes.
+  // Finalize setup in the background when the first import finishes.
   useEffect(() => {
     if (!isFirstRun || !isFullyDone || !isOpen) {
       return;
@@ -148,12 +148,12 @@ export default function SetupModal({
         setWorkspacePath(data.workspacePath);
         setResolvedPath(data.resolved);
 
-        // First-run configuration does not trigger immediate finalization or refresh.
+        // During first run, wait for ingestion before finalizing and refreshing.
         if (isFirstRun) {
           return true;
         }
 
-        // Settings mode: Finalize changes and reload when switching to an existing workspace.
+        // In settings, switching to an existing workspace finalizes and reloads right away.
         try {
           if (data.isExistingWorkspace) {
             await fetch('/api/setup/finalize', { method: 'POST' });
@@ -204,7 +204,7 @@ export default function SetupModal({
           return;
         }
 
-        // Smart Skip: If existing workspace detected, finalize and finish now
+        // If the workspace already exists, finish setup now.
         if (isExistingWorkspace) {
           try {
             const finalizeRes = await fetch('/api/setup/finalize', { method: 'POST' });
@@ -353,8 +353,8 @@ export default function SetupModal({
       if (isScanTab) {
         if (isFullyDone) {
           if (isFirstRun) {
-            // Finalize has already been called in the background useEffect,
-            // or we call it one last time to be safe and reload.
+            // The background effect may have finalized already.
+            // If it hasn't, finalize here before reloading.
             window.location.reload();
             return;
           }

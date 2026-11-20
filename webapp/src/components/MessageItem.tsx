@@ -109,7 +109,7 @@ const MessageItem = React.memo(
       isImageShare;
     const isMediaOnly = hasMedia && !msg.content;
 
-    // Filter photos if we are showing a link preview (avoids duplicates)
+    // Skip photos already shown in the link preview.
     const displayPhotos = previewUrl && msg.photos ? [] : msg.photos || [];
 
     // Construct Class Names for Bubble
@@ -121,7 +121,7 @@ const MessageItem = React.memo(
       .filter(Boolean)
       .join(' ');
 
-    // Add a plain class for global targeting by ChatWindow
+    // Give ChatWindow a plain class name it can target globally.
     const bubbleClassName = `${bubbleClasses} messageBubble`;
 
     return (

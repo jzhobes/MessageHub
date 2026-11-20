@@ -174,7 +174,7 @@ describe('MarkdownExportBuilder', () => {
     expect(groupMd).toContain('[Replying to Alex: "Who\'s down for Japan?"]');
     expect(groupMd).toContain('\nk\n');
     expect(groupMd).toContain('[Reactions: Jeff 😂]');
-    // Crossed midnight inside same continuous conversation -> full date header
+    // Keep this as one conversation across midnight and show a full date header.
     expect(groupMd).toContain('**2026-11-16 00:05 | John (self):**');
     expect(groupMd).not.toContain('555-123-4567');
     expect(groupMd).toContain('[Deleted message]');
@@ -253,7 +253,7 @@ describe('selectBestDays heuristic', () => {
     ];
 
     const picked = selectBestDays(days, { isChat: true, targetMessages: 100 });
-    // Should spread across June, Sept, Nov rather than picking both Nov 15 & Nov 16
+    // Pick days across June, September, and November so adjacent November days don't take two spots.
     expect(picked).toEqual(['2026-06-05', '2026-09-10', '2026-11-15']);
   });
 });

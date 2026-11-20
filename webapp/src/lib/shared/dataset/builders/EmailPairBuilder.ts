@@ -20,8 +20,7 @@ class EmailPairBuilder {
   constructor(private opts: EmailBuilderOptions) {}
 
   /**
-   * Add an inbound email (from someone else).
-   * Best practice: keep ONLY the most recent inbound until a reply is sent.
+   * Keep the latest incoming email until the user replies.
    */
   addInbound(raw: string, senderName?: string): void {
     const cleaned = this._cleanInbound(raw, senderName);
@@ -32,9 +31,8 @@ class EmailPairBuilder {
   }
 
   /**
-   * Add an outbound email (from the user).
-   * Returns a finalized user->assistant pair if we have a pending inbound.
-   * Otherwise returns null (drops outbound-only by default).
+   * Pair the user's reply with the pending inbound email. Return `null` if there's no inbound
+   * context to pair it with.
    */
   addOutbound(raw: string): Msg[] | null {
     const cleaned = this._cleanOutbound(raw);
@@ -62,7 +60,7 @@ class EmailPairBuilder {
 
     let inboundWithSubject = inbound;
 
-    // Inject subject ONCE, and only on the first emitted pair.
+    // Put the subject in the first emitted pair only.
     if (this.opts.injectSubjectOnce && !this.hasInjectedSubject && this.opts.subject) {
       inboundWithSubject = `[Subject: ${this.opts.subject}]\n\n${inboundWithSubject}`;
       this.hasInjectedSubject = true;
@@ -73,7 +71,7 @@ class EmailPairBuilder {
       { role: 'assistant', content: cleaned },
     ];
 
-    // Consume inbound to prevent reusing it across multiple outbounds.
+    // Clear the inbound once paired so we don't attach it to another reply.
     this.pendingInbound = null;
 
     return pair;
@@ -85,7 +83,7 @@ class EmailPairBuilder {
       return null;
     }
 
-    // Strip long quoted history and signatures BEFORE prepending sender name.
+    // Strip quoted history and signatures before adding the sender's name.
     s = stripQuotedHistory(s);
     s = stripCommonEmailBoilerplate(s);
 
@@ -117,7 +115,7 @@ class EmailPairBuilder {
       return null;
     }
 
-    // Outbound should not include pasted inbound history
+    // Keep pasted context from repeating in the outbound reply.
     s = stripQuotedHistory(s);
 
     if (this.opts.redactPII) {
@@ -132,7 +130,7 @@ class EmailPairBuilder {
 }
 
 function stripQuotedHistory(s: string): string {
-  // Cuts common quoted blocks. Expand if your exports differ.
+  // Cut common quote blocks. Add more markers here if another export format needs them.
   const patterns = [
     /\nOn .* wrote:\n[\s\S]*$/i,
     /\nFrom:\s.*\nSent:\s.*\nTo:\s.*\nSubject:\s.*\n[\s\S]*$/i,
@@ -148,7 +146,7 @@ function stripQuotedHistory(s: string): string {
 }
 
 function stripCommonEmailBoilerplate(s: string): string {
-  // Keep this conservative; don’t nuke real content.
+  // Keep the match narrow so we don't lose real message text.
   const lines = s.split('\n');
   const kept: string[] = [];
 
@@ -160,7 +158,7 @@ function stripCommonEmailBoilerplate(s: string): string {
       continue;
     }
 
-    // Drop common corporate slogan lines (example-specific)
+    // Drop the corporate slogan lines we know about.
     if (/^(patient first|open communication|helps each other|reliable|embraces change|scale thinking)\b/i.test(t)) {
       continue;
     }

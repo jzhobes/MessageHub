@@ -23,7 +23,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(200).json({ archives });
   } catch (error) {
     console.error('Failed to list archives:', error);
-    // If data dir doesn't exist yet, just return empty
+    // A missing workspace has no archives yet.
     return res.status(200).json({ archives: [] });
   }
 }

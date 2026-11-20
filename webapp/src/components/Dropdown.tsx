@@ -22,10 +22,10 @@ interface DropdownProps {
 }
 
 /**
- * Accessible dropdown built on the native HTML Popover API (`popover="auto"`) with CSS anchor
- * positioning and a JS viewport fallback. Supports controlled (`open`) and uncontrolled modes,
- * keyboard navigation (`ArrowUp`/`ArrowDown`/`Home`/`End`/`Enter`/`Space`/`Escape`/`Tab`),
- * and a 150ms post-close guard so light-dismissing via the trigger does not immediately reopen it.
+ * Use the native Popover API with CSS anchors and a viewport fallback in JS.
+ * Supports controlled (`open`) and uncontrolled state, plus ArrowUp, ArrowDown, Home, End, Enter,
+ * Space, Escape, and Tab.
+ * Wait 150ms after dismissal so clicking the trigger to close doesn't immediately reopen it.
  */
 export function Dropdown({
   trigger,
@@ -75,7 +75,7 @@ export function Dropdown({
       if (!isOpen) {
         e.preventDefault();
         toggle();
-        // Let it open then focus
+        // Wait until the menu opens before moving focus inside.
         setTimeout(() => {
           const items = menuRef.current?.querySelectorAll<HTMLElement>(`.${styles.dropdownItem}:not([disabled])`);
           if (items && items.length > 0) {
@@ -87,7 +87,7 @@ export function Dropdown({
           }
         }, 50);
       } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-        // Already open, just move focus
+        // If it's already open, just move focus.
         e.preventDefault();
         const items = menuRef.current?.querySelectorAll<HTMLElement>(`.${styles.dropdownItem}:not([disabled])`);
         if (items && items.length > 0) {
@@ -147,7 +147,7 @@ export function Dropdown({
         }
         break;
       case 'Tab':
-        // Popover auto handles this usually but let's be explicit
+        // Close explicitly so the component state stays in sync with the native popover.
         close();
         break;
     }
@@ -160,7 +160,7 @@ export function Dropdown({
       return;
     }
 
-    // Type casting because TypeScript definitions for popover might be missing depending on version
+    // Some TypeScript versions don't include the popover API in their DOM types.
     const popoverMenu = menu as HTMLElement & { showPopover(): void; hidePopover(): void };
 
     const handleToggle = (e: Event & { newState: string }) => {
@@ -178,13 +178,13 @@ export function Dropdown({
       try {
         popoverMenu.showPopover();
       } catch {
-        // Fallback for non-supporting browsers or already open state
+        // Fall back if the browser can't show it or it's already open.
       }
     } else {
       try {
         popoverMenu.hidePopover();
       } catch {
-        // Fallback for non-supporting browsers or already closed state
+        // Fall back if the browser can't hide it or it's already closed.
       }
     }
 
@@ -197,7 +197,7 @@ export function Dropdown({
       const triggerRect = triggerRef.current.getBoundingClientRect();
       const availableHeight = window.innerHeight - triggerRect.bottom - 20;
 
-      // Handle width "100%" by measuring trigger
+      // Measure the trigger when the menu should be the same width.
       const resolvedWidth = width === '100%' ? triggerRect.width : width || 160;
       const resolvedMinWidth = minWidth === 'trigger' ? triggerRect.width : minWidth;
       const top = triggerRect.bottom + gap;
@@ -220,7 +220,7 @@ export function Dropdown({
     if (isOpen) {
       updatePosition();
       window.addEventListener('resize', updatePosition);
-      window.addEventListener('scroll', updatePosition, true); // capture to catch nested scrolls
+      window.addEventListener('scroll', updatePosition, true); // Use capture so scroll events from nested containers reach us.
       return () => {
         window.removeEventListener('resize', updatePosition);
         window.removeEventListener('scroll', updatePosition, true);
@@ -269,8 +269,8 @@ interface DropdownItemProps {
 }
 
 /**
- * Menu item that closes the parent `Dropdown` on click unless `closeOnClick` is `false` or the
- * item/click target contains an interactive form control (`input`, `textarea`, `select`, `label`).
+ * Close the parent dropdown on click by default. Honor an explicit `closeOnClick` value. Otherwise,
+ * keep it open when the click is in a form control or label, or the item contains a form control.
  */
 export function DropdownItem({ children, className, style, closeOnClick, disabled, onClick }: DropdownItemProps) {
   const ctx = useContext(DropdownContext);
@@ -282,16 +282,16 @@ export function DropdownItem({ children, className, style, closeOnClick, disable
     }
     onClick?.();
 
-    // Smart Close Logic
-    // 1. If explicitly provided, respect the prop
-    // 2. Otherwise, check if we contain an input/checkbox
+    // Decide whether the click should close the menu.
+    // Use the prop when the caller sets it.
+    // Otherwise, check for form controls.
     let shouldClose = closeOnClick;
 
     if (shouldClose === undefined) {
       const target = e.target as HTMLElement;
       const isInput = target.closest('input, textarea, select');
       const isLabel = target.closest('label');
-      // If we clicked an input or a label, or the item contains an input, default to NOT closing
+      // Leave the menu open while someone is using a control or its label.
       if (isInput || isLabel || itemRef.current?.querySelector('input, textarea, select')) {
         shouldClose = false;
       } else {

@@ -8,10 +8,9 @@ interface UseRangeSelectionProps<T> {
 }
 
 /**
- * Tracks global Shift-key state to provide Shift+Click range selection over an ordered item list.
- * Uses a rolling anchor and base snapshot: each Shift+Click applies the clicked item's toggled state
- * across the inclusive range from the previous anchor to the clicked item, then advances the anchor
- * until Shift is released.
+ * Use Shift+Click to toggle an inclusive range in the ordered list.
+ * Apply the clicked item's new state against a baseline selection, then move the anchor to that
+ * item for the next click. Releasing Shift ends the gesture.
  */
 export function useRangeSelection<T>({ items, selectedIds, onChange, getId }: UseRangeSelectionProps<T>) {
   const lastCheckedId = useRef<string | null>(null);
@@ -50,7 +49,7 @@ export function useRangeSelection<T>({ items, selectedIds, onChange, getId }: Us
 
       const isShift = shiftDown.current;
 
-      // Ensure a starting point for shift range if an anchor exists
+      // Use the current anchor as the first range start.
       if (isShift && !rangeStartId.current && lastCheckedId.current) {
         rangeStartId.current = lastCheckedId.current;
       }
@@ -59,7 +58,7 @@ export function useRangeSelection<T>({ items, selectedIds, onChange, getId }: Us
       if (isShift && !rangeStartId.current) {
         rangeBase.current = new Set(selectedIds);
 
-        // If no anchor yet (clean slate + shift held), treat first click as normal toggle
+        // Without an anchor, the first Shift+Click works like a normal click.
         if (!lastCheckedId.current) {
           const next = new Set(selectedIds);
           if (next.has(id)) {
@@ -78,7 +77,7 @@ export function useRangeSelection<T>({ items, selectedIds, onChange, getId }: Us
         rangeStartId.current = lastCheckedId.current;
       }
 
-      // Shift range apply (rolling base + moving start)
+      // Apply the range to the baseline, starting at the current anchor.
       if (isShift && rangeStartId.current) {
         const startIndex = items.findIndex((item) => getId(item) === rangeStartId.current);
         if (startIndex === -1) {
@@ -117,7 +116,7 @@ export function useRangeSelection<T>({ items, selectedIds, onChange, getId }: Us
       onChange(next);
       lastCheckedId.current = id;
       rangeStartId.current = null;
-      rangeBase.current = new Set(next); // Update base for future shift clicks
+      rangeBase.current = new Set(next); // Save this selection as the baseline for the next Shift+Click.
     },
     [items, selectedIds, onChange, getId],
   );

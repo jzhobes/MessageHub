@@ -52,10 +52,9 @@ export function ModalHeader({
 }
 
 /**
- * Native `<dialog>` modal (`showModal()`) with 300ms exit-animation unmounting via `useModalAnimation`.
- * Intercepts Escape (`cancel`) and backdrop clicks according to `dismissible`, fires `onAfterClose`
- * after unmount, and defers enabling `ModalHeader`'s close button by 10ms so the browser's initial
- * focus scan lands on modal content first.
+ * Open a native `<dialog>` with `showModal()` and keep it mounted for the 300ms exit animation.
+ * `dismissible` controls Escape and backdrop clicks. `onAfterClose` runs after unmount.
+ * Enable the header's close button after 10ms so the browser focuses the dialog content first.
  */
 export default function BaseModal({
   isOpen,
@@ -82,8 +81,8 @@ export default function BaseModal({
     if (isMounted && !dialog.open) {
       dialog.setAttribute('closedby', dismissible ? 'closerequest' : 'none');
       dialog.showModal();
-      // Delay enabling the close button slightly to let
-      // the browser's initial focus scan hit the content first.
+      // Wait a beat before enabling the close button
+      // so the browser focuses the dialog content first.
       const timer = setTimeout(() => setIsReady(true), 10);
       return () => clearTimeout(timer);
     } else if (!isMounted && dialog.open) {
@@ -91,7 +90,7 @@ export default function BaseModal({
     }
   }, [isMounted, dismissible]);
 
-  // Handle native cancel (Escape key) and unexpected native close (e.g. Chromium CloseWatcher)
+  // Handle Escape and native closes, including Chromium's CloseWatcher.
   useEffect(() => {
     const dialog = dialogRef.current;
     if (!dialog || !isMounted) {
@@ -101,7 +100,7 @@ export default function BaseModal({
     dialog.setAttribute('closedby', dismissible ? 'closerequest' : 'none');
 
     const handleCancel = (e: Event) => {
-      e.preventDefault(); // Prevent default to handle close via state
+      e.preventDefault(); // Let React state handle the close so the exit animation can run.
       if (dismissible && onClose) {
         onClose();
       }
@@ -114,7 +113,7 @@ export default function BaseModal({
       if (dismissible && onClose) {
         onClose();
       } else if (dialog.isConnected && !dialog.open) {
-        // Keep DOM in sync if the browser force-closed a non-dismissible dialog
+        // Reopen the dialog if the browser closes it while dismissal is disabled.
         dialog.showModal();
       }
     };

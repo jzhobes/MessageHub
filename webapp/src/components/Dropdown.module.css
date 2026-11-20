@@ -12,7 +12,7 @@
   /* Initial state for Popover API */
   position: fixed;
   inset: auto;
-  z-index: 10000; /* Though top-layer handles this, it doesn't hurt */
+  z-index: 10000; /* The top layer already handles stacking. Keep the z-index as a fallback. */
 
   /* Transition setup */
   transition:
@@ -24,7 +24,7 @@
   opacity: 1;
   transform: scale(1);
 
-  /* JS Fallback / Non-anchor support */
+  /* JS positioning for browsers without CSS anchor support. */
   top: var(--dropdown-top);
   left: var(--dropdown-left);
 }
@@ -42,7 +42,7 @@
   }
 }
 
-/* Progressive Enhancement: Native CSS Anchoring */
+/* Use native CSS anchors when the browser supports them. */
 @supports (anchor-name: --test) {
   .dropdownMenu {
     top: anchor(bottom);

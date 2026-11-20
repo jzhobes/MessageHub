@@ -231,7 +231,7 @@ describe('demoRouter', () => {
   it('transforms content rows, supports jump by messageId and date, and serves media gallery', async () => {
     const contentRes = await handleDemoFetch('/api/content?threadId=fb_chat_1&page=1&platform=facebook');
     const { records } = await contentRes.json();
-    // Message 2 has both text and photo, so transformContentRows splits it into 2 bubbles
+    // Message 2 has text and a photo, so it should come back as two bubbles.
     expect(records.some((r: { id: string }) => r.id === '2_media')).toBe(true);
     expect(records.some((r: { id: string }) => r.id === '2')).toBe(true);
 
@@ -260,12 +260,12 @@ describe('demoRouter', () => {
     expect(searchRes.status).toBe(200);
     const body = await searchRes.json();
 
-    // Results are scoped to facebook (2 coffee messages in fb_chat_1)
+    // The Facebook filter should return the two coffee messages from fb_chat_1.
     expect(body.total).toBe(2);
     expect(body.data).toHaveLength(2);
     expect(body.data[0].snippet).toBeTruthy();
 
-    // Platform facet is self-excluding, so google_mail ("ship" in both inbound and outbound) still appears
+    // Keep Gmail in the platform counts even when Facebook is selected. Both Gmail messages contain “ship.”
     expect(body.facets.platforms).toEqual({ facebook: 2, google_mail: 2 });
     expect(body.facets.senders['John Doe']).toBe(1);
     expect(body.facets.senders['Alice Smith']).toBe(1);
@@ -333,7 +333,7 @@ describe('demoRouter', () => {
     const jsonlPreview = await jsonlPreviewRes.json();
     expect(jsonlPreview.sessions.length).toBeGreaterThan(0);
 
-    // Full ZIP generation + job-status polling + JSZip validation
+    // Generate the full ZIP, poll for completion, and open it with JSZip to check the contents.
     let capturedBlob: Blob | null = null;
     vi.spyOn(URL, 'createObjectURL').mockImplementation((obj: Blob | MediaSource) => {
       capturedBlob = obj as Blob;

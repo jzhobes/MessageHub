@@ -5,8 +5,8 @@ import path from 'path';
 import { getProjectRoot } from './python';
 
 /**
- * Quotes a workspace path as a single .env value.
- * Rejects control characters and variable expressions interpreted by the Next.js loader.
+ * Quote the workspace path so it stays one .env value. Reject control characters and variable
+ * expressions the Next.js loader would interpret.
  *
  * @param workspacePath - The path to persist
  * @returns A quoted value that preserves the original path
@@ -25,9 +25,8 @@ export function serializeWorkspacePath(workspacePath: string): string {
 }
 
 /**
- * Updates the .env file with the provided workspace path.
- * This ensures the configuration persists across application restarts.
- * Also initializes root boundaries if they are missing.
+ * Save the workspace path to .env so it survives a restart. Fill in the root boundaries if they're
+ * missing.
  */
 export async function persistWorkspacePath(workspacePath: string): Promise<void> {
   const value = serializeWorkspacePath(workspacePath);
@@ -39,7 +38,7 @@ export async function persistWorkspacePath(workspacePath: string): Promise<void>
     await fs.promises.access(envPath);
     content = await fs.promises.readFile(envPath, 'utf-8');
   } catch {
-    // .env doesn't exist, start empty
+    // Start with an empty file if .env doesn't exist yet.
   }
 
   let newContent = content;
@@ -54,7 +53,7 @@ export async function persistWorkspacePath(workspacePath: string): Promise<void>
     newContent += `WORKSPACE_PATH=${value}\n`;
   }
 
-  // 2. Ensure Security Roots exist (default to HOME)
+  // Use HOME for any security root that hasn't been configured.
   const homeDir = os.homedir();
   if (!/^ROOT_IMPORT_PATH=/m.test(newContent)) {
     if (newContent && !newContent.endsWith('\n')) {

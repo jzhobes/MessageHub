@@ -12,7 +12,7 @@ vi.mock('@/hooks/useIngestion', () => ({
   useIngestion: vi.fn(),
 }));
 
-// Mock the sub-components using absolute paths to ensure they are correctly intercepted
+// Use absolute paths so the mocks intercept the same imports as SetupModal.
 vi.mock('@/components/modals/setup/DataPathStep', () => ({
   __esModule: true,
   default: () => <div data-testid="path-step">Path Step</div>,
@@ -80,7 +80,7 @@ describe('SetupModal Component', () => {
 
     expect(screen.getByText('Welcome to MessageHub')).toBeTruthy();
     expect(screen.getByText('Get Started')).toBeTruthy();
-    // Close button (top right) should NOT be present in FirstRun Welcome
+    // The first-run welcome screen leaves out the top-right close button.
     expect(screen.queryByLabelText('Close')).toBeNull();
   });
 
@@ -120,24 +120,20 @@ describe('SetupModal Component', () => {
 
     // Test Wizard version footer buttons
     cleanup();
-    mockUseIngestion({ isInstalling: false }); // Start with install off so we can navigate
+    mockUseIngestion({ isInstalling: false }); // Start with ingestion off so we can navigate to the path step.
     render(<SetupModal {...defaultProps} isFirstRun={true} />);
 
     // 1. Navigate to 'path' step
     screen.getByText('Get Started').click();
     expect(await screen.findByTestId('path-step')).toBeTruthy();
 
-    // 2. Now trigger installation state
-    // We mount a fresh instance at the correct step to verify footer buttons
+    // Switch to active ingestion once we're on the right step.
+    // Remount the wizard with ingestion active to check the footer controls.
     cleanup();
     mockUseIngestion({ isInstalling: true });
-    render(<SetupModal {...defaultProps} isFirstRun={true} initialStep={1} />); // initialStep 1 is 'import', initialStep 0 is 'welcome' (or 'path' if not first run... let's check)
+    render(<SetupModal {...defaultProps} isFirstRun={true} initialStep={1} />); // Start with the Import step.
 
-    // In FirstRun, steps are ['path', 'import', 'scan'].
-    // If we want 'path' with footer, we need a way to get there.
-    // Actually SetupModal.tsx:
-    // const stepTab = initialStep === 0 ? 'welcome' : initialStep === 1 ? 'import' : initialStep === 2 ? 'scan' : 'path';
-    // Let's use initialStep={3} to get to 'path' (the fallback 'else' condition)
+    // initialStep={3} selects the Path fallback, which has the footer we need.
     cleanup();
     render(<SetupModal {...defaultProps} isFirstRun={true} initialStep={3} />);
 

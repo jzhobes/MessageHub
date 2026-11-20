@@ -5,9 +5,9 @@ import { DatasetEntry } from '@/lib/shared/types';
 import type { NextApiRequest, NextApiResponse } from 'next';
 
 /**
- * Generates a fast dataset formatting preview (`POST`) by running `DatasetGenerator` on at most the
- * first 3 selected threads (capped at 100k tokens/file and 20 parsed sessions) and returning the
- * 5 most recent sessions.
+ * Preview dataset formatting on POST. Run `DatasetGenerator` on up to three selected threads, with
+ * 100k tokens per file and at most 20 parsed sessions. Return the five most recent sessions
+ * collected.
  */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -64,7 +64,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     generator.setDb(db.get());
 
-    // We only take a few threads for the preview
+    // A few threads are enough to show the format.
     const previewThreadIds = (threadIds as string[]).slice(0, 3);
     const recordsStream = generator.generateRecords(previewThreadIds, identityNames, dateRange);
 
@@ -94,13 +94,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         });
       }
 
-      // Don't over-collect if we have a massive thread, 20 is enough to get a recent sample
+      // Stop at 20 sessions so a large thread doesn't slow down the preview.
       if (allSessions.length >= 20) {
         break;
       }
     }
 
-    // Return the 5 most recent sessions (from the end of the collection)
+    // Take the last five sessions in the collection.
     const sessions = allSessions.slice(-5);
 
     return res.status(200).json({ sessions });

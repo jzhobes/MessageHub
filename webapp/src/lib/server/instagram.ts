@@ -1,13 +1,13 @@
 /**
- * Builds browser-like navigation headers for authenticated Instagram requests.
- * Accepts `authEnv` as either a JSON object of cookie key/value pairs or a raw `Cookie` header string,
- * falling back to the raw string if JSON parsing fails.
+ * Send browser-style headers for authenticated Instagram requests.
+ * Read `authEnv` as a JSON cookie map when possible. If parsing fails, send it as the raw `Cookie`
+ * header.
  */
 export function getInstagramHeaders(authEnv: string): Record<string, string> {
   let cookieString = authEnv;
 
   try {
-    // Try parsing JSON first if it looks like JSON
+    // Only try JSON if the value looks like an object.
     if (authEnv.trim().startsWith('{')) {
       const authData = JSON.parse(authEnv);
       cookieString = Object.entries(authData)
@@ -19,8 +19,6 @@ export function getInstagramHeaders(authEnv: string): Record<string, string> {
   }
 
   return {
-    // 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-    // 'User-Agent': 'MessageHub',
     Cookie: cookieString,
     Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
     'Accept-Language': 'en-US,en;q=0.5',

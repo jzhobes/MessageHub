@@ -14,8 +14,8 @@ interface DemoInfoModalProps {
 const GITHUB_REPO_URL = 'https://github.com/jzhobes/MessageHub';
 
 /**
- * Replaces the local Setup wizard in GitHub Pages static Demo Mode, explaining what works
- * client-side on the sample archive and linking users to run MessageHub locally.
+ * Show this in place of Setup on GitHub Pages. It explains what works with the sample archive and
+ * how to run MessageHub locally.
  */
 export default function DemoInfoModal({ isOpen, onClose }: DemoInfoModalProps) {
   return (

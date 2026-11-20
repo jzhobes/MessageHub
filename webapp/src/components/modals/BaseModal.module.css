@@ -120,7 +120,7 @@
 
 .content {
   flex: 1;
-  min-height: 0; /* Critical: allows flex child to be constrained by parent height */
+  min-height: 0; /* Let the flex child fit within the modal's height. */
   overflow: hidden;
   display: flex;
   flex-direction: column;

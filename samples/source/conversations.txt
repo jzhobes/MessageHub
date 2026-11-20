@@ -1,0 +1,443 @@
+# platform | slug | title | participants (owner is always Alex Smith)
+# @ date time (UTC); sender code: message. Blank lines are ignored.
+# A comment starting with '# attachment: ' attaches the named file to the next message.
+# M Alex Smith; L Emma Wilson; T Ben Miller; J Sam Park; R David Smith;
+# A Susan Smith; E James Turner; N Sarah Brown; S Chris Taylor
+
+## facebook | cabin-weekend | Fern House weekend | M,L,T,J
+@ 2025-01-12 18:10
+L: Could we actually do the cabin thing this spring instead of just saying we should?
+M: yes. putting my calendar where my mouth is
+T: March? Before everyone gets wedding season busy
+J: March 14–16 works for me
+M: same here, I can take Friday afternoon off
+L: I'll look for somewhere with a kitchen. Eating out for every meal gets expensive.
+T: And actual beds please. My camping era has ended.
+J: you slept on a yoga mat once and we heard about it for a year
+@ 2025-01-15 19:05
+L: Found Fern House in Millbrook. Two bedrooms, four beds, $480 total for two nights.
+M: so $120 each before groceries? works for me
+J: is there a train nearby?
+L: Not really. Ben offered to drive, right?
+T: I did! Four people fit if Sam doesn't bring the enormous suitcase.
+J: that was ONE trip
+M: book it, I'll send my share tonight
+@ 2025-02-09 17:20
+L: Booked! Confirmation is in Alex's email too. Check-in Friday March 14 after 4.
+M: got it. Is the address 18 Fern Lane?
+L: Yep, Millbrook. The gravel driveway is after the red mailbox.
+T: I'll put that in the route. Leave at noon?
+# attachment: weekend-plan.svg
+J: could we do 1? i have a dentist appointment that morning
+M: 1 works. Pickup outside my building, 42 Linden Street.
+@ 2025-03-12 20:15
+J: weather says rain Friday. Still hiking Saturday?
+L: Saturday looks dry. Cedar Loop is only 3 miles.
+M: bringing the blue rain jacket anyway
+T: Grocery list: pasta, eggs, coffee. What am I missing?
+J: oat milk for me please
+L: And something green. We are adults occasionally.
+M: Added spinach and apples. I'll handle Friday dinner.
+@ 2025-03-14 12:40
+T: Running 15 minutes late. Sorry, gas station queue.
+M: no rush, Sam's here. making coffee
+J: small suitcase acquired. Awaiting applause
+L: 👏👏
+T: At the corner now. Silver car, trunk open.
+@ 2025-03-16 15:10
+L: Home! Already miss that porch.
+M: me too! groceries came to $86.40, so $21.60 each
+J: sent. Did anyone grab my green water bottle?
+T: In my car. I can bring it Tuesday.
+M: best part was everyone going quiet for the last mile 😂
+L: That was the hill. Nobody had oxygen left.
+
+## facebook | emma | Emma Wilson | M,L
+@ 2025-01-08 18:30
+L: You left your scarf at mine.
+M: oh that's where it went. can I grab it Saturday?
+L: Yep. Coffee around 11?
+M: perfect. same place by the station?
+L: Let's try Willow Coffee instead. Station place is closed for repairs.
+@ 2025-02-16 16:05
+M: did you ever find that lentil soup recipe?
+L: Susan's one? You sent it to me in November 😂
+M: wait didn't I send it to you originally
+L: Ask your mom. It had lemon at the end, that's all I remember.
+M: will do. keep forgetting the lemon
+@ 2025-03-18 19:30
+L: Did the cabin host reply about your charger?
+M: yes! they're mailing it. left it behind the sofa apparently
+L: At least it wasn't the entire suitcase.
+M: leave Sam out of this 😂
+@ 2025-04-22 18:20
+L: Soup report: excellent. Used red lentils, cooked in 25 minutes.
+M: remember the lemon?
+L: I did. I have learned from your mistakes.
+M: fair enough haha
+@ 2025-06-08 10:10
+M: Willow at 11 again next Saturday?
+L: Yes please. Bring the cabin photos if you have them.
+M: I'll make an album. fair warning, about 40 are the same tree
+L: It was a good tree.
+
+## facebook | family-table | Sunday table | M,A,R
+@ 2025-01-19 15:00
+A: Dinner next Sunday? Making lasagna.
+R: I'm in. Can we eat at six? Work until five
+M: Six is good. I'll bring dessert.
+A: Nothing with walnuts please. Your aunt is coming.
+M: apple crumble, no nuts. got it
+R: I'll bring salad so we can pretend this is balanced
+@ 2025-02-23 14:30
+A: Found your blue serving bowl while clearing the cupboard.
+M: that's yours! mine is the white one with the chipped edge
+R: how many bowls do we own
+A: Then I have acquired another bowl somehow.
+M: I'll bring the white one Sunday and we can check
+@ 2025-04-13 13:10
+R: Who has the lentil soup recipe? Making dinner for friends
+M: Mom emailed it in February. Search for lemon lentil soup.
+A: One cup red lentils, David. Not the whole bag.
+R: okay that was one time
+M: It is.
+@ 2025-06-15 14:00
+A: Lunch here on the 22nd? We can sit outside if it's dry.
+M: Yes. I'll bring strawberries.
+R: Can bring bread from the bakery
+A: Lovely. Around one, no need to rush.
+M: saving that last sentence as proof 😂
+
+## facebook | ben | Ben Miller | M,T
+@ 2025-01-25 12:15
+T: Are you using that drill this weekend?
+M: nope, all yours. shelf stayed up overnight so that's a start
+T: High praise for a shelf.
+M: the bar is low
+@ 2025-02-02 16:00
+T: Returning drill Tuesday. Also your small screwdriver was in the bag.
+M: Thanks! I need it for the loose kitchen handle.
+T: Want a hand with that?
+M: think I've got it. will text if things go wrong
+@ 2025-03-17 18:15
+M: Thanks again for driving. How much for gas?
+T: $48 total. $12 each if that's okay.
+M: sent. still got Sam's bottle?
+T: Yep. Bringing it to rehearsal tomorrow.
+@ 2025-05-10 11:30
+T: Community garden has spare tomato seedlings. Want two?
+M: yes please! third time lucky
+T: These like sun and regular watering.
+M: right. will try to keep these alive
+
+## instagram | sam | Sam Park | M,J
+@ 2025-01-21 20:00
+J: this pottery studio has a beginner class in February
+M: beginner as in actually beginner?
+J: they say no experience needed. i intend to test that claim
+M: Send me the booking details?
+J: Thursday Feb 13, 6:30. Clay Room on Orchard Street
+M: booked. this could go badly
+@ 2025-02-13 21:00
+M: mine looks like a tiny watering can
+J: mine has no handle. We could combine them
+M: between us we've made one mug
+J: pickup in three weeks. They're firing everything together
+@ 2025-03-06 18:30
+J: pots are ready! Going Saturday morning
+M: could you grab mine too? helping David move
+J: sure. The one with the ambitious handle?
+M: that's the one. thumbprint on the side
+@ 2025-04-05 10:10
+M: mug update: holds coffee! bit wobbly though
+J: that's a successful first mug
+M: too risky to take it to work?
+J: take it. Establish dominance over the office mugs
+@ 2025-06-02 19:40
+J: want to do the summer class? Six weeks this time
+M: Maybe autumn? June is getting crowded.
+J: fair. i'll remind you in August
+M: please do. aiming for a flat bottom next time
+
+## instagram | concert | Saturday at Lantern Hall | M,L,J
+@ 2025-04-02 18:00
+L: Harbor Lights are playing Lantern Hall May 17. Anyone interested?
+J: yes! Haven't seen them since the tiny basement venue
+M: I'm in. standing or balcony?
+J: balcony if there are seats. My knees vote balcony
+L: Three balcony tickets are $28 each plus $3 fee.
+M: go for it, sending $31 now
+@ 2025-05-14 19:10
+L: Tickets emailed to Alex. Doors 7, music 8.
+# attachment: concert-plan.svg
+M: got them! dinner first?
+J: Nori Kitchen at 6? It's two blocks away
+L: Works for me. Can you book?
+M: booked for three at 6, under Alex
+@ 2025-05-17 17:40
+J: train is delayed. Might be there at 6:15
+M: we'll order dumplings. will save you some
+L: No legally binding promises.
+J: i trust Alex more on this
+@ 2025-05-18 11:05
+M: still have the last song stuck in my head
+L: Same. That quiet encore was the best bit.
+J: also thank you for actually saving the dumplings
+M: only just. Emma was eyeing the last two
+
+## instagram | balcony | Balcony experiments | M,T
+@ 2025-05-11 10:00
+M: tomatoes are in! enough space between them?
+T: Separate pots would be better. They get bigger than you think.
+M: okay, separate pots tomorrow
+T: Drainage holes in both, please.
+M: yes dad
+@ 2025-05-25 09:20
+M: leaves looking a bit sad. too much water?
+T: Is the soil still wet a finger down?
+M: very
+T: Give it a few days. Pots don't need a drink every time you do.
+@ 2025-06-19 18:00
+M: first tomato!! tiny but I'll take it
+T: Leave it until it's properly red.
+M: I wasn't going to eat it immediately
+T: You sent that message while holding a fork, didn't you?
+M: no comment
+
+## google_chat | Space Field Notes | Field Notes launch | M,E,N,S
+@ 2025-01-13 09:10
+N: Starting a space for the Field Notes website refresh. Target launch April 8.
+M: I'll map the signup flow this week.
+E: I can audit the current pages. Where are the support notes?
+S: I'll send a summary tomorrow. Main issue is people losing the confirmation email.
+M: Let's put the next step on the success page too, then.
+N: Good. Small launch first: signup, event list, contact page.
+@ 2025-02-04 10:00
+M: First flow is ready. Could someone try it without me narrating?
+E: Happy to. Is mobile included?
+M: Yes. Please try a narrow screen; the date picker is the bit I'm least sure about.
+S: I got through, but didn't realize the email field was required.
+M: Thanks. I'll make the label explicit and keep the error next to the field.
+N: Can we review Thursday at 10?
+E: Works. I'll bring the keyboard navigation notes.
+@ 2025-03-04 14:00
+E: Signup review: tab order is good now. One issue with long event titles.
+M: Wrapping or clipping?
+E: Clipping on the confirmation screen. Sending a review note separately.
+M: Found it. Fixed width on the title container. I'll adjust it.
+S: Support copy is approved. Kept the phone number on the contact page.
+N: Great. No new features before launch please.
+@ 2025-04-07 15:30
+N: Tomorrow's launch: James deploys at 10, Alex checks signup, Chris watches support.
+M: Ready. Test account uses alex+preview@example.com.
+E: Rollback is the previous release. I'll stay around until noon.
+S: I'll send the announcement once Alex gives the okay.
+@ 2025-04-08 10:15
+E: New site is live.
+M: Mobile signup and confirmation email both passed. Event dates look right too.
+S: Announcement sent. First real signup already came through.
+N: Thank you all. Let's collect feedback for a week before making more changes.
+M: Celebratory coffee seems like a reasonable next feature.
+@ 2025-04-15 11:00
+S: First week: 43 signups, two questions about accessibility, no missing confirmations reported.
+M: Nice. I'll add the venue access details next to each event.
+E: I can pair on that Friday.
+N: Let's do it. Good small follow-up.
+
+## google_chat | DM James Turner | James Turner | M,E
+@ 2025-01-28 11:00
+E: Do you have ten minutes to look at the event cards?
+M: After lunch? Finishing the signup copy now.
+E: 1:30?
+M: Works. Send the preview link before then please.
+@ 2025-02-20 14:20
+M: When you tested mobile, did the button jump after the error appeared?
+E: Yes, on the smaller screen. I thought I'd tapped the wrong thing.
+M: That's helpful. I'll reserve space for the error message.
+E: Thanks. I'll retest tomorrow morning.
+@ 2025-03-04 14:10
+# attachment: signup-review.svg
+E: Review note attached. The title is Spring neighborhood planting workshop.
+M: Ah yes, our most ambitious title meets our smallest screen.
+E: I can shorten the example, but real titles will be this long.
+M: Keep it. The layout needs to handle it.
+@ 2025-04-11 12:00
+E: Coffee? We never claimed the launch coffee.
+M: Absolutely. Willow at 12:30?
+E: See you there. Bringing the mug you made?
+M: It has been promoted to desk pencil holder. Stability concerns.
+
+## google_chat | Space Lunch | Lunch walk | M,E,S
+@ 2025-02-11 12:05
+S: Anyone walking to the market for lunch?
+M: Me. Need daylight.
+E: Give me five, finishing a call.
+S: Meet by the side door at 12:15.
+@ 2025-03-11 12:00
+E: Market again? Soup stall is back.
+M: Yes, but I have to be back by one.
+S: We can take the short route along the canal.
+M: Perfect. Coat on, ready when you are.
+@ 2025-05-06 12:10
+M: Lunch outside today? It's finally warm.
+S: Park bench by the library?
+E: I'll meet you there. Have leftovers.
+M: Same. No market detour needed.
+
+## google_voice | Susan Smith | Susan Smith | M,A
+@ 2025-02-15 16:00
+A: Did the package arrive?
+M: Yes, thank you! The scarf is lovely.
+A: Hand wash that one. It will shrink in the dryer.
+M: noted. keeping it away from the dryer
+@ 2025-02-16 17:00
+M: Could you email the lentil soup recipe? Emma wants it too.
+A: Of course. Lemon at the end, not while it boils.
+M: ah. that might be where I went wrong last time
+A: Sent it. Tell Emma she can use vegetable stock.
+@ 2025-04-12 10:00
+A: Are you coming tomorrow?
+M: Yes, around 5:30. Need anything from the shop?
+A: Plain yogurt please. The big tub.
+M: got it. bringing the white bowl too
+A: We finally solve the bowl mystery.
+@ 2025-06-21 17:00
+M: Strawberries bought for tomorrow. Shall I wash them here?
+A: Leave them dry until tomorrow. They keep better.
+M: Okay. See you around one.
+A: Looking forward to it ❤️
+
+## google_voice | David Smith | David Smith | M,R
+@ 2025-03-05 18:00
+R: Still okay to help move Saturday?
+M: Yes. What time does the van arrive?
+R: Nine. New address is 7 Maple Court, apartment 3B
+M: Third floor, right? Is there a lift?
+R: There is. I checked this time
+M: thank goodness. not doing those stairs again
+@ 2025-03-08 08:40
+M: on the bus, bringing bagels
+R: Hero. Van is outside the old place
+M: any coffee yet?
+R: Kettle is in a box marked books. Don't ask
+@ 2025-03-09 15:00
+R: Found your tote bag behind the boxes
+M: Keep it until dinner Sunday. How's the unpacking?
+R: kitchen is usable. still boxes everywhere
+M: maybe start with the kettle box 😂
+@ 2025-05-03 11:00
+R: Do you need the folding chairs back?
+M: Not until June. How many people are coming tonight?
+R: Six. Attempting Mom's lentil soup
+M: Lemon at the end. This is our family motto now.
+
+## google_voice | Emma Wilson | Emma Wilson | M,L
+@ 2025-03-14 16:20
+L: No signal near the turnoff. Are you close?
+M: Ten minutes out. We just passed the farm shop.
+L: Red mailbox then gravel driveway. Door code is in the booking email.
+M: Found it. Bringing groceries in first.
+@ 2025-05-17 22:45
+M: Did you get your bus?
+L: Yes, just sat down. You?
+M: walking to the station with Sam. great night
+L: text when you're home?
+M: will do
+@ 2025-05-17 23:20
+M: home! found the dumpling receipt in my coat. now I'm hungry again
+L: I was concerned for a second.
+
+## google_mail | cabin-booking | Fern House booking — March 14–16 | Fern House
+@ 2025-02-09 09:00
+Fern House: Hi Alex, your two-night stay at Fern House is confirmed for March 14–16, 2025. Four guests, total $480, paid in full. Check-in after 4 PM; checkout by 11 AM. Address: 18 Fern Lane, Millbrook. The gravel driveway is just after the red mailbox. Reply here with any questions.
+@ 2025-03-10 09:00
+Fern House: A few arrival details for Friday: the lockbox code is 2846. Please return the key at checkout. Parking fits two cars. Towels and bedding are included; bring your own groceries. Cedar Loop trail begins beside the village library. Have a lovely stay.
+@ 2025-03-17 09:00
+M: Thanks for a lovely weekend. Did you happen to find a black USB-C charger behind the living room sofa?
+@ 2025-03-18 09:00
+Fern House: We found it! We can post it to 42 Linden Street, the address on your booking. No charge. Glad you enjoyed the weekend.
+@ 2025-03-18 10:00
+M: That's the right address, thank you so much. We especially loved the porch.
+
+## google_mail | soup-recipe | Lemon lentil soup | A
+@ 2025-02-16 17:10
+A: Hi Alex, here's the soup for you and Emma. Soften one chopped onion and two carrots in olive oil. Add two cloves garlic and one teaspoon cumin. Stir in one cup rinsed red lentils, one tin chopped tomatoes, and four cups vegetable stock. Simmer 25 minutes, until the lentils are soft. Add a handful of spinach. Turn off the heat, then add the juice of half a lemon. Salt to taste. Serves four. Love, Mom
+@ 2025-02-17 18:00
+M: Made it tonight. Remembered the lemon this time! Sent the recipe to Emma too.
+@ 2025-02-18 08:00
+A: Good! It freezes well. Add a little water when reheating because it thickens.
+
+## google_mail | keyboard-order | Order W4821 confirmed | Northline Supply
+@ 2025-02-24 10:00
+# attachment: receipt-W4821.txt
+Northline Supply: Thanks for your order, Alex. Order W4821: Compact wired keyboard, charcoal, $64. Shipping $6; total $70. Delivering to 42 Linden Street. Estimated delivery February 28. Reply to this email for help. This is a fictional demo order.
+@ 2025-02-27 14:00
+Northline Supply: Your order W4821 has shipped. Expected arrival tomorrow. The parcel contains one compact wired keyboard in charcoal.
+@ 2025-02-28 15:30
+Northline Supply: Order W4821 was delivered today at 3:12 PM. Delivery location: building reception.
+
+## google_mail | keyboard-return | Return request — order W4821 | Northline Support
+@ 2025-03-02 12:00
+M: Hello, the keyboard from order W4821 arrived Friday. The space bar sticks unless I press right in the middle. Could I return it for a refund? I have the original packaging.
+@ 2025-03-03 09:00
+# attachment: return-R219.svg
+Northline Support: Sorry about that, Alex. Your return reference is R219. Please use the prepaid label attached and drop the parcel off within 14 days. We'll refund the full $70, including original shipping, once received.
+@ 2025-03-04 17:00
+M: Dropped it off this afternoon. Thanks for making this straightforward.
+@ 2025-03-07 10:00
+Northline Support: We received return R219 and issued your $70 refund. Please allow 3–5 business days for it to appear on your original payment method.
+
+## google_mail | pottery-booking | Clay Room — beginner session February 13 | Clay Room
+@ 2025-01-22 09:00
+Clay Room: Hi Alex, you're booked for our beginner pottery session on Thursday February 13, 6:30–8:30 PM. Address: 26 Orchard Street. Aprons and materials provided. Wear clothes you don't mind getting clay on. Your $45 booking includes firing one piece.
+@ 2025-03-06 09:00
+Clay Room: Your pottery is ready to collect! Pickup hours: Tuesday–Saturday, 10 AM–6 PM. A friend can collect on your behalf; just give them your name and class date.
+@ 2025-03-06 12:00
+M: Thank you! Sam Park will collect mine on Saturday. We both attended the February 13 session.
+
+## google_mail | field-notes-scope | Field Notes refresh — agreed scope | N,E,S
+@ 2025-01-16 10:00
+N: Thanks for the kickoff. For April 8 we're updating signup, event listings, and the contact page. Alex owns the signup flow, James handles implementation, Chris reviews support copy. We'll leave member accounts for a later phase. Design review February 6 at 10 AM.
+@ 2025-01-16 11:00
+M: Confirmed. I'll include mobile layouts and the confirmation screen. Could Chris send the most common signup questions before next Tuesday?
+@ 2025-01-17 09:00
+S: Sent the summary in Chat. The biggest question is what happens after submitting the form. We should show the event date and next step immediately.
+@ 2025-04-09 09:00
+N: The refresh launched yesterday as planned. Thanks everyone. Please keep feedback in the Field Notes launch space for the next week; we'll choose follow-ups together on April 15.
+
+## google_mail | concert-tickets | Your Harbor Lights tickets — May 17 | Lantern Hall
+@ 2025-04-03 10:00
+Lantern Hall: Hi Alex, your three balcony tickets for Harbor Lights are confirmed. Saturday May 17, Lantern Hall, 9 Canal Road. Doors 7 PM, performance 8 PM. Total paid: $93 including fees. Booking reference LH517. Show this confirmation at the box office to collect your tickets. All event details are fictional demo content.
+@ 2025-05-14 10:00
+Lantern Hall: A reminder for Saturday: bag check is at the main entrance. Balcony seating is unreserved. The box office opens at 6:30 PM; please have booking reference LH517 ready.
+
+## google_mail | dinner-reservation | Nori Kitchen reservation — May 17 at 6 PM | Nori Kitchen
+@ 2025-05-14 19:20
+Nori Kitchen: Reservation confirmed for Alex Smith: three guests, Saturday May 17 at 6 PM. Address: 14 Canal Road, a short walk from Lantern Hall. Please reply if you're running more than 15 minutes late.
+@ 2025-05-17 17:45
+M: One of our party may arrive at 6:15 because of a train delay. Two of us will be there at six. Is that okay?
+@ 2025-05-17 17:50
+Nori Kitchen: Absolutely, thanks for letting us know. We'll seat you when you arrive.
+
+## google_mail | library-hold | Ready for pickup: The Orchard Map | Linden Library
+@ 2025-05-21 09:00
+Linden Library: Your hold, The Orchard Map by fictional author Morgan Reed, is ready at the Linden branch. Please collect by May 28. Opening hours: Monday–Friday 9 AM–7 PM, Saturday 10 AM–4 PM. Bring your library card.
+@ 2025-06-12 09:00
+Linden Library: Reminder: The Orchard Map is due June 14. You can renew at the desk if no one else is waiting. This is a fictional library notice for the demo.
+
+## instagram | book-swap | Book swap | M,L
+@ 2025-01-30 19:15
+L: Finished the book you lent me. The ending got me.
+M: right?? went back and reread the first chapter
+L: Can I bring it Saturday and borrow the next one?
+M: yes! leaving it by the door now so we don't forget
+@ 2025-05-22 18:00
+M: Library hold finally came in. The Orchard Map.
+L: Oh that's the one Sam mentioned. Tell me if it's good.
+M: will do. need to collect before next Wednesday
+L: Set a reminder. Last time your book went on holiday without you.
+@ 2025-06-04 19:00
+M: Finished it. Slow start, but I loved the sisters arguing over the orchard.
+L: Worth joining the hold queue?
+M: I think so. more family drama than mystery though
+L: That helps a lot. Adding it tonight.

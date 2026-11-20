@@ -6,8 +6,8 @@ import { getMyNames } from '@/lib/server/identity';
 import type { NextApiRequest, NextApiResponse } from 'next';
 
 /**
- * API Handler to list directory contents for the file explorer.
- * Leverages FileSystem manager class for security and path resolution.
+ * List the requested folder for File Explorer. Use the filesystem service to resolve the path and
+ * enforce the configured root.
  */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const requestedPath = req.query.path;
@@ -43,7 +43,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     }
 
-    // If it doesn't exist, we don't try to list contents
+    // Return the path details without listing files if the folder hasn't been created yet.
     const items = (meta?.exists ?? true) ? await fileSystem.listContents(currentPath, extensions, mode) : [];
 
     return res.status(200).json({

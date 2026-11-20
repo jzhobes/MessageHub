@@ -8,14 +8,13 @@ import { ZipArchive } from 'archiver';
 import { jobStore } from '@/lib/jobStore';
 import { DatasetGenerator } from '@/lib/server/DatasetGenerator';
 import db from '@/lib/server/db';
+import { getDatasetBaseName } from '@/lib/shared/dataset/datasetFilename';
 
 import type { NextApiRequest, NextApiResponse } from 'next';
 
 /**
- * Next.js API Configuration
- * - bodyParser: Increased limit to handle large thread selection payloads.
- * - externalResolver: Enabled to support manual response streaming via archiver.
- * - runtime: Forced nodejs to allow usage of native fs and archiver modules.
+ * Allow large thread selections in the request body. Use the external resolver for archive
+ * streaming and the Node.js runtime for filesystem and archiver access.
  */
 export const config = {
   api: {
@@ -49,9 +48,9 @@ interface GenerateDatasetBody {
 }
 
 /**
- * Runs `DatasetGenerator` in the background (merging UI identity names with DB identities as a
- * fail-safe), packs generated parts into a temp ZIP archive, and updates `jobStore` progress/status.
- * Marks the job failed if no valid training parts are emitted.
+ * Build the dataset in the background, write a temporary ZIP, and track progress in `jobStore`. Use
+ * the identities from SQLite if the UI list is incomplete.
+ * Fail the job if generation produces no valid training parts.
  */
 async function processJob(jobId: string, body: GenerateDatasetBody) {
   try {
@@ -80,8 +79,8 @@ async function processJob(jobId: string, body: GenerateDatasetBody) {
       timeZone,
     } = body;
 
-    // FAIL-SAFE: Automatically fetch all known identity names/emails from DB
-    // to ensure 'isMe' logic works even if UI config is incomplete.
+    // Include the names and emails we know from the database.
+    // That lets isMe work even if the UI only supplied some identities.
     const { getMyNames } = await import('@/lib/server/identity');
     const dbNames = await getMyNames();
     const identityNames = [...new Set([...uiNames, ...dbNames])];
@@ -96,7 +95,7 @@ async function processJob(jobId: string, body: GenerateDatasetBody) {
       zlib: { level: 9 }, // Maximum compression
     });
 
-    // Promise to track when I/O is actually done
+    // Wait for the output stream to finish before marking the ZIP ready.
     const streamFinished = new Promise<void>((resolve, reject) => {
       outputStream.on('close', resolve);
       archive.on('error', reject);
@@ -146,11 +145,15 @@ async function processJob(jobId: string, body: GenerateDatasetBody) {
       );
     }
 
-    // Finalize the zip (writes central directory)
+    // Write the ZIP's central directory before closing it.
     await archive.finalize();
     await streamFinished;
 
-    jobStore.update(jobId, { status: 'completed', resultPath: filePath });
+    jobStore.update(jobId, {
+      status: 'completed',
+      resultPath: filePath,
+      downloadFileName: `${getDatasetBaseName(datasetName, outputFormat)}.zip`,
+    });
   } catch (error: unknown) {
     console.error('Job %s failed:', jobId, error);
     jobStore.update(jobId, { status: 'failed', error: (error as Error).message || 'Unknown error' });
@@ -158,10 +161,9 @@ async function processJob(jobId: string, body: GenerateDatasetBody) {
 }
 
 /**
- * Async dataset export endpoint.
- * - `POST`: prunes jobs and temp archives older than 1 hour, enqueues a background generation job,
- *   and responds `202` with `{ jobId }`.
- * - `GET ?jobId=...`: streams the completed ZIP archive for download.
+ * POST removes jobs and temporary archives older than an hour, starts generation in the background,
+ * and returns 202 with `{ jobId }`.
+ * GET with `jobId` streams the finished ZIP.
  */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   // 1. Download Handling
@@ -185,7 +187,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const stat = await fs.promises.stat(job.resultPath);
 
     res.setHeader('Content-Type', 'application/zip');
-    res.setHeader('Content-Disposition', 'attachment; filename=virtual_me_dataset.zip');
+    const downloadFileName = job.downloadFileName ?? 'virtual_me_dataset.zip';
+    const fallbackName = downloadFileName.replace(/[^ -~]|"/g, '_');
+    const encodedName = encodeURIComponent(downloadFileName.toWellFormed()).replace(
+      /[!'()*]/g,
+      (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`,
+    );
+    res.setHeader('Content-Disposition', `attachment; filename="${fallbackName}"; filename*=UTF-8''${encodedName}`);
     res.setHeader('Content-Length', stat.size);
 
     const readStream = fs.createReadStream(job.resultPath);
@@ -205,7 +213,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(400).json({ error: 'Missing identityNames' });
       }
 
-      // Run cleanup of old jobs (older than 1 hour)
+      // Remove jobs and ZIPs from more than an hour ago.
       jobStore.cleanup(3600000, async (job) => {
         if (job.resultPath) {
           try {
@@ -213,8 +221,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             await fs.promises.unlink(job.resultPath);
             console.log(`Cleaned up artifact for job ${job.id}`);
           } catch {
-            // access failed (file not there) or unlink failed
-            // Ignore "not found" errors during cleanup
+            // The file may already be gone, or the delete may have failed.
+            // A ZIP that's already gone needs no cleanup.
           }
         }
       });
@@ -222,10 +230,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const jobId = crypto.randomUUID();
       jobStore.create(jobId);
 
-      // Start processing in background (FIRE AND FORGET)
+      // Let generation run after the request returns.
       processJob(jobId, req.body);
 
-      // Return ID immediately
+      // Give the client the job ID so it can start polling.
       return res.status(202).json({ jobId });
     } catch (error: unknown) {
       console.error('Job creation failed:', error);

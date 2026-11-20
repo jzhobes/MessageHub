@@ -7,13 +7,13 @@ from utils import fix_text, get_media_type, parse_iso_time
 
 
 def normalize_participants(participant_list):
-    """Normalizes participant names for consistent ID generation."""
+    """Normalize participant names so the same names produce the same ID."""
     clean = [fix_text(p).strip() for p in participant_list if p]
     return sorted(list(set(clean)))
 
 
 def ingest_google_chat_thread(cursor, thread_dir):
-    """Ingests a single Google Chat thread folder."""
+    """Import one Google Chat thread folder."""
     thread_path = Path(thread_dir)
     thread_id = thread_path.name
 
@@ -35,9 +35,9 @@ def ingest_google_chat_thread(cursor, thread_dir):
 
     participants_json = json.dumps(normalize_participants(participants))
 
-    # Determine if it's a group:
-    # 1. Any 'Space' is a group
-    # 2. Any DM with > 2 participants is a Group DM
+    # Treat spaces and larger DMs as group chats.
+    # Every Space is a group.
+    # A DM counts as a group once it has more than two participants.
     is_group = (not thread_id.startswith("DM ")) or (len(participants) > 2)
 
     cursor.execute(
@@ -60,8 +60,8 @@ def ingest_google_chat_thread(cursor, thread_dir):
     # Read Messages
     files_to_read = [messages_file] if messages_file.exists() else list(thread_path.glob("message_*.json"))
 
-    # === Deduplicate attachments ===
-    # 1. Scan disk for actual files
+    # Match attachment references to the files on disk.
+    # Start with the filenames actually on disk.
     disk_file_map = {}  # { base_filename: [(index, actual_filename), ...] }
     try:
         for f in thread_path.iterdir():
@@ -91,7 +91,7 @@ def ingest_google_chat_thread(cursor, thread_dir):
     except Exception as e:
         print(f"Warning scanning dir {thread_dir}: {e}")
 
-    # 2. Collect all attachment references
+    # Collect references across the whole thread.
     all_messages = []
     for mf in files_to_read:
         try:
@@ -102,7 +102,7 @@ def ingest_google_chat_thread(cursor, thread_dir):
         except Exception:
             pass
 
-    # 3. Build JSON attachment map
+    # Build the map we'll use to resolve those references.
     json_att_map = {}
     for msg in all_messages:
         if "attached_files" in msg:
@@ -207,7 +207,7 @@ def ingest_google_chat_thread(cursor, thread_dir):
 
 
 def discover_google_chat_identity(scan_path):
-    """Scans for Google Chat profile information files to discover user identity."""
+    """Look for the user's identity in Google Chat profile exports."""
     root = Path(scan_path) / "Google Chat/Users"
     if root.exists():
         try:

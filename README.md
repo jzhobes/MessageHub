@@ -11,7 +11,7 @@ MessageHub also includes **DataForge AI**, a dataset curation studio designed to
 ### Requirements
 
 - Node.js 26+ (LTS)
-- Python 3.10+
+- Python 3.12+
 - macOS, Linux, or WSL
   > **Windows setup:** Use WSL (Windows Subsystem for Linux) with Ubuntu, and install Node.js and Python inside Ubuntu.
 
@@ -76,10 +76,10 @@ MessageHub can fetch rich link previews for shared Instagram URLs if you provide
 Add `INSTAGRAM_AUTH` using either a JSON object of cookie key/value pairs or a raw `Cookie` header string:
 
 ```env
-# JSON object of cookie key/value pairs
+# Set cookies as a JSON object of name/value pairs.
 INSTAGRAM_AUTH='{"sessionid":"...","csrftoken":"..."}'
 
-# Or a raw Cookie header string
+# A raw Cookie header works too.
 INSTAGRAM_AUTH="sessionid=...; csrftoken=..."
 ```
 

@@ -61,7 +61,7 @@ describe('/api/studio/dataset-threads', () => {
       labels: ['message'],
     });
 
-    // 6 substantive messages from Me + 2 from Alice (URLs should not count toward myCount)
+    // Use six substantive messages from Me and two from Alice. Leave URLs out of myCount.
     for (let i = 0; i < 6; i++) {
       seedMessage(memDb, {
         thread_id: 'high_score',
@@ -83,7 +83,7 @@ describe('/api/studio/dataset-threads', () => {
       content: 'Nice!',
     });
 
-    // Only 3 messages from Me (< 5 threshold -> qualityScore 0)
+    // Three messages from Me is below the cutoff, so the thread scores zero.
     for (let i = 0; i < 3; i++) {
       seedMessage(memDb, {
         thread_id: 'low_count',
@@ -116,7 +116,7 @@ describe('/api/studio/dataset-threads', () => {
       qualityScore: 0,
     });
 
-    // Filter to instagram only -> excludes facebook thread and virtual facebook threads
+    // With Instagram selected, skip the real and virtual Facebook threads.
     const igCall = createMocks({ method: 'GET', query: { platform: ['instagram'] } });
     await handler(igCall.req, igCall.res);
     expect(igCall.res._getJSONData()).toHaveLength(1);

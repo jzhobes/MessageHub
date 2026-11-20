@@ -11,9 +11,9 @@ from utils import fix_text, get_media_type
 
 
 def get_body(msg):
-    """Extracts the best available text body from a message."""
+    """Get the best text body available for this message."""
     if msg.is_multipart():
-        # Prefer text/plain, fallback to text/html
+        # Use plain text if we have it. Fall back to HTML.
         plain = None
         html = None
         for part in msg.walk():
@@ -43,7 +43,7 @@ def get_body(msg):
 
 
 def decode_mime_header(val):
-    """Decodes RFC 2047 encoded headers (e.g. =?UTF-8?Q?...?=)."""
+    """Decode RFC 2047 headers such as =?UTF-8?Q?...?=."""
     if not val:
         return ""
     try:
@@ -60,38 +60,38 @@ def decode_mime_header(val):
 
 
 def get_plain_text_snippet(html_or_text, length=100):
-    """Returns a clean plain-text snippet from HTML or text."""
+    """Make a plain-text snippet from HTML or text."""
     if not html_or_text:
         return ""
 
-    # Try to strip HTML if it looks like HTML
+    # Strip tags if this looks like HTML.
     if "<" in html_or_text and ">" in html_or_text:
         try:
             soup = BeautifulSoup(html_or_text, "html.parser")
             text = soup.get_text(separator=" ").strip()
-            # Replace multiple spaces/newlines with a single space
+            # Collapse runs of spaces and newlines to one space.
             text = re.sub(r"\s+", " ", text)
             return text[:length]
         except Exception:
             pass
 
-    # Fallback to simple slicing if not HTML or BS4 fails
+    # Slice the original text if there's no HTML or Beautiful Soup can't parse it.
     text = re.sub(r"\s+", " ", html_or_text).strip()
     return text[:length]
 
 
 def clean_html(html):
-    """Removes HTML tags and returns formatted text."""
+    """Strip HTML tags while keeping readable text formatting."""
     if not html:
         return ""
 
-    # If it's not looking like HTML, just do a basic clean
+    # Plain text only needs a basic cleanup.
     if not ("<html" in html.lower() or "<body" in html.lower() or "</div>" in html.lower() or "<p" in html.lower()):
         return unwrap_text(html.strip())
 
     try:
         soup = BeautifulSoup(html, "html.parser")
-        # Keep newlines for the stripper to work correctly
+        # Keep line breaks so the stripper can preserve the structure.
         return soup.get_text(separator="\n").strip()
     except Exception:
         return html.strip()
@@ -99,8 +99,7 @@ def clean_html(html):
 
 def unwrap_text(text):
     """
-    Joins lines that were likely hard-wrapped by email clients.
-    Preserves double-newlines as paragraph breaks.
+    Join lines that look hard-wrapped by an email client. Keep double newlines as paragraph breaks.
     """
     if not text:
         return ""
@@ -113,7 +112,7 @@ def unwrap_text(text):
     cleaned_paragraphs = []
 
     for para in paragraphs:
-        # For each paragraph, join lines that start with lowercase (soft wraps)
+        # Within a paragraph, treat lowercase starts as likely continuations.
         lines = para.split("\n")
         if not lines:
             continue
@@ -124,7 +123,7 @@ def unwrap_text(text):
             if not stripped_next:
                 continue
 
-            # If the next line starts with lowercase, it's likely a wrapped line
+            # A lowercase start is a good hint that this line was wrapped.
             if stripped_next and stripped_next[0].islower():
                 unwrapped = unwrapped.rstrip() + " " + stripped_next
             else:
@@ -137,8 +136,7 @@ def unwrap_text(text):
 
 def strip_quoted_text(text):
     """
-    Attempts to remove historical email quotes and reply headers.
-    Returns only the "new" content of the message.
+    Keep the new part of the email by trimming recognized reply headers and quoted history.
     """
     if not text:
         return ""
@@ -157,7 +155,7 @@ def strip_quoted_text(text):
 
         # 2. Outlook/Forwarding style "From:" header
         if re.match(r"^(From|Sent|To|Subject):\s+.*", stripped, re.IGNORECASE):
-            # If we see multiple headers in a row, it's definitely a quoted block
+            # Treat the first From, Sent, To, or Subject line as the start of quoted history.
             break
 
         # 3. "-----Original Message-----"
@@ -165,8 +163,8 @@ def strip_quoted_text(text):
             break
 
         # 4. Multi-line "On [Date], [Name] wrote:"
-        # Gmail often wraps this across multiple lines.
-        # Check if this line starts with "On " and look ahead for "wrote:"
+        # Look for a reply header that the email client may have wrapped.
+        # Look for “wrote:” after an opening “On ”.
         if stripped.startswith("On "):
             found_wrote = False
             # Look ahead up to 4 lines
@@ -184,13 +182,13 @@ def strip_quoted_text(text):
 
 
 def parse_participants(msg):
-    """Extracts all participants (From, To, Cc) as names."""
+    """Collect display names from From, To, and Cc."""
     parts = []
     for header in ["from", "to", "cc"]:
         val = msg.get(header)
         if val:
-            # val can be a comma-separated list of addresses
-            # Use getaddresses to properly parse them
+            # One header can contain several addresses.
+            # Use getaddresses so commas in names are handled correctly.
             addr_list = getaddresses([str(val)])
             for name, addr in addr_list:
                 clean_name = fix_text(name if name else addr)
@@ -200,7 +198,7 @@ def parse_participants(msg):
 
 
 def extract_external_images(html):
-    """Parses HTML for interesting external images, excluding quoted history."""
+    """Pull external images from the current HTML message and skip quoted history."""
     if not html:
         return []
 
@@ -208,7 +206,7 @@ def extract_external_images(html):
     try:
         soup = BeautifulSoup(html, "html.parser")
 
-        # Remove quoted history to avoid picking up old GIFs
+        # Strip the quoted history first so old GIFs don't show up again.
         for quote in soup.find_all("div", class_="gmail_quote"):
             quote.decompose()
 
@@ -217,7 +215,7 @@ def extract_external_images(html):
             if not src:
                 continue
 
-            # Interesting patterns: Tenor, Giphy, or Google proxies
+            # Look for Tenor, Giphy, and Google proxy URLs.
             src_lower = src.lower()
             if any(p in src_lower for p in ["tenor.com", "giphy.com", "googleusercontent.com/proxy"]):
                 results.append({"uri": src, "type": "photo"})
@@ -227,7 +225,7 @@ def extract_external_images(html):
 
 
 def strip_html_quotes(html):
-    """Surgically removes quoted history from HTML body."""
+    """Trim quoted history from the HTML body."""
     if not html:
         return ""
     try:
@@ -239,17 +237,17 @@ def strip_html_quotes(html):
         for blockquote in soup.find_all("blockquote"):
             blockquote.decompose()
 
-        # 3. Enterprise/Outlook style "From:" blocks and "On ... wrote:" tails.
-        # These often lack a wrapper div and just appear as text blocks in the middle of the body.
+        # Look for Outlook-style “From:” blocks and “On ... wrote:” headers.
+        # These can appear as plain blocks in the body without a wrapper div.
         header_pattern = re.compile(r"^\s*(From|Sent|To|Subject):", re.IGNORECASE)
         wrote_pattern = re.compile(r"^\s*On .* wrote:", re.IGNORECASE)
 
-        # Check all potential block-level elements for quote markers
+        # Look for quote markers in block-level elements.
         for element in soup.find_all(["div", "p", "span", "b", "font"]):
             text = element.get_text().strip()
-            # If we find a line starting with From: or On [Date] wrote:, it's likely the start of a quote session
+            # A block starting with “From:” or “On [Date] wrote:” likely starts quoted history.
             if header_pattern.match(text) or wrote_pattern.match(text):
-                # We've found the start of the quote. Decompose this element and everything that follows.
+                # Remove the quote marker and everything that follows it.
                 for sibling in element.find_all_next():
                     sibling.decompose()
                 element.decompose()
@@ -261,17 +259,17 @@ def strip_html_quotes(html):
 
 
 def map_cid_to_local(html, media):
-    """Replaces cid: references in HTML with local /api/media URLs."""
+    """Point inline cid: references to local /api/media URLs."""
     if not html or not media:
         return html
 
     # media is a list of {"uri": "Mail/attachments/...", "type": "photo"}
-    # We need to find if any of these were CIDs
+    # Match those attachment paths back to their CIDs.
     for m in media:
         uri = m["uri"]
 
         if uri.startswith("http"):
-            # Also proxy known problematic external links (like Google proxies)
+            # Proxy known trouble spots too, such as Google proxy URLs.
             if "googleusercontent.com/proxy" in uri.lower():
                 local_url = f"/api/media?path={uri}&platform=google_mail"
                 html = html.replace(uri, local_url)
@@ -280,7 +278,7 @@ def map_cid_to_local(html, media):
         fname = uri.split("/")[-1]
 
         # If the filename was derived from a CID (e.g. ii_k1r2z3x4.png)
-        # We try to match it back
+        # Try the filename as a way back to the original CID.
         cid_match = re.match(r"^(.*?)\.[a-z0-9]+$", fname)
         if cid_match:
             cid = cid_match.group(1)
@@ -294,9 +292,9 @@ def map_cid_to_local(html, media):
 
 def ingest_google_mail_mbox(cursor, mbox_path, identity_stats):
     """
-    Ingests a Google Takeout MBOX file into the database.
-    Updates identity_stats (email -> { 'names': set(), 'count': int }) in-place.
-    Returns: (msg_total, skipped_total)
+    Import one Google Takeout mbox file and update identity_stats in place.
+    The stats map each email address to a set of names and a count.
+    Return (msg_total, skipped_total).
     """
     mbox_file = Path(mbox_path)
     if not mbox_file.exists():
@@ -312,7 +310,7 @@ def ingest_google_mail_mbox(cursor, mbox_path, identity_stats):
 
     for i, message in enumerate(mbox):
         try:
-            # Label detection for thread_labels
+            # Collect labels for thread_labels.
             raw_labels = str(message.get("X-Gmail-Labels", ""))
             current_message_labels = set()
             if "Sent" in raw_labels:
@@ -320,9 +318,9 @@ def ingest_google_mail_mbox(cursor, mbox_path, identity_stats):
             if "Inbox" in raw_labels:
                 current_message_labels.add("inbox")
 
-            # 1. Collect identity from 'Delivered-To' header only
-            # This is the most accurate and reliable way to identify the mailbox owner
-            # Delivered-To is added by Gmail servers and always contains the actual recipient email
+            # Use Delivered-To to identify the mailbox owner.
+            # This is more reliable than the visible To field.
+            # Gmail adds it with the actual delivery address.
             delivered_to = str(message.get("Delivered-To", ""))
             if delivered_to:
                 addr_list = getaddresses([delivered_to])
@@ -353,7 +351,7 @@ def ingest_google_mail_mbox(cursor, mbox_path, identity_stats):
             except Exception:
                 ts = 0
 
-            # 3. Content Extraction (HTML Preferred for EmailItem)
+            # Collect both body formats when available. EmailItem prefers HTML.
             # Find both parts if they exist
             plain_body = ""
             html_body = ""
@@ -382,7 +380,7 @@ def ingest_google_mail_mbox(cursor, mbox_path, identity_stats):
                 else:
                     plain_body = message.get_payload(decode=True).decode("utf-8", errors="replace")
 
-            # 4. Media Extraction (Do this before content processing to map CIDs)
+            # Extract attachments first so we can resolve inline CIDs in the body.
             media = []
             attach_dir = mbox_file.parent / "attachments"
             attach_dir.mkdir(exist_ok=True)
@@ -430,7 +428,7 @@ def ingest_google_mail_mbox(cursor, mbox_path, identity_stats):
                 # Map inline image CIDs
                 content = map_cid_to_local(cleaned_html, media)
             elif plain_body:
-                # Fallback to plain text, strip quotes, and convert to basic HTML
+                # With plain text only, strip quotes and convert the rest to basic HTML.
                 stripped_plain = strip_quoted_text(plain_body)
                 unwrapped = unwrap_text(stripped_plain)
                 content = f"<div style='white-space: pre-wrap;'>{unwrapped}</div>"
@@ -470,7 +468,7 @@ def ingest_google_mail_mbox(cursor, mbox_path, identity_stats):
                         cache_threads[thread_id]["last_ms"] = ts
                         cache_threads[thread_id]["snippet"] = get_plain_text_snippet(content)
 
-                    # Accumulate labels across all messages in thread
+                    # Keep every label seen across the thread's messages.
                     cache_threads[thread_id]["labels"].update(current_message_labels)
             else:
                 skipped_total += 1
@@ -504,7 +502,7 @@ def ingest_google_mail_mbox(cursor, mbox_path, identity_stats):
         # Insert all labels encountered for this thread
         labels = info.get("labels", set())
 
-        # Ensure every Gmail thread has at least one label (default to inbox)
+        # Give unlabeled Gmail threads an inbox label.
         if not labels:
             labels = {"inbox"}
 
@@ -518,8 +516,8 @@ def ingest_google_mail_mbox(cursor, mbox_path, identity_stats):
 
 def discover_google_mail_identity(gmail_identity_stats):
     """
-    Determines the most likely owner of the Gmail account based on 'To' field counts.
-    Returns: (best_email, names, count) or None
+    Pick the most likely Gmail owner using counts from the To field.
+    Return (best_email, names, count), or None when there's no candidate.
     """
     if not gmail_identity_stats:
         return None

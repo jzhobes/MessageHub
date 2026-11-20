@@ -12,13 +12,13 @@ def get_stable_id(title):
 
 
 def normalize_participants(participant_list):
-    """Normalizes participant names for consistent ID generation."""
+    """Normalize participant names so the same names produce the same ID."""
     clean = [fix_text(p).strip() for p in participant_list if p]
     return sorted(list(set(clean)))
 
 
 def ingest_facebook_entry(cursor, thread_dir, thread_id_override=None):
-    """Refers to Facebook/Instagram unified ingestion."""
+    """Use the shared Facebook and Instagram importer."""
     return ingest_facebook_instagram_thread(cursor, thread_dir, "facebook", thread_id_override)
 
 
@@ -28,19 +28,19 @@ def ingest_instagram_entry(cursor, thread_dir, thread_id_override=None):
 
 def ingest_facebook_instagram_thread(cursor, thread_dir, platform, thread_id_override=None):
     """
-    Ingests a single Facebook or Instagram thread folder.
-    This logic is shared because the JSON export structure is nearly identical for both.
+    Import one Facebook or Instagram thread folder. Their JSON exports use nearly the same structure, so
+    they can share the parser.
     """
     thread_path = Path(thread_dir)
     thread_id = thread_id_override if thread_id_override else thread_path.name
 
-    # Collect all message json files
-    # pattern: message_1.json, message_2.json ...
+    # Collect all the message JSON files.
+    # Exports split messages into message_1.json, message_2.json, and so on.
     message_files = sorted(thread_path.glob("message_*.json"))
     if not message_files:
         return 0, 0
 
-    # Parse Metadata (Title, Participants) from the first file (usually newest)
+    # Read the title and participants from the first file, which is usually the newest.
     title = ""
     participants = []
 
@@ -170,7 +170,7 @@ def ingest_facebook_instagram_thread(cursor, thread_dir, platform, thread_id_ove
 
 
 def ingest_facebook_events(cursor, scan_path, my_name):
-    """Parses all your_event_responses_*.json files into the threads/messages model."""
+    """Import your_event_responses_*.json as threads with RSVP messages."""
     events_dir = Path(scan_path) / "Facebook/your_facebook_activity/events"
     if not events_dir.exists():
         return 0, 0
@@ -189,7 +189,7 @@ def ingest_facebook_events(cursor, scan_path, my_name):
             ("events_declined", "Declined Event", "You declined this event."),
         ]
 
-        # Use a dict to merge duplicates by timestamp
+        # Use the timestamp as the key so duplicate entries merge.
         # Key: ts_ms, Value: {title, status_msg, snippet}
         merged_events = {}
 
@@ -227,7 +227,7 @@ def ingest_facebook_events(cursor, scan_path, my_name):
             # Insert label
             cursor.execute("INSERT OR IGNORE INTO thread_labels (thread_id, label) VALUES (?, ?)", (event_id, "event"))
 
-            # Create "Message" for RSVP
+            # Store the RSVP as a message so it appears in the thread.
             cursor.execute(
                 """
                 INSERT OR REPLACE INTO content (thread_id, sender_name, timestamp_ms, content)
@@ -248,7 +248,7 @@ def ingest_facebook_events(cursor, scan_path, my_name):
 
 
 def ingest_facebook_owned_events(cursor, scan_path, my_name):
-    """Parses all your_events_*.json files (events created by the user)."""
+    """Import your_events_*.json for events the user created."""
     events_dir = Path(scan_path) / "Facebook/your_facebook_activity/events"
     if not events_dir.exists():
         return 0, 0
@@ -322,20 +322,20 @@ def ingest_facebook_owned_events(cursor, scan_path, my_name):
 
 
 def ingest_facebook_posts(cursor, scan_path, my_name):
-    """Parses all post-related JSON files into threads/messages model."""
+    """Import post-related JSON files as threads and messages."""
     posts_dir = Path(scan_path) / "Facebook/your_facebook_activity/posts"
     if not posts_dir.exists():
         return 0, 0
 
     # Gather all post-related files
-    # Meta uses several names: your_posts_*.json, your_uncategorized_photos.json, your_posts__check_ins__photos_and_videos_*.json
+    # Meta uses a few filenames, including your_posts_*.json, your_uncategorized_photos.json, and your_posts__check_ins__photos_and_videos_*.json.
     posts_files = list(posts_dir.glob("your_*.json"))
     if not posts_files:
         return 0, 0
 
     msg_count = 0
     skipped_count = 0
-    # Merge duplicates and extract data across ALL files
+    # Merge duplicates across the whole export before inserting posts.
     merged_data = {}
     try:
         for p_file in posts_files:
@@ -348,7 +348,7 @@ def ingest_facebook_posts(cursor, scan_path, my_name):
                             merged_data[ts] = post
                         else:
                             # Merge into existing timestamp
-                            # Prefer longer/more descriptive title
+                            # Keep the longer title when both entries have one.
                             new_title = post.get("title", "")
                             old_title = merged_data[ts].get("title", "")
                             if len(new_title) > len(old_title):
@@ -365,7 +365,7 @@ def ingest_facebook_posts(cursor, scan_path, my_name):
             raw_title = post.get("title") or "Post"
             post_title = fix_text(raw_title)
 
-            # Extract content - pick longest if multiple available
+            # If we have several versions of the text, keep the longest.
             content = ""
             for d in post.get("data", []):
                 if "post" in d:
@@ -410,13 +410,13 @@ def ingest_facebook_posts(cursor, scan_path, my_name):
 
             # Determine snippet and final message content
             # If we have content text, use it.
-            # Otherwise, if we have a share/media, don't just repeat the title if it's generic.
+            # With a share or attachment, skip the generic title as message text.
             msg_content = content
             if not msg_content:
                 if share_url:
                     msg_content = share_url
                 elif unique_media:
-                    msg_content = ""  # Let the media bubble speak for itself
+                    msg_content = ""  # The media bubble already shows what was shared.
                 else:
                     msg_content = post_title
 
@@ -457,7 +457,7 @@ def ingest_facebook_posts(cursor, scan_path, my_name):
 
 
 def ingest_facebook_checkins(cursor, scan_path, my_name):
-    """Parses check-ins.json into threads/messages."""
+    """Import check-ins.json as threads and messages."""
     p = Path(scan_path) / "Facebook/your_facebook_activity/posts/check-ins.json"
     if not p.exists():
         return 0, 0
@@ -530,7 +530,7 @@ def ingest_facebook_checkins(cursor, scan_path, my_name):
 
 
 def discover_facebook_identity(scan_path):
-    """Scans for Facebook profile information files to discover user identity."""
+    """Look for the user's identity in Facebook profile exports."""
     p = Path(scan_path) / "Facebook/profile_information/profile_information.json"
     if not p.exists():
         p = Path(scan_path) / "Facebook/personal_information/profile_information/profile_information.json"
@@ -548,10 +548,10 @@ def discover_facebook_identity(scan_path):
 
 
 def discover_instagram_identity(scan_path):
-    """Scans for Instagram profile information files to discover user identity."""
+    """Look for the user's identity in Instagram profile exports."""
     p = Path(scan_path) / "Instagram/personal_information/personal_information/personal_information.json"
     if not p.exists():
-        # Another common variation
+        # Look for this filename too.
         p = Path(scan_path) / "Instagram/personal_information/personal_information.json"
 
     if p.exists():

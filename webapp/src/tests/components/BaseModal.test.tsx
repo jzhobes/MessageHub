@@ -62,7 +62,7 @@ describe('BaseModal', () => {
     const dialog = container.querySelector('dialog') as HTMLDialogElement;
     expect(showModalMock).toHaveBeenCalledTimes(1);
 
-    // Simulate Chromium CloseWatcher force-closing the native dialog
+    // Close the native dialog directly, as Chromium's CloseWatcher can.
     dialog.removeAttribute('open');
     dialog.dispatchEvent(new Event('close'));
 

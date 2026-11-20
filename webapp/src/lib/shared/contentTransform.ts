@@ -14,7 +14,7 @@ export interface RawContentRow {
 }
 
 /**
- * Extracts a lowercase file extension (including leading dot) without relying on Node `path`.
+ * Get the lowercase extension, including the dot, without importing Node's `path`.
  */
 export function getFileExtension(uri: string): string {
   const clean = uri.split('?')[0].split('#')[0];
@@ -28,10 +28,9 @@ export function getFileExtension(uri: string): string {
 }
 
 /**
- * Transforms raw content rows into UI `ContentRecord` bubbles: reclassifies generic `file`
- * attachments by extension, expands Google Chat annotations, formats virtual Facebook events/posts,
- * and splits mixed text+media rows into separate media and text bubbles unless the row looks like
- * a single-photo link preview.
+ * Turn raw rows into `ContentRecord` bubbles. Use file extensions to identify generic attachments,
+ * expand Google Chat annotations, and format virtual Facebook events and posts.
+ * Split text and media into two bubbles unless they look like one photo with a link preview.
  */
 export function transformContentRows(rows: RawContentRow[], myNames: string[], threadIdStr: string): ContentRecord[] {
   return rows.flatMap((row) => {
@@ -48,7 +47,7 @@ export function transformContentRows(rows: RawContentRow[], myNames: string[], t
     const files: MediaItem[] = media.filter((m) => m.type === 'file');
     const otherFiles: MediaItem[] = [];
 
-    // Post-process 'files' (e.g. from Google Chat) to see if they are actually photos/videos
+    // Check generic file attachments for photo or video extensions.
     files.forEach((f) => {
       const ext = getFileExtension(f.uri);
       if (['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.heic'].includes(ext)) {
@@ -110,8 +109,8 @@ export function transformContentRows(rows: RawContentRow[], myNames: string[], t
           };
         }
       } else if (threadIdStr.startsWith('fb-post-') || threadIdStr.startsWith('fb-checkin-')) {
-        // For posts and check-ins, prefer the actual content if available,
-        // otherwise fallback to the title (e.g. "Your Post" if no text)
+        // Use the actual text for posts and check-ins when we have it.
+        // Otherwise show the title, such as “Your Post.”
         displayContent = row.content || row.event_title;
       } else {
         displayContent = `${row.event_title}${row.content ? `: ${row.content}` : ''}`;
@@ -121,9 +120,9 @@ export function transformContentRows(rows: RawContentRow[], myNames: string[], t
 
     const result: ContentRecord[] = [];
 
-    // Logic to split Text and Media into separate bubbles to match original UI behavior.
-    // However, if the message looks like a Link Preview (Text + 1 Photo), we keep them together
-    // so the frontend can deduplicate the image.
+    // Show text and media in separate bubbles to match the original conversation.
+    // Keep a link with its one photo if it looks like a preview.
+    // The frontend uses both to avoid showing the same image twice.
     const hasLink = row.content && /(https?:\/\/[^\s]+)/.test(row.content);
     const isLikelyPreview =
       hasText &&
@@ -147,7 +146,7 @@ export function transformContentRows(rows: RawContentRow[], myNames: string[], t
         videos: videos.length ? videos : undefined,
         gifs: gifs.length ? gifs : undefined,
         sticker: stickers.length > 0 ? stickers[0] : undefined,
-        reactions: reactions, // Attach reactions to media preference
+        reactions: reactions, // Put reactions on the media bubble when we split the message.
         event_metadata: eventMetadata,
       });
 
@@ -183,7 +182,7 @@ export function transformContentRows(rows: RawContentRow[], myNames: string[], t
       });
     }
 
-    // Fallback for empty (shouldn't happen with valid data)
+    // Keep a basic bubble if no display records were built.
     if (result.length === 0) {
       result.push({
         id: row.id.toString(),

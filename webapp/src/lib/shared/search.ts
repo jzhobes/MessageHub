@@ -11,21 +11,20 @@ export interface ParsedQuery {
 }
 
 /**
- * Shared search query parser that respects quoted phrases and special operators.
- * Supports OR operator (uppercase only) to create boolean OR queries.
+ * Parse search terms, keeping quoted phrases intact. Uppercase `OR` starts a new group. Terms
+ * inside each group are ANDed.
  *
- * Examples:
- * - "test email" → [[test, email]] (AND)
- * - "test OR email" → [[test], [email]] (OR)
- * - "test email OR trial" → [[test, email], [trial]] (group1 OR group2)
- * - '"test OR email"' → [["test OR email"]] (literal phrase)
+ * - `test email` → [[test, email]]
+ * - `test OR email` → [[test], [email]]
+ * - `test email OR trial` → [[test, email], [trial]]
+ * - `"test OR email"` → [["test OR email"]]
  */
 export function parseSearchQuery(queryStr: string): ParsedQuery {
-  // Split by " OR " (uppercase, with spaces) to get OR groups
-  // But respect quotes - don't split inside quoted phrases
+  // Split on uppercase “ OR ” with spaces on both sides.
+  // Leave OR inside quoted phrases alone.
   const orGroups: ParsedToken[][] = [];
 
-  // First, extract quoted phrases and replace them with placeholders
+  // Set quoted phrases aside so the split can't break them up.
   const quotedPhrases: string[] = [];
   const placeholderPrefix = '__QUOTED_PHRASE_';
   const processedQuery = queryStr.replace(/"([^"]+)"/g, (match, phrase) => {
@@ -69,7 +68,7 @@ export function parseSearchQuery(queryStr: string): ParsedQuery {
         .replace(/\*/g, '%')
         .replace(/\?/g, '_');
 
-      // For regex, we escape all special regex chars EXCEPT our glob wildcards * and ?
+      // Escape regex characters except * and ?, which are our search wildcards.
       const escapedForRegex = clean
         .replace(/[.+^${}()|[\]\\]/g, '\\$&')
         .replace(/\?/g, '.') // Replace ? first (single char wildcard)

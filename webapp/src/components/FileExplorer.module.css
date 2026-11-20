@@ -4,8 +4,8 @@
   /* height set via prop */
   background: var(--bg-primary);
   overflow: hidden;
-  height: 100%; /* Default to filling parent if no prop */
-  min-height: 0; /* Critical: allows flex child to shrink below content size */
+  height: 100%; /* Fill the parent when no height is set. */
+  min-height: 0; /* Let this flex child shrink below the size of its content. */
 }
 
 .header {
@@ -76,7 +76,7 @@
 
 .list {
   flex: 1;
-  min-height: 0; /* Critical: allows scrolling to work properly */
+  min-height: 0; /* Let the file list scroll within the available height. */
   overflow-y: auto;
   padding: 4px 0;
 }
@@ -103,10 +103,9 @@
 .itemDisabled {
   opacity: 0.4;
   cursor: default;
-  /* pointer-events: none; // If we disable pointer events, we can't select text or anything. But for file explorer usually OK */
 }
 
-/* Ensure hover doesn't trigger on disabled items even if pointer-events is auto */
+/* Keep the disabled hover style even when pointer events are enabled. */
 .itemDisabled:hover {
   background: transparent;
 }

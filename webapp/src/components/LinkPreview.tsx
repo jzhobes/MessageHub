@@ -113,7 +113,7 @@ export default function LinkPreview({ url }: LinkPreviewProps) {
   const textContent = data?.title || data?.description;
 
   if (!loading && !hasImage && !textContent) {
-    // Fallback - don't show separate bubble, just let the text link stand alone
+    // If there's no preview, leave the link in the message on its own.
     return null;
   }
 

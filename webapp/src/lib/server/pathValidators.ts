@@ -2,9 +2,9 @@ import fs from 'fs';
 import path from 'path';
 
 /**
- * Resolves symlinks in the existing part of a path, preserving missing child components.
- * Rejects dangling symlinks and filesystem errors other than missing paths.
- * Checks every candidate against the trusted root before filesystem probes.
+ * Resolve the part of the path that exists and keep the missing child components. Check each
+ * candidate against the trusted root before probing the filesystem.
+ * Reject dangling symlinks and any filesystem error other than a missing path.
  *
  * @param targetPath - The path to canonicalize
  * @param rootPath - The trusted absolute root that bounds ancestor traversal
@@ -29,7 +29,7 @@ export function canonicalizePath(targetPath: string, rootPath: string): string {
       if (current === root) {
         throw new Error('PERMISSION_DENIED');
       }
-      // realpath also reports ENOENT for a dangling symlink. Never treat it as a new directory.
+      // A dangling symlink can also throw ENOENT. Treat it as an error so it can't pass as a new folder.
       try {
         fs.lstatSync(current);
       } catch (statError) {
@@ -46,15 +46,15 @@ export function canonicalizePath(targetPath: string, rootPath: string): string {
 }
 
 /**
- * Tests an unknown filesystem error for a specific errno code.
+ * Check whether an unknown error has the requested filesystem code.
  */
 export function hasErrorCode(error: unknown, code: string): boolean {
   return !!error && typeof error === 'object' && 'code' in error && error.code === code;
 }
 
 /**
- * Creates a path resolver with a canonical root scoped to one filesystem operation.
- * Checks lexical and canonical containment while allowing missing child directories.
+ * Resolve the root once for this filesystem operation. Check both the literal and resolved paths
+ * against it, while still allowing missing child directories.
  *
  * @param rootPath - The trusted root for this operation
  * @returns A resolver that returns canonical paths within the root
@@ -68,7 +68,7 @@ export function createPathResolver(rootPath: string): (requestedPath?: string) =
     }
     const resolved = path.resolve(requestedPath || root);
     let traversalRoot = root;
-    // Keep guards beside the paths they validate for static analysis.
+    // Keep each guard next to its filesystem call so static analysis can see it.
     const relative = path.relative(root, resolved);
     if (relative === '..' || relative.startsWith('..' + path.sep) || path.isAbsolute(relative)) {
       const canonicalRelative = path.relative(canonicalRoot, resolved);

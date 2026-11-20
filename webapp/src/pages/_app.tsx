@@ -49,7 +49,7 @@ function MainContent({ Component, pageProps }: { Component: AppProps['Component'
   const { isInitialized } = useApp();
   const router = useRouter();
 
-  // Show splash if we're checking status OR redirecting an uninitialized user to home
+  // Keep the splash up while we check status or send a user back to setup.
   if (isInitialized === null || (isInitialized === false && router.pathname !== '/')) {
     return <LoadingSplash />;
   }

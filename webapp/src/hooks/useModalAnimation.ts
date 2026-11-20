@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
 
 /**
- * useModalAnimation manages the mount/unmount lifecycle of a modal
- * to allow for exit animations before the component is removed from the DOM.
+ * Keep a closing modal mounted until its exit animation finishes.
  *
  * @param isOpen - Whether the modal should be open according to parent state
  * @param duration - Duration of the exit animation in ms (default: 300)
@@ -18,7 +17,7 @@ export function useModalAnimation(isOpen: boolean, duration: number = 300) {
   }
 
   useEffect(() => {
-    // When isOpen becomes false, start the closing animation
+    // Start the exit animation as soon as the parent closes the modal.
     if (!isOpen && isMounted && !isClosing) {
       // Trigger cooling-off/exit animation state
       // eslint-disable-next-line react-hooks/set-state-in-effect

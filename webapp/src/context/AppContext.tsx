@@ -5,7 +5,7 @@ import { useRouter } from 'next/router';
 import { apiFetch } from '@/lib/client/apiClient';
 
 interface AppContextType {
-  isInitialized: boolean | null; // null means "checking"
+  isInitialized: boolean | null; // null means we're still checking.
   availability: Record<string, boolean>;
   refreshStatus: () => Promise<void>;
 }
@@ -37,9 +37,9 @@ async function fetchStatusResult(pathname: string): Promise<StatusResult> {
 }
 
 /**
- * Queries `/api/status` on pathname changes (deduplicated per path and guarded against concurrent
- * fetches) to expose workspace initialization status and per-platform availability.
- * Redirects uninitialized users to `/` if they navigate to another route.
+ * Check `/api/status` on pathname changes for workspace setup and available platforms. Deduplicate
+ * checks by path and allow one fetch at a time.
+ * Send users back to `/` if they open another page before setting up a workspace.
  */
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [isInitialized, setIsInitialized] = useState<boolean | null>(null);
@@ -55,7 +55,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setAvailability(result.platforms);
       }
 
-      // Global Guard: Redirect to home if uninitialized and not on home page
+      // Send users without a workspace back home.
       if (result.shouldRedirectHome) {
         router.replace('/');
       }
@@ -85,7 +85,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [router.pathname, applyStatusResult],
   );
 
-  // Re-check on path changes to ensure guard stays active
+  // Check again when the path changes so navigation can't skip setup.
   useEffect(() => {
     if (isFetchingRef.current || lastCheckedPathRef.current === router.pathname) {
       return;

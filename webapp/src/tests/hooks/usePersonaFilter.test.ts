@@ -98,7 +98,7 @@ describe('usePersonaFilter', () => {
       expect(result.current.scanningLabels.size).toBe(0);
     });
 
-    // Replace [threadA] with [threadB] (same array length = 1)
+    // Swap threadA for threadB without changing the visible count.
     rerender({ threads: [threadB] });
 
     await waitFor(() => {

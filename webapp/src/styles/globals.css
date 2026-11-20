@@ -34,6 +34,10 @@
   --bg-primary: #ffffff;
   --bg-secondary: #f2f2f7;
 
+  --toggle-selected-text: #2563eb;
+  --toggle-selected-bg: rgba(37, 99, 235, 0.1);
+  --toggle-selected-hover-bg: rgba(37, 99, 235, 0.15);
+
   /* Standardized Border Radii */
   --radius-1: 4px; /* Small: Buttons, Inputs, Tags */
   --radius-2: 12px; /* Medium: Cards, Panes, Tooltips */
@@ -95,6 +99,10 @@
   --highlight-border: #ffffff;
   --bg-primary: #000000;
   --bg-secondary: #1c1c1e;
+
+  --toggle-selected-text: #93c5fd;
+  --toggle-selected-bg: rgba(147, 197, 253, 0.1);
+  --toggle-selected-hover-bg: rgba(147, 197, 253, 0.15);
 }
 
 body {
@@ -111,7 +119,7 @@ body {
   box-sizing: border-box;
 }
 
-/* Custom Scrollbar Removed: Using native OS scrollbars with color-scheme support */
+/* Use native scrollbars and let color-scheme pick the theme. */
 
 .spinner {
   animation: spin 1s linear infinite;
@@ -125,7 +133,7 @@ body {
   }
 }
 
-/* Reset for button elements to behave like clean boxes */
+/* Clear browser button styles so components can set their own. */
 .btn-reset,
 .btn,
 .btn-primary,
@@ -149,7 +157,7 @@ body {
   cursor: default;
 }
 
-/* Standard Premium Button - Base Styles */
+/* Shared base styles for primary buttons. */
 .btn,
 .btn-primary,
 .btn-secondary {
@@ -204,13 +212,10 @@ body {
   background-color: var(--bg-sidebar-hover);
 }
 
-/* 
-   Button attached to an input (Suffix) 
-   Designed to overlap the parent container's borders for a seamless look.
-*/
+/* Attach the button to the input's trailing edge. Overlap the container borders so the two read as one control. */
 .btn-input-suffix {
   height: calc(100% + 2px); /* Overlap top/bottom borders */
-  margin: -1px; /* Pull outwards to cover parent border */
+  margin: -1px; /* Pull the button outward to cover the input border. */
   border-top-left-radius: 0;
   border-bottom-left-radius: 0;
   border-top-right-radius: inherit;

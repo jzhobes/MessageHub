@@ -78,7 +78,7 @@ describe('LinkPreview', () => {
         signals.push(init.signal);
       }
       return new Promise<Response>(() => {
-        // Intentionally pending
+        // Leave the preview request pending on purpose.
       });
     });
     vi.stubGlobal('fetch', fetchMock);
@@ -113,7 +113,7 @@ describe('LinkPreview', () => {
 
     unmount();
 
-    // Remounting the same URL should render synchronously with zero extra fetch
+    // Mount the same URL again. The preview should appear immediately from cache with no extra fetch.
     render(<LinkPreview url="https://example.com/cached" />);
     expect(screen.getByText('Cached Title')).toBeTruthy();
     expect(screen.queryByText('Loading preview...')).toBeNull();

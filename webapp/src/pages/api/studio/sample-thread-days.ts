@@ -13,8 +13,8 @@ interface SampleThreadDaysBody {
 }
 
 /**
- * Deterministically samples selected threads (`POST`) within the optional `dateRange` and returns
- * per-day message counts plus auto-selected representative days targeting ~100 messages per thread.
+ * On POST, count messages by day within the optional `dateRange` and consistently pick
+ * representative days that get each thread close to 100 messages.
  */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {

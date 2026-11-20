@@ -11,7 +11,8 @@ export interface SSEEvent {
 }
 
 /**
- * Creates node-mocks-http request/response mocks backed by a real EventEmitter for streaming/SSE tests.
+ * Use a real EventEmitter with node-mocks-http so streaming and SSE tests can observe response
+ * events.
  */
 export function createStreamingMocks<
   TReq extends RequestType = NextApiRequest,
@@ -21,7 +22,7 @@ export function createStreamingMocks<
 }
 
 /**
- * Resolves once a mock HTTP response stream has finished writing and ended.
+ * Wait for the mock response to finish writing and end.
  */
 export function waitForStreamEnd(res: MockResponse<NextApiResponse>): Promise<void> {
   if (res.writableEnded || res._isEndCalled()) {
@@ -40,7 +41,7 @@ export function waitForStreamEnd(res: MockResponse<NextApiResponse>): Promise<vo
 }
 
 /**
- * Parses `data: {"type": ..., "payload": ...}\n\n` chunks from an SSE response body.
+ * Read structured SSE data events from the mock response body.
  */
 export function parseSSEEvents(raw: string): SSEEvent[] {
   const events: SSEEvent[] = [];

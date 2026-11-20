@@ -21,7 +21,7 @@ class DiskSpaceEstimateTests(unittest.TestCase):
     def test_zip_uses_exact_uncompressed_size_with_headroom(self):
         with tempfile.TemporaryDirectory() as tmp:
             zip_path = Path(tmp) / "export.zip"
-            payload = b"A" * 100_000  # Highly compressible: compressed size is tiny
+            payload = b"A" * 100_000  # Use highly compressible input so the ZIP size is tiny.
             with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
                 zf.writestr("messages.json", payload)
 

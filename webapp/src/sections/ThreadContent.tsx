@@ -7,6 +7,7 @@ import { Dropdown, DropdownItem } from '@/components/Dropdown';
 import EmailItem from '@/components/EmailItem';
 import EventItem from '@/components/EventItem';
 import MessageItem from '@/components/MessageItem';
+import ThreadNavigation from '@/components/ThreadNavigation';
 
 import { ContentRecord, QuotedMessageMetadata, Thread } from '@/lib/shared/types';
 
@@ -57,7 +58,7 @@ function ThreadHeaderDropdown({
         </Dropdown>
       </div>
 
-      {/* Members Modal - Simple implementation */}
+      {/* Open the member list from the thread header. */}
       {showMembers && (
         <div className={styles.modalOverlay} onClick={() => setShowMembers(false)}>
           <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
@@ -93,12 +94,14 @@ interface ThreadContentProps {
   targetMessageId: string | null;
   targetTimestamp?: number | null;
   highlightToken: number;
+  timelineReset: string | number;
   initializing?: boolean;
   hideHeader?: boolean;
   showMedia?: boolean;
   onStartReached: () => void;
   onEndReached: () => void;
-  onPageChange?: (page: number) => void;
+  onNavigate?: (page: number, timestamp?: number) => Promise<void>;
+  onPageChange?: (page: number, timestamp?: number) => void;
   onShowMediaChange?: (show: boolean) => void;
   selectedDays?: Set<string>;
   dayStats?: Record<string, { totalMsgs: number; myMsgs: number }>;
@@ -106,10 +109,10 @@ interface ThreadContentProps {
 }
 
 /**
- * Virtualized bidirectional message timeline powered by `Virtuoso`. Reverses newest-first `messages`
- * into chronological display order, shifts `firstItemIndex` downward from `START_INDEX` when prepending
- * older history to preserve scroll position, gates `startReached`/`endReached` behind a 500ms `isReady`
- * cooldown, and supports scroll-and-highlight for both external search jumps and clicked quoted replies.
+ * Display newest-first input in chronological order with `Virtuoso`. When older messages arrive,
+ * decrease `firstItemIndex` from `START_INDEX` to keep the scroll position steady.
+ * Wait 500ms before enabling edge pagination. Search jumps and quoted replies both scroll to and
+ * highlight the target message.
  */
 export default function ThreadContent({
   activeThread,
@@ -121,44 +124,48 @@ export default function ThreadContent({
   targetMessageId,
   targetTimestamp,
   highlightToken,
+  timelineReset,
   initializing,
   hideHeader,
   showMedia,
   onStartReached,
   onEndReached,
   onPageChange,
+  onNavigate,
   onShowMediaChange,
   selectedDays,
   dayStats,
   onToggleDay,
 }: ThreadContentProps) {
   const threadId = activeThread?.id ?? null;
+  const timelineKey = `${threadId ?? ''}:${timelineReset}`;
+  const hasTimeline = messages !== null && !initializing;
 
   // Refs
   const virtuosoRef = useRef<VirtuosoHandle>(null);
   const previousMessagesLength = useRef(0);
   const newestMessageIdRef = useRef<string | null>(null);
+  const atTopKeyRef = useRef<string | null>(null);
   const atBottomRef = useRef(false);
-  const prevThreadIdRef = useRef<string | null>(threadId);
+  const initialPreloadRef = useRef<string | null>(null);
+  const initialPreloadSizeRef = useRef(0);
+  const previousTimelineRef = useRef(timelineKey);
 
   // State
+  const [currentTimestamp, setCurrentTimestamp] = useState<number | undefined>();
   const [currentTopPage, setCurrentTopPage] = useState(pageRange.min);
   const [firstItemIndex, setFirstItemIndex] = useState(START_INDEX);
   const [isReady, setIsReady] = useState(false);
   const [localTargetId, setLocalTargetId] = useState<string | null>(null);
   const [localHighlightToken, setLocalHighlightToken] = useState(0);
-  const [prevThreadId, setPrevThreadId] = useState<string | null>(threadId);
+  const [previousTimelineKey, setPreviousTimelineKey] = useState(timelineKey);
 
-  if (threadId !== prevThreadId) {
-    setPrevThreadId(threadId);
+  if (timelineKey !== previousTimelineKey) {
+    setPreviousTimelineKey(timelineKey);
+    setCurrentTimestamp(undefined);
+    setCurrentTopPage(pageRange.min);
     setFirstItemIndex(START_INDEX);
     setLocalTargetId(null);
-  }
-
-  const readyKey = `${threadId ?? ''}:${targetMessageId ?? ''}`;
-  const [prevReadyKey, setPrevReadyKey] = useState(readyKey);
-  if (readyKey !== prevReadyKey) {
-    setPrevReadyKey(readyKey);
     setIsReady(false);
   }
 
@@ -185,13 +192,14 @@ export default function ThreadContent({
     if (pageRange.min === 1) {
       return { index: 'LAST', align: 'end' as const };
     }
-    return { index: firstItemIndex, align: 'start' as const };
-  }, [targetIndex, pageRange.min, firstItemIndex]);
+    // Virtuoso scroll locations are relative to the loaded data, even when firstItemIndex is set.
+    return { index: 0, align: 'start' as const };
+  }, [targetIndex, pageRange.min]);
 
   // Layout effects
   useLayoutEffect(() => {
-    if (prevThreadIdRef.current !== threadId) {
-      prevThreadIdRef.current = threadId;
+    if (previousTimelineRef.current !== timelineKey) {
+      previousTimelineRef.current = timelineKey;
       previousMessagesLength.current = 0;
       newestMessageIdRef.current = null;
     }
@@ -207,9 +215,12 @@ export default function ThreadContent({
       const currentNewest = virtuosoData[currentLen - 1];
       const currentNewestId = currentNewest.id || currentNewest.timestamp_ms.toString();
 
-      // If the newest message hasn't changed, we must have added to the top (History)
+      // If the newest message stayed the same, the new rows are older history at the top.
       if (currentNewestId === newestMessageIdRef.current) {
         const delta = currentLen - prevLen;
+        if (initialPreloadRef.current === timelineKey) {
+          initialPreloadSizeRef.current = delta;
+        }
         setFirstItemIndex((prev) => prev - delta);
         console.log(`[ChatWindow] Prepended ${delta} items. Adjusting index.`);
       } else {
@@ -223,41 +234,52 @@ export default function ThreadContent({
       const last = virtuosoData[virtuosoData.length - 1];
       newestMessageIdRef.current = last.id || last.timestamp_ms.toString();
     }
-  }, [virtuosoData, threadId]);
+  }, [virtuosoData, timelineKey]);
 
   // Effects
 
-  // Reset atBottom state prevents stale true causing runaway on navigation
+  // Reset atBottom on navigation so a stale value can't start a load loop.
   useEffect(() => {
     atBottomRef.current = false;
   }, [messages, targetMessageId]);
 
   // Ready state logic
   useEffect(() => {
+    if (!hasTimeline) {
+      return;
+    }
     const t = setTimeout(() => {
       setIsReady(true);
     }, 500);
     return () => clearTimeout(t);
-  }, [readyKey]);
+  }, [timelineKey, hasTimeline]);
 
-  // Manual trigger for onEndReached once ready
+  // Virtuoso can report an edge before pagination is ready and won't report it again for the same items.
   useEffect(() => {
-    /*
-     * We only want to run this check ONCE when the component becomes "ready" (initial load done).
-     * Accessing refs (atBottomRef) is safe as they are always fresh.
-     * Accessing state (hasMoreNew, loading) is safe because they are captured from the render
-     * where isReady became true.
-     * We strictly exclude 'loading'/'hasMoreNew' from deps to prevent re-running this
-     * logic when those values change during normal operation (avoiding loops).
-     */
-    if (isReady && atBottomRef.current && hasMoreNew && !loading) {
-      console.log('Manual trigger of onEndReached after ready state');
+    if (!isReady || loading) {
+      return;
+    }
+    if (atTopKeyRef.current === timelineKey && hasMoreOld) {
+      initialPreloadRef.current = timelineKey;
+      onStartReached();
+    } else if (atBottomRef.current && hasMoreNew) {
       onEndReached();
     }
+    // Run only when the timeline becomes ready, so pagination updates cannot start a load loop.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isReady]);
 
-  // Imperative scroll when highlightToken changes (e.g. user clicks search result for already loaded thread)
+  useEffect(() => {
+    if (initialPreloadRef.current !== timelineKey || !initialPreloadSizeRef.current) {
+      return;
+    }
+    // Keep the first message of the requested page at the top after preloading older rows.
+    virtuosoRef.current?.scrollToIndex({ index: initialPreloadSizeRef.current, align: 'start' });
+    initialPreloadRef.current = null;
+    initialPreloadSizeRef.current = 0;
+  }, [firstItemIndex, timelineKey]);
+
+  // Scroll when highlightToken changes, even if the search result is in an already loaded thread.
   useEffect(() => {
     if (targetIndex !== -1 && virtuosoRef.current) {
       virtuosoRef.current.scrollToIndex({
@@ -302,7 +324,7 @@ export default function ThreadContent({
       return;
     }
 
-    // Normalize Virtuoso index (remove logic offset)
+    // Subtract Virtuoso's index offset to get the position in our array.
     const normalizedIndex = range.startIndex - firstItemIndex;
 
     // Safety check
@@ -316,7 +338,9 @@ export default function ThreadContent({
     const calculatedPage = pageRange.min + Math.floor(originalIndex / 100);
 
     setCurrentTopPage(calculatedPage);
-    onPageChange?.(calculatedPage);
+    const timestamp = messages[originalIndex]?.timestamp_ms;
+    setCurrentTimestamp(timestamp);
+    onPageChange?.(calculatedPage, timestamp);
   };
 
   // Components
@@ -390,21 +414,30 @@ export default function ThreadContent({
             onShowMediaChange={activeThread?.platform === 'google_mail' ? undefined : onShowMediaChange}
           />
           <div className={styles.pageIndicator}>
-            (Page {currentTopPage?.toLocaleString()} of {(activeThread?.pageCount || 1).toLocaleString()})
+            {activeThread && onNavigate && (
+              <ThreadNavigation
+                key={activeThread.id}
+                threadId={activeThread.id}
+                currentPage={currentTopPage}
+                currentTimestamp={currentTimestamp}
+                totalPages={activeThread.pageCount || 1}
+                onNavigate={onNavigate}
+              />
+            )}
           </div>
         </div>
       )}
 
       <div className={styles.messagesContainer}>
         <Virtuoso
+          key={timelineKey}
           ref={virtuosoRef}
           data={virtuosoData}
           computeItemKey={(index, item) => (item.id ? item.id.toString() : `${item.timestamp_ms}-${index}`)}
           style={{ height: '100%' }}
           firstItemIndex={firstItemIndex}
-          followOutput={false} // Explicitly disable sticky bottom behavior
-          overscan={200} // Increase overscan for smoother scrolling
-          defaultItemHeight={50} // Help Virtuoso estimate layout
+          followOutput={false} // Don't pin the view to the bottom while new messages arrive.
+          defaultItemHeight={50} // Give Virtuoso a starting estimate for item height.
           initialTopMostItemIndex={initialTopIndex}
           startReached={() => {
             if (hasMoreOld && !loading && isReady) {
@@ -421,18 +454,21 @@ export default function ThreadContent({
             Footer,
           }}
           rangeChanged={handleRangeChanged}
+          atTopStateChange={(atTop) => {
+            atTopKeyRef.current = atTop ? timelineKey : null;
+          }}
           atBottomStateChange={(atBottom) => {
             atBottomRef.current = atBottom;
           }}
           itemContent={(index, msg) => {
             // Determine if my message
-            const dataIndex = index - firstItemIndex; // Normalize absolute index to 0-based data index
+            const dataIndex = index - firstItemIndex; // Convert Virtuoso's absolute index to the zero-based message index.
 
             const isMyMsg = !!msg.is_sender;
             const prevMsg = virtuosoData[dataIndex - 1]; // Above
             const nextMsg = virtuosoData[dataIndex + 1]; // Below
 
-            // Day Change Logic (for optional Studio Project day-selection header bar)
+            // Add a day header for Studio Project mode when day selection is enabled.
             const currentDateObj = new Date(msg.timestamp_ms);
             const prevDateObj = prevMsg ? new Date(prevMsg.timestamp_ms) : null;
             const isDayChange =
@@ -455,7 +491,7 @@ export default function ThreadContent({
             const isDaySelected = !!selectedDays?.has(dayKey);
             const statsForDay = dayStats?.[dayKey];
 
-            // Timestamp Logic: Show if day changed or > 1 hour gap
+            // Show a timestamp when the day changes or there's a gap over an hour.
             let showTimestamp = false;
             if (prevDateObj) {
               if (isDayChange || currentDateObj.getHours() !== prevDateObj.getHours()) {
@@ -465,11 +501,11 @@ export default function ThreadContent({
               showTimestamp = true;
             }
 
-            // isTop: First in a block (Different sender OR Timestamp break)
+            // Start a bubble group when the sender changes or a timestamp breaks it up.
             const isTop = !prevMsg || prevMsg.sender_name !== msg.sender_name || showTimestamp;
 
-            // isBottom: Last in a block (Different sender OR Next is timestamp break)
-            // We need to peek ahead to see if next msg generates a timestamp
+            // End the group if the next sender changes or the next message needs a timestamp.
+            // Look at the next message to see if it starts a new group.
             let nextShowsTimestamp = false;
             if (nextMsg) {
               const currentDate = new Date(msg.timestamp_ms);
@@ -486,7 +522,7 @@ export default function ThreadContent({
 
             const isBottom = !nextMsg || nextMsg.sender_name !== msg.sender_name || nextShowsTimestamp;
 
-            // Pass flags to MessageItem instead of style objects
+            // Pass the group flags and let MessageItem choose the styles.
             const showAvatar = !isMyMsg && isBottom;
             const showName = !isMyMsg && isTop;
 

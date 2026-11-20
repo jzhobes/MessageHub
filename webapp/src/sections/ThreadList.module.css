@@ -20,7 +20,7 @@
 .threadListHeader {
   composes: header from './ThreadListCommon.module.css';
   z-index: 20;
-  padding: 0; /* Full coverage for trigger */
+  padding: 0; /* Make the trigger cover the whole row. */
 }
 
 .headerDropdown {

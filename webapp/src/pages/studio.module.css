@@ -33,7 +33,7 @@
 
 .mainPane {
   flex: 1;
-  overflow-y: auto; /* Scroller flush right */
+  overflow-y: auto; /* Keep the scroller flush against the right edge. */
   background: var(--bg-primary);
 }
 
@@ -694,7 +694,7 @@
   margin-left: -1px; /* Overlap borders */
   transition:
     all 0.2s,
-    z-index 0s; /* Instant z-index for stacking context */
+    z-index 0s; /* Set z-index immediately so the stacking order doesn't wait for the transition. */
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -720,14 +720,14 @@
 .segmentedBtn:hover {
   border-color: var(--text-secondary);
   background: var(--bg-secondary);
-  z-index: 2; /* Bring to front on hover */
+  z-index: 2; /* Raise the hovered control. */
 }
 
 .segmentedBtn.active {
   background: var(--bubble-sent-bg);
   color: #fff;
   border-color: var(--bubble-sent-bg);
-  z-index: 3; /* Active always on top */
+  z-index: 3; /* Keep the active control above the rest. */
 }
 
 .segmentedBtn.active span {

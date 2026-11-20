@@ -58,8 +58,8 @@ export interface FileExplorerFooterData {
 }
 
 /**
- * Minimal filename matcher supporting only `'*'`, case-insensitive extension globs (`'*.ext'`),
- * and exact filename equality (not full glob syntax).
+ * Match `*`, extensions like `*.zip` regardless of case, or an exact filename. These are the only
+ * supported patterns.
  */
 function simpleGlobMatch(filename: string, pattern: string): boolean {
   if (pattern === '*') {
@@ -84,9 +84,9 @@ export function formatBytes(bytes: number, decimals = 1) {
 }
 
 /**
- * Server-backed directory browser supporting `'import'` (archive selection) and `'workspace'`
- * (destination folder selection with path validation metadata) modes. Evaluates `filters` in order
- * so later matching rules override earlier ones; folders are always visible and never selectable.
+ * Browse server folders for either archive import or a workspace destination. Workspace mode also
+ * reports path validation details.
+ * Later matching filters win. Folders stay visible for navigation and are never selected as files.
  */
 export default function FileExplorer({
   initialPath,
@@ -125,7 +125,7 @@ export default function FileExplorer({
     onMetadataChangeRef.current = onMetadataChange;
   }, [onPathChange, onSelectionChange, onError, onMetadataChange]);
 
-  // Debounce path changes for API calls (ONLY if not immediate)
+  // Debounce path changes before calling the API.
   useEffect(() => {
     const handler = setTimeout(() => {
       setDebouncedPath(currentPath);
@@ -136,13 +136,13 @@ export default function FileExplorer({
 
   const navigateTo = (newPath: string, immediate = false) => {
     if (immediate) {
-      // Bypassing debounce for explicit clicks/actions
+      // Go straight to the path when someone clicks it.
       setDebouncedPath(newPath);
     }
     setCurrentPath(newPath);
   };
 
-  // Sync initialPath if changed from outside (adjusting state during render)
+  // Pick up a new initialPath during render.
   if (initialPath !== prevInitialPath) {
     setPrevInitialPath(initialPath);
     if (initialPath !== undefined && initialPath !== currentPath) {
@@ -151,7 +151,7 @@ export default function FileExplorer({
     }
   }
 
-  // Notify parent of path changes (Debounced to prevent rendering loops)
+  // Debounce the parent callback so updates don't bounce between renders.
   useEffect(() => {
     onPathChangeRef.current?.(debouncedPath);
   }, [debouncedPath]);
@@ -225,12 +225,12 @@ export default function FileExplorer({
     getId: (item: FileItem) => item.path,
   });
 
-  // Track what we are currently fetching or have just fetched
+  // Track the current fetch and the last one that finished.
   const lastCallRef = useRef<{ path: string; mode: string } | null>(null);
 
   // Fetch directory
   useEffect(() => {
-    // If we just fetched this path/mode combination, don't do it again
+    // Skip paths we've already fetched for this mode.
     if (lastCallRef.current?.path === debouncedPath && lastCallRef.current?.mode === mode) {
       return;
     }
@@ -266,11 +266,11 @@ export default function FileExplorer({
           return;
         }
 
-        // If we requested an empty path and got back a default, sync our state without re-triggering
+        // An empty path can resolve to the default folder. Sync it here so we don't fetch it again.
         if (!debouncedPath) {
           setCurrentPath(data.path);
           setDebouncedPath(data.path);
-          lastCallRef.current = { path: data.path, mode }; // Important: prevent re-fetch loop
+          lastCallRef.current = { path: data.path, mode }; // Treat the resolved path as fetched so the state change doesn’t start another request.
         }
 
         setParentPath(data.parent);
@@ -317,10 +317,10 @@ export default function FileExplorer({
   };
 
   const handleToggleAll = () => {
-    // If ANY are selected, uncheck all. Else check all.
+    // Clear the visible selection if any item is checked. Otherwise check them all.
     const anySelected = selectableFiles.some((f: FileItem) => selectedPaths.has(f.path));
 
-    // Use handleSelection logic? No, global toggle is custom.
+    // The bulk toggle handles the visible list in one pass.
     const next = new Set(selectedPaths);
 
     if (anySelected) {
@@ -331,7 +331,7 @@ export default function FileExplorer({
       selectableFiles.forEach((f: FileItem) => next.add(f.path));
     }
 
-    // Update logic same as hook callback
+    // Update the selection and size totals together, just like a single toggle.
     setSelectedPaths(next);
     const newSizes: Record<string, number> = {};
     let total = 0;
@@ -412,7 +412,7 @@ export default function FileExplorer({
               {allSelected ? (
                 <FaCheckSquare color="var(--border-thread-active)" size={16} />
               ) : indeterminate ? (
-                // Indeterminate state visual
+                // Show the mixed state when only some visible files are selected.
                 <div
                   className={styles.indeterminateBox}
                   style={{ borderColor: 'var(--border-thread-active)', background: 'var(--border-thread-active)' }}
@@ -470,7 +470,7 @@ export default function FileExplorer({
             }
             if (item.type === 'folder') {
               isSelectable = false;
-            } // Folders not selectable in this logic
+            } // Folders are for navigation here.
 
             return (
               <div
@@ -502,7 +502,7 @@ export default function FileExplorer({
                     )}
                   </div>
                 ) : (
-                  <div style={{ width: 14 }}></div> // Spacer for folder
+                  <div style={{ width: 14 }}></div> // Keep folder rows aligned with the file checkboxes.
                 )}
 
                 {/* Icon */}

@@ -85,7 +85,7 @@ export class DatasetGenerator {
   private _core: DatasetCore;
 
   constructor(opts: GeneratorOptions) {
-    // Database instance is provided after instantiation via setDb()
+    // Call setDb() to supply the database before generating records or files.
     this._encoder = encoding_for_model('gpt-4' as TiktokenModel);
     this._core = new DatasetCore({
       ...opts,
@@ -99,8 +99,8 @@ export class DatasetGenerator {
   }
 
   /**
-   * Streams structured dataset records (training sessions and optional Markdown history)
-   * without coupling consumers to file packaging. Requires `setDb()` to be called first.
+   * Stream training sessions and optional Markdown history so callers can decide how to package
+   * them. Call `setDb()` first.
    */
   public generateRecords(
     threadIds: string[],
@@ -115,11 +115,11 @@ export class DatasetGenerator {
   }
 
   /**
-   * Streams formatted dataset files for the selected thread IDs.
-   * Requires `setDb()` to be called first. Supports both database thread IDs and virtual Facebook IDs
-   * (`fb-post-all`, `fb-event-*`). Splits chat sessions on 4-hour inactivity gaps or token limits,
-   * pairs Gmail threads via `EmailPairBuilder`, and yields JSONL chunks bounded by `maxTokensPerFile`
-   * (or consolidated ChatGPT Project Markdown files when `outputFormat === 'markdown'`).
+   * Stream dataset files for database thread IDs and virtual Facebook IDs (`fb-post-all`,
+   * `fb-event-*`). Call `setDb()` first.
+   * Split chats at four-hour gaps or token limits and pair Gmail messages with `EmailPairBuilder`.
+   * Yield JSONL files up to `maxTokensPerFile`, or consolidated project files when
+   * `outputFormat === 'markdown'`.
    */
   public generateStream(
     threadIds: string[],

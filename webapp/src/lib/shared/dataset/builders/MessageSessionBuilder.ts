@@ -23,8 +23,8 @@ export class MessageSessionBuilder {
   constructor(private opts: BuilderOptions) {}
 
   /**
-   * Add a message to the current session.
-   * Returns a completed DatasetEntry if a session boundary was hit (due to token limit).
+   * Add a message and return the finished `DatasetEntry` if it pushes the session over the token
+   * limit.
    */
   public addMessage(
     content: string,
@@ -43,13 +43,13 @@ export class MessageSessionBuilder {
       finalContent = `[${senderName}]: ${finalContent}`;
     }
 
-    // Subject injection at start of session
+    // Include the subject at the start of the session.
     if (this.isFirstInSession && this.opts.threadTitle && this.opts.threadTitle !== 'Unknown') {
       finalContent = `[Subject: ${this.opts.threadTitle}]\n\n${finalContent}`;
       this.isFirstInSession = false;
     }
 
-    const msgTokens = this.opts.tokenizer(finalContent) + 4; // +4 for overhead
+    const msgTokens = this.opts.tokenizer(finalContent) + 4; // Allow four extra tokens for message overhead.
 
     // Session Split Check (Token Limit)
     const isFirstResponse = role === 'assistant' && !this.currentSession.some((m) => m.role === 'assistant');
@@ -62,15 +62,15 @@ export class MessageSessionBuilder {
       // Split occurred!
       const session = this.finalize();
 
-      // Start new session with previous orphans (handled by finalize)
-      // then add this message
+      // Start the next session with anything finalize carried over.
+      // Add the current message after those carryovers.
       this.pushMessage(finalContent, role, msgTokens);
       this._handleReactions(reactionsJson, role);
 
       return session;
     }
 
-    // Merge Sequential Logic
+    // Merge consecutive messages with the same role and speaker.
     let merged = false;
     if (this.opts.mergeSequential && this.currentSession.length > 0) {
       const last = this.currentSession[this.currentSession.length - 1];
@@ -91,21 +91,21 @@ export class MessageSessionBuilder {
   }
 
   /**
-   * Force a session boundary (e.g. on timeout or end of thread).
-   * Returns a completed DatasetEntry or null if not valid for training.
+   * Finish the session, for example after a timeout or at the end of a thread. Return a
+   * `DatasetEntry` if it qualifies for training, or `null` if it doesn't.
    */
   public finalize(): DatasetEntry | null {
     if (this.currentSession.length === 0) {
       return null;
     }
 
-    // Find the last assistant message to ensure the session ends on the target response
+    // End the session at the last assistant message so it has a target response.
     let validEndIndex = this.currentSession.length - 1;
     while (validEndIndex >= 0 && this.currentSession[validEndIndex].role !== 'assistant') {
       validEndIndex--;
     }
 
-    // Capture orphans (messages after the last assistant response) to carry over
+    // Carry anything after the last assistant response into the next session.
     const orphans = this.currentSession.slice(validEndIndex + 1);
     const finalMessages = this.currentSession.slice(0, validEndIndex + 1);
 
@@ -116,9 +116,8 @@ export class MessageSessionBuilder {
     const sessionTs = this.firstMsgTimestamp;
     this.firstMsgTimestamp = orphans.length > 0 ? sessionTs : null;
 
-    // Quality Check:
-    // 1. Must always have an assistant message (the target)
-    // 2. Unless in Knowledge mode (assistant-only) or certain platforms (facebook posts), must have a user prompt
+    // Every session needs an assistant message as its target.
+    // Require a user prompt too, except for knowledge records, Facebook, and group chats.
     const hasUser = finalMessages.some((m) => m.role === 'user');
     const hasAssistant = finalMessages.some((m) => m.role === 'assistant');
 
@@ -144,7 +143,7 @@ export class MessageSessionBuilder {
       // [Sender]: Message...
       const combinedContent = finalMessages
         .map((m) => {
-          // Omit [Me] and [User] tags in assistant-only knowledge format
+          // Leave out speaker tags in assistant-only knowledge exports.
           if (m.role === 'assistant') {
             return m.content;
           }
@@ -179,8 +178,8 @@ export class MessageSessionBuilder {
     const reply = this._getReactionReply(reactionsJson);
     if (reply) {
       const reactionTokens = this.opts.tokenizer(reply) + 4;
-      // We don't split tokens JUST for reactions usually, but if it pushes over,
-      // the NEXT message will trigger the split.
+      // Reactions count toward the budget.
+      // If they push us over, split when the next message comes in.
       this.pushMessage(reply, 'assistant', reactionTokens);
     }
   }

@@ -82,12 +82,12 @@
 
 .suffixDropdown:disabled {
   opacity: 0.4;
-  cursor: default; /* Regular cursor for disabled threads as requested */
+  cursor: default; /* Use the normal cursor for disabled threads. */
 }
 
 .suffixReset {
   composes: btn-reset from global;
-  width: 44px; /* Matches height to make a perfect square */
+  width: 44px; /* Match the width and height so the control stays square. */
   display: flex;
   align-items: center;
   justify-content: center;
@@ -140,7 +140,7 @@
 
 .contentCol {
   flex: 1;
-  min-width: 0; /* For truncation */
+  min-width: 0; /* Let the text shrink so it can truncate. */
 }
 
 .header {

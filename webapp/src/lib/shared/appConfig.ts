@@ -3,16 +3,16 @@ import path from 'path';
 import { parseEnv } from 'util';
 
 /**
- * AppConfig serves as the central configuration manager for the application.
- * It handles resolving local data paths across different environments (including WSL).
+ * Keep workspace configuration in one place and resolve local paths for each environment, including
+ * WSL.
  */
 class AppConfig {
   private _workspacePath?: string;
 
   /**
-   * Normalizes a configured workspace path into an absolute path.
-   * Request handlers validate filesystem boundaries before updating this configuration.
-   * Handles Windows drive-letter mapping (X:\ -> /mnt/x/) for Non-Windows host environments.
+   * Turn the configured workspace path into an absolute path. On non-Windows hosts, map drive
+   * letters such as X: to `/mnt/x/`. Request handlers check the filesystem boundaries before
+   * setting this value.
    */
   private _resolvePath(targetPath?: string): string {
     // Determine project root first
@@ -21,8 +21,8 @@ class AppConfig {
 
     let p = targetPath || process.env.WORKSPACE_PATH;
 
-    // If no path in process.env, try reading from .env file directly
-    // This is critical because process.env won't pick up changes made by the setup wizard without a restart.
+    // If process.env has no workspace path, read .env directly.
+    // The setup wizard can change .env while the server is running.
     if (!p) {
       try {
         const envPath = path.join(projectRoot, '.env');
@@ -35,7 +35,7 @@ class AppConfig {
       }
     }
 
-    // Final fallback: default data directory in project root
+    // With no configured path, use the project's data directory.
     if (!p) {
       return path.resolve(projectRoot, 'data');
     }
@@ -50,7 +50,7 @@ class AppConfig {
   }
 
   /**
-   * The absolute path to the workspace storage folder.
+   * Absolute path to the workspace folder.
    */
   public get WORKSPACE_PATH(): string {
     if (!this._workspacePath) {
@@ -60,7 +60,7 @@ class AppConfig {
   }
 
   /**
-   * Dynamically update the workspace storage path at runtime.
+   * Switch the active workspace without restarting.
    */
   public set WORKSPACE_PATH(newPath: string) {
     this._workspacePath = this._resolvePath(newPath);
@@ -68,6 +68,6 @@ class AppConfig {
   }
 }
 
-// Export a single instance of the config service as default
+// Share this config instance across imports.
 const appConfig = new AppConfig();
 export default appConfig;

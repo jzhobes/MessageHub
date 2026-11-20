@@ -3,16 +3,15 @@ import { IS_DEMO_MODE, withBasePath } from '@/lib/client/env';
 let demoMediaManifest: Record<string, string> = {};
 
 /**
- * Populates the static media manifest loaded from `/demo/data.json` so `getMediaUrl` resolves
- * exported media paths synchronously without hitting `/api/media`.
+ * Register the manifest from `/demo/data.json` so `getMediaUrl` can look up exported files without
+ * calling `/api/media`.
  */
 export function setDemoMediaManifest(manifest: Record<string, string>): void {
   demoMediaManifest = manifest || {};
 }
 
 /**
- * Resolves a media attachment URI to either the local `/api/media` route or a pre-exported
- * static `/demo/media/...` path in GitHub Pages demo mode.
+ * Point attachments to `/api/media` locally or the exported `/demo/media/...` file on GitHub Pages.
  */
 export function getMediaUrl(uri: string, platform: string): string {
   if (!uri) {

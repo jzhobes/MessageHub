@@ -27,7 +27,7 @@ import { StudioControls } from '@/sections/StudioControls';
 import { StudioThreadList } from '@/sections/StudioThreadList';
 
 /**
- * Main state for the DataForge Studio configuration.
+ * Settings that drive Studio's dataset export.
  */
 const initialState = {
   identityNames: '',
@@ -48,12 +48,11 @@ const initialState = {
 
 const initialFilterState = {
   filterPlatforms: new Set<string>(),
-  filterTypes: new Set<string>(), // Empty = All types
+  filterTypes: new Set<string>(), // An empty selection includes every type.
   excludeNoise: true,
   minQuality: 30,
 };
 
-// Templates moved to StudioConfig.tsx
 function calculateDateRange(recency: string): { start: number; end: number } | undefined {
   if (recency === 'all') {
     return undefined;
@@ -126,7 +125,7 @@ export default function Studio() {
 
   const analyzeWorkerRef = useRef<Worker | null>(null);
 
-  // Terminate style analysis worker on unmount
+  // Stop the analysis worker when leaving Studio.
   useEffect(() => {
     return () => {
       analyzeWorkerRef.current?.terminate();
@@ -138,13 +137,13 @@ export default function Studio() {
   useEffect(() => {
     async function init() {
       try {
-        // Fetch threads (all platforms) using dataset-optimized API
+        // Load all platforms from the dataset thread endpoint.
         const res = await apiFetch(`/api/studio/dataset-threads?platform=all`);
         let allThreads: Thread[] = [];
 
         if (res.ok) {
           const data = await res.json();
-          // Tag with platform if not already (API provides it)
+          // Use the API's platform value when available.
           allThreads = data.map((t: Thread) => ({
             ...t,
             platform_source: getPlatformLabel(t.platform || ''),
@@ -168,7 +167,7 @@ export default function Studio() {
     init();
   }, [setField]);
 
-  // Warmup AI Model on Mount
+  // Warm up the model when Studio opens.
   useEffect(() => {
     const worker = new Worker(withBasePath('/workers/style-worker.js'), { type: 'module' });
     worker.postMessage({ type: 'preload' });
@@ -176,7 +175,7 @@ export default function Studio() {
     worker.onmessage = (e) => {
       const { type, message, progress, details } = e.data;
       if (type === 'progress') {
-        // Only show if it's actually doing something (loading model)
+        // Show progress only while the model is loading.
         setWarmupStatus(message);
         if (progress) {
           setWarmupProgress(progress);
@@ -192,7 +191,7 @@ export default function Studio() {
         // Start fade out after 2.5s
         setTimeout(() => setFadingOut(true), 2500);
 
-        // Remove completely after 3s (allowing 0.5s for fade out)
+        // Remove it after 3s so the fade has 0.5s to finish.
         setTimeout(() => {
           setWarmupStatus(null);
           setWarmupProgress(0);
@@ -207,36 +206,32 @@ export default function Studio() {
 
   const { excludeNoise, minQuality, filterPlatforms, filterTypes } = filters;
 
-  // Filtered List
-  const visibleThreads = useMemo(() => {
+  const eligibleThreads = useMemo(() => {
     const NOISE_REGEX =
       /\b(verify|code|otp|dhl|ups|usps|fedex|delivery|order|track|notification|alert|info|reply|service|uber|doordash|grab|lyft|banking|bank|security|auth|ticket|support|no-reply|noreply|mailer|daemon|facebook|instagram|google)\b/i;
 
     return threads.filter((t) => {
-      // 0. Quality Filter
       if ((t.qualityScore || 0) < minQuality) {
         return false;
       }
-      // 1. Platform Filter
-      if (filterPlatforms.size > 0 && t.platform && !filterPlatforms.has(t.platform)) {
-        return false;
-      }
-      // 2. Type Filter
-      if (filterTypes.size > 0 && t.type && !filterTypes.has(t.type)) {
-        return false;
-      }
-      // 3. Noise Filter
       if (excludeNoise) {
-        if ((t.myMessageCount || 0) === 0) {
-          return false;
-        }
-        if (NOISE_REGEX.test(t.title)) {
-          return false;
-        }
+        return (t.myMessageCount || 0) > 0 && (t.is_group || !NOISE_REGEX.test(t.title));
       }
       return true;
     });
-  }, [threads, excludeNoise, filterPlatforms, filterTypes, minQuality]);
+  }, [threads, excludeNoise, minQuality]);
+
+  const visibleThreads = useMemo(() => {
+    return eligibleThreads.filter((t) => {
+      if (filterPlatforms.size > 0 && t.platform && !filterPlatforms.has(t.platform)) {
+        return false;
+      }
+      if (filterTypes.size > 0 && t.type && !filterTypes.has(t.type)) {
+        return false;
+      }
+      return true;
+    });
+  }, [eligibleThreads, filterPlatforms, filterTypes]);
 
   // --- Style Filtering ---
   const { activePersonas, scanningLabels, handleTogglePersona, personaCounts } = usePersonaFilter({
@@ -245,34 +240,17 @@ export default function Studio() {
   });
 
   const platformCounts = useMemo(() => {
-    const NOISE_REGEX =
-      /\b(verify|code|otp|dhl|ups|usps|fedex|delivery|order|track|notification|alert|info|reply|service|uber|doordash|grab|lyft|banking|bank|security|auth|ticket|support|no-reply|noreply|mailer|daemon|facebook|instagram|google)\b/i;
-
     const counts: Record<string, number> = {};
     let total = 0;
 
-    threads.forEach((t) => {
-      // Respect Quality Filter
-      if ((t.qualityScore || 0) < minQuality) {
-        return;
-      }
-
-      // Respect Noise Filter for counts
-      if (excludeNoise) {
-        if ((t.myMessageCount || 0) === 0) {
-          return;
-        }
-        if (NOISE_REGEX.test(t.title)) {
-          return;
-        }
-      }
+    eligibleThreads.forEach((t) => {
       const p = t.platform || 'Other';
       counts[p] = (counts[p] || 0) + 1;
 
       if (t.platform === 'facebook' && t.type) {
-        const typeKey = t.type; // Use the type label directly (message, post, event)
+        const typeKey = t.type; // Use the thread's type directly for message, post, or event.
         counts[typeKey] = (counts[typeKey] || 0) + 1;
-        // Also keep composite for the component fallback if needed
+        // Keep the composite key as a fallback for the component.
         counts[`facebook:${t.type}`] = (counts[`facebook:${t.type}`] || 0) + 1;
       }
 
@@ -280,15 +258,15 @@ export default function Studio() {
     });
     counts['All'] = total;
     return counts;
-  }, [threads, excludeNoise, minQuality]);
+  }, [eligibleThreads]);
   const visibleSelectedThreads = useMemo(
     () => visibleThreads.filter((t) => selectedIds.has(t.id)),
     [visibleThreads, selectedIds],
   );
 
-  // Auto-scan best days for newly selected threads (or on recency change for non-edited threads) in Project mode.
-  // Waits while persona scanning is actively streaming selections, debounces rapid clicks,
-  // deduplicates in-flight IDs, and sends sequential chunks so bulk selection never floods the server.
+  // In Project mode, sample days for newly selected threads. Resample on recency changes if the user hasn't edited the picks.
+  // Wait for persona scanning to finish adding selections and debounce rapid clicks.
+  // Skip requests already in flight and send one batch at a time so bulk selection doesn't swamp the API.
   useEffect(() => {
     if (!isProjectMode || selectedIds.size === 0 || scanningLabels.size > 0) {
       return;
@@ -322,7 +300,7 @@ export default function Studio() {
       const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
       const dateRange = calculateDateRange(recency);
 
-      // Re-filter at fire time so we never duplicate an ID that started scanning during debounce
+      // Check again when the timer fires. Another scan could have started in the meantime.
       const pendingIds = toScan.filter((id) => {
         if (inFlightScanRecencyRef.current[id] === recency) {
           return false;
@@ -455,7 +433,7 @@ export default function Studio() {
     };
   }, [isProjectMode, selectedIds, scanningLabels.size, config.recencyFilter, config.identityNames]);
 
-  // Abort any in-flight sample-thread-days requests on unmount or when recency/mode changes
+  // Cancel day sampling when Studio unmounts or the recency or mode changes.
   useEffect(() => {
     return () => {
       scanAbortRef.current?.abort();
@@ -511,7 +489,7 @@ export default function Studio() {
       setActivePreviewThread(found);
       setIsPreviewThreadOpen(true);
 
-      // Populate dayStats for unselected threads opened in Project mode so Day Header counts render
+      // Load daily stats for opened threads even if they aren't selected. Project mode still needs counts in the day headers.
       if (isProjectMode && !dayStatsByThread[id] && !id.startsWith('fb-event-')) {
         const names = config.identityNames
           .split(',')
@@ -654,7 +632,7 @@ export default function Studio() {
           analyzeWorkerRef.current = null;
           worker.terminate();
         } else if (type === 'error') {
-          // If the error string contains the known harmless warning, ignore it
+          // Skip this warning when it matches the known harmless message.
           if (error && typeof error === 'string' && error.includes('VerifyEachNodeIsAssignedToAnEp')) {
             return;
           }
@@ -686,46 +664,43 @@ export default function Studio() {
       .filter(Boolean);
     const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
 
-    await startDatasetGeneration(
-      {
-        threadIds: visibleSelectedThreads.map((t) => t.id),
-        identityNames: names,
-        includeGroupSpeakerNames: config.includeGroupNames,
-        mergeSequential: config.mergeSequential,
-        removeSystemMessages: config.removeSystemMessages,
-        imputeReactions: config.imputeReactions,
-        redactPII: config.redactPII,
-        splitDataset: config.exportTarget === 'custom' ? config.customSplit : isProjectMode,
-        maxTokensPerFile:
-          config.exportTarget === 'custom' && config.customSplit
-            ? parseInt(config.customFileLimit) || 2000000
-            : isProjectMode
-              ? 1900000
-              : undefined,
-        maxTokensPerSession:
-          config.exportTarget === 'custom'
-            ? parseInt(config.customSessionLimit) || Infinity
-            : isProjectMode
-              ? 2000 // Increased from 800 for better email/long-thread support
-              : 12000, // Increased from 8k for modern GPT-4o style fine-tuning
-        personaTag: config.personaTag.trim(),
-        customInstructions: config.customInstructions.trim(),
-        skipSystemMessages: isProjectMode,
-        outputFormat: isProjectMode ? 'markdown' : 'jsonl',
-        selectedDaysByThread: isProjectMode ? selectedDaysByThread : undefined,
-        timeZone,
-        datasetName: config.datasetName.trim(),
-        dateRange: calculateDateRange(config.recencyFilter),
-      },
-      config.datasetName,
-    );
+    await startDatasetGeneration({
+      threadIds: visibleSelectedThreads.map((t) => t.id),
+      identityNames: names,
+      includeGroupSpeakerNames: config.includeGroupNames,
+      mergeSequential: config.mergeSequential,
+      removeSystemMessages: config.removeSystemMessages,
+      imputeReactions: config.imputeReactions,
+      redactPII: config.redactPII,
+      splitDataset: config.exportTarget === 'custom' ? config.customSplit : isProjectMode,
+      maxTokensPerFile:
+        config.exportTarget === 'custom' && config.customSplit
+          ? parseInt(config.customFileLimit) || 2000000
+          : isProjectMode
+            ? 1900000
+            : undefined,
+      maxTokensPerSession:
+        config.exportTarget === 'custom'
+          ? parseInt(config.customSessionLimit) || Infinity
+          : isProjectMode
+            ? 2000 // Give emails and long threads more room in each session.
+            : 12000, // Allow larger files for GPT-4o-style fine-tuning.
+      personaTag: config.personaTag.trim(),
+      customInstructions: config.customInstructions.trim(),
+      skipSystemMessages: isProjectMode,
+      outputFormat: isProjectMode ? 'markdown' : 'jsonl',
+      selectedDaysByThread: isProjectMode ? selectedDaysByThread : undefined,
+      timeZone,
+      datasetName: config.datasetName.trim() || 'virtual_me',
+      dateRange: calculateDateRange(config.recencyFilter),
+    });
   }
 
   // Realistic Token Estimation
   const estimatedTokens = useMemo(() => {
     let total = 0;
     visibleSelectedThreads.forEach((t) => {
-      // 0. Recency Heuristic: If thread's last message is older than the filter, skip estimation for it.
+      // Skip threads whose latest message falls outside the recency window.
       const range = calculateDateRange(config.recencyFilter);
       if (range && t.timestamp < range.start) {
         return;
@@ -735,31 +710,31 @@ export default function Studio() {
       const avgLen = t.myAvgMessageLength || 40;
       const msgCount = t.messageCount || 0;
 
-      // Realistic Turn-based heuristic
+      // Estimate usable turns based on the thread type.
       const myCount = t.myMessageCount || 0;
       const otherCount = Math.max(0, msgCount - myCount);
 
       let effectiveMsgs = 0;
       if (t.platform === 'google_mail' || t.platform === 'gmail') {
-        // Enforced 1:1. Only pairs where we have both an inbound and an outbound.
+        // Count email turns only when there's an inbound and an outbound message to pair.
         effectiveMsgs = Math.min(myCount, otherCount) * 2;
       } else if (t.type === 'post' || t.type === 'event') {
-        // Each post/event becomes a session with a synthetic user prompt + assistant response.
+        // Count each post or event as one session with a generated prompt and a response.
         effectiveMsgs = myCount * 2;
       } else {
-        // Regular chat: we drop one-sided sessions.
+        // Chat sessions need both sides of the exchange.
         if (myCount > 0 && otherCount > 0) {
           effectiveMsgs = Math.min(myCount, otherCount) * 2;
         }
       }
 
-      // 1. Content Tokens: Roughly 4 characters per token
+      // Estimate one content token per four characters.
       let tokens = (effectiveMsgs * avgLen) / 4.0;
 
-      // 2. Message Overhead: ~5 tokens per message for JSON framing and roles
+      // Allow about five extra tokens per message for roles and JSON framing.
       tokens += effectiveMsgs * 5;
 
-      // 3. System message & Persona overhead
+      // Include the system message and persona text in the estimate.
       if (config.exportTarget !== 'customgpt') {
         const estSessions = t.platform === 'google_mail' || t.platform === 'gmail' ? Math.min(myCount, otherCount) : 1;
 
