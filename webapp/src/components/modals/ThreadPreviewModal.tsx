@@ -1,10 +1,12 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 
+import BaseModal, { BaseModalProps, ModalHeader } from '@/components/modals/BaseModal';
+import Tooltip from '@/components/Tooltip';
+
 import { getPlatformLabel } from '@/lib/shared/platforms';
 import { ContentRecord, Thread } from '@/lib/shared/types';
 import ThreadContent from '@/sections/ThreadContent';
 
-import BaseModal, { BaseModalProps, ModalHeader } from './BaseModal';
 import styles from './ThreadPreviewModal.module.css';
 
 interface ThreadPreviewModalProps extends Pick<BaseModalProps, 'isOpen' | 'onClose' | 'onAfterClose'> {
@@ -301,14 +303,11 @@ export default function ThreadPreviewModal({
               <div className={styles.chipList}>
                 {sortedSelectedDays.map((dayKey) => (
                   <span key={dayKey} className={styles.dayChip}>
-                    <button
-                      type="button"
-                      className={styles.dayChipJump}
-                      title={`Jump to ${dayKey}`}
-                      onClick={() => handleJumpToDate(dayKey)}
-                    >
-                      {formatShortChipDate(dayKey)}
-                    </button>
+                    <Tooltip content={`Jump to ${dayKey}`}>
+                      <button type="button" className={styles.dayChipJump} onClick={() => handleJumpToDate(dayKey)}>
+                        {formatShortChipDate(dayKey)}
+                      </button>
+                    </Tooltip>
                     <button
                       type="button"
                       className={styles.dayChipRemove}

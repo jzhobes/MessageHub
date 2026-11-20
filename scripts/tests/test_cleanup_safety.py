@@ -1,6 +1,7 @@
 import io
 import os
 import sys
+import tarfile
 import tempfile
 import unittest
 import zipfile
@@ -140,6 +141,66 @@ class CleanupSafetyTests(unittest.TestCase):
             self.assertEqual(processed, 1)
             self.assertFalse((sibling_dir / "pwned.txt").exists())
             self.assertIn("Skipping unsafe member", buf.getvalue())
+
+    def test_extract_explicit_tar_archive_keeps_original_untouched(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            import_dir = root / "imports"
+            workspace_dir = root / "workspace"
+            import_dir.mkdir()
+            workspace_dir.mkdir()
+
+            archive_path = import_dir / "takeout.tar.gz"
+            with tarfile.open(archive_path, "w:gz") as tf:
+                payload = b"{}"
+                info = tarfile.TarInfo("Takeout/Google Chat/Groups/DM 1/messages.json")
+                info.size = len(payload)
+                tf.addfile(info, io.BytesIO(payload))
+
+            with redirect_stdout(io.StringIO()):
+                processed, detected, moves = extract_archives_found_with_opts(
+                    [workspace_dir],
+                    workspace_dir,
+                    platform_filter="all",
+                    delete_after=False,
+                    explicit_archives=[archive_path],
+                )
+
+            self.assertEqual(processed, 1)
+            self.assertEqual(detected, {"google_chat"})
+            self.assertEqual(moves, [(archive_path, None)])
+            self.assertTrue(archive_path.exists())
+            self.assertFalse((workspace_dir / ".processed").exists())
+            self.assertTrue((workspace_dir / "Google Chat/Groups/DM 1/messages.json").exists())
+
+    def test_extract_explicit_archive_deletes_original_when_requested(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            import_dir = root / "imports"
+            workspace_dir = root / "workspace"
+            import_dir.mkdir()
+            workspace_dir.mkdir()
+
+            archive_path = import_dir / "fb.zip"
+            with zipfile.ZipFile(archive_path, "w") as zf:
+                zf.writestr("your_facebook_activity/messages/inbox/thread1/message_1.json", "{}")
+
+            with redirect_stdout(io.StringIO()):
+                processed, detected, moves = extract_archives_found_with_opts(
+                    [workspace_dir],
+                    workspace_dir,
+                    platform_filter="all",
+                    delete_after=True,
+                    explicit_archives=[archive_path],
+                )
+
+            self.assertEqual(processed, 1)
+            self.assertEqual(detected, {"facebook"})
+            self.assertEqual(moves, [(archive_path, None)])
+            self.assertFalse(archive_path.exists())
+            self.assertTrue(
+                (workspace_dir / "Facebook/your_facebook_activity/messages/inbox/thread1/message_1.json").exists()
+            )
 
 
 if __name__ == "__main__":

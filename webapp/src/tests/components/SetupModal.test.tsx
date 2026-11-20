@@ -19,7 +19,19 @@ vi.mock('@/components/modals/setup/DataPathStep', () => ({
 }));
 vi.mock('@/components/modals/setup/ImportStep', () => ({
   __esModule: true,
-  default: () => <div data-testid="import-step">Import Step</div>,
+  default: ({
+    setRemoteFiles,
+    onConfirm,
+  }: {
+    setRemoteFiles?: (files: string[], totalSize: number) => void;
+    onConfirm?: () => void;
+  }) => (
+    <div data-testid="import-step">
+      Import Step
+      <button onClick={() => setRemoteFiles?.(['/import/next.zip'], 128)}>Select Archive</button>
+      <button onClick={() => onConfirm?.()}>Confirm Import</button>
+    </div>
+  ),
 }));
 vi.mock('@/components/modals/setup/ScanStep', () => ({
   __esModule: true,
@@ -43,6 +55,7 @@ describe('SetupModal Component', () => {
       error: null,
       activeTransfers: {},
       runInstall: vi.fn(),
+      reset: vi.fn(),
       ...overrides,
     });
   };
@@ -77,7 +90,7 @@ describe('SetupModal Component', () => {
     // Sidebar title
     expect(screen.getByText(/Setup/i)).toBeTruthy();
     // Close button (top right) should be present
-    expect(screen.getByTitle('Close')).toBeTruthy();
+    expect(screen.getByLabelText('Close')).toBeTruthy();
     // Sidebar Close button (text) should also be present
     expect(screen.getByText('Close')).toBeTruthy();
   });
@@ -88,8 +101,8 @@ describe('SetupModal Component', () => {
     // Test Sidebar version
     render(<SetupModal {...defaultProps} isFirstRun={false} />);
 
-    // Top right close button should be disabled (queried by title)
-    const topCloseBtn = screen.getByTitle('Close') as HTMLButtonElement;
+    // Top right close button should be disabled (queried by aria-label)
+    const topCloseBtn = screen.getByLabelText('Close') as HTMLButtonElement;
     expect(topCloseBtn.disabled).toBe(true);
 
     // Sidebar close button should be disabled (queried by text)
@@ -197,5 +210,17 @@ describe('SetupModal Component', () => {
     } finally {
       consoleErrorSpy.mockRestore();
     }
+  });
+
+  it('resets completed ingestion state when selecting another archive in ImportStep', async () => {
+    const reset = vi.fn();
+    mockUseIngestion({ isComplete: true, progress: 100, status: 'Complete', reset });
+
+    render(<SetupModal {...defaultProps} isFirstRun={false} initialStep={1} />);
+
+    expect(screen.getByTestId('import-step')).toBeTruthy();
+    screen.getByText('Select Archive').click();
+
+    expect(reset).toHaveBeenCalledTimes(1);
   });
 });

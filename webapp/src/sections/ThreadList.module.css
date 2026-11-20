@@ -153,3 +153,27 @@
   flex: 1;
   height: 100%;
 }
+
+.archivedName {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.archivedName > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.archivedBadge {
+  flex-shrink: 0;
+  font-size: 0.65rem;
+  font-weight: 400;
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+  padding: 2px 5px;
+  border-radius: 4px;
+}

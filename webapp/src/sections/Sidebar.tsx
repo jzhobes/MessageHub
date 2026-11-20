@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { FaRobot } from 'react-icons/fa';
 
 import PlatformIcon from '@/components/PlatformIcon';
+import Tooltip from '@/components/Tooltip';
 
 import styles from './Sidebar.module.css';
 
@@ -28,18 +29,19 @@ export default function Sidebar({ activePlatform, availability, collapsed, onPla
       {SIDEBAR_PLATFORMS.map((p) => {
         const isAvailable = availability[p.id];
         return (
-          <button
-            key={p.id}
-            className={`${styles.navItem} ${activePlatform === p.id ? styles.navItemActive : ''}`}
-            disabled={!isAvailable}
-            title={collapsed ? p.label : ''}
-            onClick={() => onPlatformSelect(p.id)}
-          >
-            <span className={styles.sidebarIconWrapper}>
-              <PlatformIcon platform={p.id} active={isAvailable} size={p.size} />
-            </span>
-            <span className={styles.sidebarLabel}>{p.label}</span>
-          </button>
+          <Tooltip key={p.id} content={collapsed ? p.label : null} placement="right" className={styles.tooltipTrigger}>
+            <button
+              className={`${styles.navItem} ${activePlatform === p.id ? styles.navItemActive : ''}`}
+              disabled={!isAvailable}
+              aria-label={p.label}
+              onClick={() => onPlatformSelect(p.id)}
+            >
+              <span className={styles.sidebarIconWrapper}>
+                <PlatformIcon platform={p.id} active={isAvailable} size={p.size} />
+              </span>
+              <span className={styles.sidebarLabel}>{p.label}</span>
+            </button>
+          </Tooltip>
         );
       })}
 
@@ -47,19 +49,21 @@ export default function Sidebar({ activePlatform, availability, collapsed, onPla
         <div style={{ height: 1, backgroundColor: 'var(--border-subtle)', width: '100%' }} />
       </div>
 
-      <div className={styles.navItem}>
-        <Link
-          href="/studio"
-          className={styles.sidebarButton}
-          style={{ textDecoration: 'none', color: 'inherit' }}
-          title="DataForge AI"
-        >
-          <span className={styles.sidebarIconWrapper}>
-            <FaRobot color="#666" size={20} />
-          </span>
-          <span className={styles.sidebarLabel}>DataForge AI</span>
-        </Link>
-      </div>
+      <Tooltip content={collapsed ? 'DataForge AI' : null} placement="right" className={styles.tooltipTrigger}>
+        <div className={styles.navItem}>
+          <Link
+            href="/studio"
+            className={styles.sidebarButton}
+            style={{ textDecoration: 'none', color: 'inherit' }}
+            aria-label="DataForge AI"
+          >
+            <span className={styles.sidebarIconWrapper}>
+              <FaRobot color="#666" size={20} />
+            </span>
+            <span className={styles.sidebarLabel}>DataForge AI</span>
+          </Link>
+        </div>
+      </Tooltip>
 
       <div style={{ flex: 1 }} />
     </div>

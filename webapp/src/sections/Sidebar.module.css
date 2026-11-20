@@ -101,3 +101,8 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+.tooltipTrigger {
+  width: 100%;
+  display: flex;
+}

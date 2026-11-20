@@ -5,6 +5,7 @@ import { FaRobot } from 'react-icons/fa';
 import Checkbox from '@/components/Checkbox';
 import TextareaAuto from '@/components/TextareaAuto';
 import TextInput from '@/components/TextInput';
+import Tooltip from '@/components/Tooltip';
 
 import styles from '@/pages/studio.module.css';
 
@@ -107,15 +108,20 @@ export function StudioConfig({
                     placeholder="e.g. Casual, Friendly"
                     value={config.personaTag}
                     suffix={
-                      <button
-                        className="btn-input-suffix"
-                        title="Analyze writing style in selected threads"
-                        disabled={analyzingStyle || selectedCount === 0}
-                        onClick={onAnalyzeStyle}
+                      <Tooltip
+                        content="Analyze writing style in selected threads"
+                        align="end"
+                        style={{ height: '100%', borderRadius: 'inherit' }}
                       >
-                        <FaRobot size={16} />
-                        <span>{analyzingStyle ? 'Analyzing' : 'Analyze Style'}</span>
-                      </button>
+                        <button
+                          className="btn-input-suffix"
+                          disabled={analyzingStyle || selectedCount === 0}
+                          onClick={onAnalyzeStyle}
+                        >
+                          <FaRobot size={16} />
+                          <span>{analyzingStyle ? 'Analyzing' : 'Analyze Style'}</span>
+                        </button>
+                      </Tooltip>
                     }
                     onChange={(e) => onFieldChange('personaTag', e.target.value)}
                   />

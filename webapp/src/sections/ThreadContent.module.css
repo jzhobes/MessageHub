@@ -316,3 +316,18 @@
 .participantsList li:last-child {
   border-bottom: none;
 }
+
+.cutoverNotice {
+  padding: 20px;
+  text-align: center;
+  color: var(--text-secondary, #666);
+  font-size: 13px;
+}
+
+.cutoverNotice p {
+  margin: 8px 0;
+}
+
+.cutoverNotice a {
+  color: var(--accent-color, #0084ff);
+}

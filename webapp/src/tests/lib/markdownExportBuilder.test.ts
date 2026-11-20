@@ -6,7 +6,7 @@ import {
   isMarkdownSystemMessage,
   MarkdownExportBuilder,
 } from '@/lib/server/dataset/builders/MarkdownExportBuilder';
-import { DaySummaryStat, selectBestDays } from '@/lib/server/dataset/scanThreadDays';
+import { DaySummaryStat, selectBestDays } from '@/lib/server/dataset/sampleThreadDays';
 
 describe('MarkdownExportBuilder', () => {
   it('derives self label preferring a real name over Me, phone numbers, and emails', () => {

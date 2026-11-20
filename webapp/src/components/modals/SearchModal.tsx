@@ -3,16 +3,17 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { FaChevronDown, FaChevronUp, FaSearch, FaSpinner, FaTimes, FaUndo } from 'react-icons/fa';
 import { Virtuoso } from 'react-virtuoso';
 
+import BaseModal, { ModalHeader } from '@/components/modals/BaseModal';
+import SearchResultItem from '@/components/modals/SearchResultItem';
+import PlatformSelectionDropdown from '@/components/PlatformSelectionDropdown';
 import TextInput from '@/components/TextInput';
+import Tooltip from '@/components/Tooltip';
 
 import { useForm } from '@/hooks/useForm';
 
 import { PlatformMap } from '@/lib/shared/platforms';
 
-import BaseModal, { ModalHeader } from './BaseModal';
 import styles from './SearchModal.module.css';
-import SearchResultItem from './SearchResultItem';
-import PlatformSelectionDropdown from '../PlatformSelectionDropdown';
 
 interface SearchModalProps {
   isOpen: boolean;
@@ -76,6 +77,10 @@ export default function SearchModal({ isOpen, onClose, onNavigate }: SearchModal
         q: searchQuery,
         page: pageNum.toString(),
       });
+      // Infinite scroll appends results without updating facet counts, so skip facets after page 1.
+      if (pageNum > 1) {
+        params.set('includeFacets', '0');
+      }
       config.filterPlatforms.forEach((p) => {
         params.append('platform', p);
       });
@@ -232,9 +237,15 @@ export default function SearchModal({ isOpen, onClose, onNavigate }: SearchModal
                   onChange={handlePlatformChange}
                 />
 
-                <button className={styles.suffixReset} title="Clear search and filters" onClick={handleReset}>
-                  <FaUndo size={14} />
-                </button>
+                <Tooltip
+                  content="Clear search and filters"
+                  align="end"
+                  style={{ height: '100%', borderRadius: 'inherit' }}
+                >
+                  <button className={styles.suffixReset} aria-label="Clear search and filters" onClick={handleReset}>
+                    <FaUndo size={14} />
+                  </button>
+                </Tooltip>
               </div>
             }
             autoFocus

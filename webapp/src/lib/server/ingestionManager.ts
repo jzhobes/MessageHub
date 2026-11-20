@@ -28,7 +28,7 @@ if (!globalWithIngestion._ingestionState) {
 const state = globalWithIngestion._ingestionState;
 
 export const ingestionManager = {
-  start: (deleteArchives: boolean): Promise<ChildProcess> => {
+  start: (deleteArchives: boolean, archives: string[] = []): Promise<ChildProcess> => {
     if (state.process && !state.isComplete) {
       return Promise.resolve(state.process);
     }
@@ -49,6 +49,9 @@ export const ingestionManager = {
       const args = ['-u', scriptPath];
       if (deleteArchives) {
         args.push('--delete-archives');
+      }
+      for (const archivePath of archives) {
+        args.push('--archive', archivePath);
       }
 
       const child = spawn(pythonPath, args, { env });

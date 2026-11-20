@@ -343,6 +343,16 @@ export default function ThreadContent({
           </>
         )}
       </div>
+    ) : activeThread?.platform === 'facebook' && activeThread.e2eeCutover ? (
+      <div className={styles.cutoverNotice}>
+        <p>Facebook Messenger switched this chat to end-to-end encryption.</p>
+        <p>
+          Messages after this point require a separate export.{' '}
+          <a href="https://www.facebook.com/secure_storage/dyi" target="_blank" rel="noopener noreferrer">
+            Download your encrypted Messenger messages.
+          </a>
+        </p>
+      </div>
     ) : null;
   };
 

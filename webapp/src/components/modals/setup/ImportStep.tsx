@@ -1,10 +1,13 @@
 import React, { useState } from 'react';
 
-import { FaCopy, FaDatabase, FaShare } from 'react-icons/fa';
+import { FaDatabase, FaShieldAlt, FaTrashAlt } from 'react-icons/fa';
 import { FaTriangleExclamation } from 'react-icons/fa6';
 
 import FileExplorer, { formatBytes } from '@/components/FileExplorer';
 import styles from '@/components/modals/SetupModal.module.css';
+import Tooltip from '@/components/Tooltip';
+
+import type { ArchiveMode } from '@/hooks/useIngestion';
 
 const IMPORT_ITEM_FILTERS = [
   {
@@ -21,17 +24,17 @@ const IMPORT_ITEM_FILTERS = [
 
 interface ImportStepProps {
   isFirstRun?: boolean;
-  transferMode: 'copy' | 'move';
+  archiveMode: ArchiveMode;
   setRemoteFiles: (files: string[], totalSize: number) => void;
-  setTransferMode: (m: 'copy' | 'move') => void;
+  setArchiveMode: (m: ArchiveMode) => void;
   onConfirm?: () => void;
 }
 
 export default function ImportStep({
   isFirstRun,
-  transferMode,
+  archiveMode,
   setRemoteFiles,
-  setTransferMode,
+  setArchiveMode,
   onConfirm,
 }: ImportStepProps) {
   const [selectionCount, setSelectionCount] = useState(0);
@@ -56,36 +59,43 @@ export default function ImportStep({
           height="100%"
           addressBarSuffix={
             !isFirstRun && (
-              <button
-                className={`${styles.button} ${styles.explorerActionBtn}`}
-                disabled={selectionCount === 0}
-                title="Proceed to overview to start processing"
-                onClick={onConfirm}
+              <Tooltip
+                content="Proceed to overview to start processing"
+                align="end"
+                style={{ height: '100%', borderRadius: 'inherit' }}
               >
-                <FaDatabase size={16} />
-                Confirm
-              </button>
+                <button
+                  className={`${styles.button} ${styles.explorerActionBtn}`}
+                  disabled={selectionCount === 0}
+                  onClick={onConfirm}
+                >
+                  <FaDatabase size={16} />
+                  Confirm
+                </button>
+              </Tooltip>
             )
           }
           subheader={
             <div className={styles.importActions}>
-              <button
-                title="Preserve original files and copy them to the workspace"
-                className={`${styles.actionButton} ${transferMode === 'copy' ? styles.actionButtonActive : ''}`}
-                onClick={() => setTransferMode('copy')}
-              >
-                <FaCopy size={12} />
-                Copy
-              </button>
+              <Tooltip content="Selected archive files remain intact after importing" align="start">
+                <button
+                  className={`${styles.actionButton} ${archiveMode === 'keep' ? styles.actionButtonActive : ''}`}
+                  onClick={() => setArchiveMode('keep')}
+                >
+                  <FaShieldAlt size={12} />
+                  Keep Originals
+                </button>
+              </Tooltip>
               <span className={styles.importSeparator}>|</span>
-              <button
-                title="Move files to the workspace and remove them from the source location"
-                className={`${styles.actionButton} ${transferMode === 'move' ? styles.actionButtonActive : ''}`}
-                onClick={() => setTransferMode('move')}
-              >
-                <FaShare size={12} />
-                Move
-              </button>
+              <Tooltip content="Selected archive files are deleted after a successful import" align="start">
+                <button
+                  className={`${styles.actionButton} ${archiveMode === 'delete' ? styles.actionButtonActive : ''}`}
+                  onClick={() => setArchiveMode('delete')}
+                >
+                  <FaTrashAlt size={12} />
+                  Delete After Import
+                </button>
+              </Tooltip>
             </div>
           }
           footer={({ visibleCount, selectedCount, totalSize }) => (
@@ -102,15 +112,16 @@ export default function ImportStep({
                 )}
               </div>
               <div className={styles.actionStatusText}>
-                {transferMode === 'move' ? (
+                {archiveMode === 'delete' ? (
                   <span style={{ display: 'flex' }}>
                     <FaTriangleExclamation color="#f59e0b" size={16} />
                     &nbsp;
-                    <strong>Move Mode:</strong>&nbsp;Original archives will be&nbsp;<strong>deleted</strong>
+                    <strong>Delete Mode:</strong>&nbsp;Selected archives will be&nbsp;<strong>deleted</strong>
+                    &nbsp;after a successful import
                   </span>
                 ) : (
                   <>
-                    <strong>Copy Mode:</strong> Originals will remain untouched
+                    <strong>Keep Mode:</strong> Selected archives will remain intact after importing
                   </>
                 )}
               </div>

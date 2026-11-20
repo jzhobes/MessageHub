@@ -38,3 +38,17 @@ Model capability and reasoning effort are separate dimensions. Examples below ar
 - Prioritize correctness, verification, and task completion over marginal token savings.
 - Keep planning, verbosity, and tool calls proportional to task complexity; avoid unnecessary reads or over-planning on straightforward work.
 - Do not assume multi-model orchestration or model switching is available unless explicitly exposed by the runtime.
+
+## Coding Standards
+
+- Keep imports organized per project lint rules and prefer configured path aliases or absolute imports (e.g., `@/...`) over relative paths when available; reserve `./` for colocated assets (e.g., CSS modules).
+- Do not stage any changes you make (`git add`), and do not touch or unstage anything already staged (`git reset` / `git restore --staged`). Leave the existing staging area completely untouched unless explicitly asked.
+- Treat questions and opinion requests as read-only unless changes are explicitly requested.
+- Reuse existing patterns, components, endpoints, helpers, and UI conventions for consistency, while favoring supported modern TS/JS syntax. Before adding code to an existing module, inspect neighboring implementations and match their naming, formatting, and routing structure. Route index files should mount dedicated routers; keep endpoint handlers in those routers. Prefer DRY solutions when logic or behavior is meaningfully repeated, but avoid abstractions that add complexity for incidental duplication.
+- Keep changes minimal and scoped. After debugging or exploratory work, remove logs, scaffolding, commented-out code, unused variables/imports, and unrelated edits.
+- Independently verify feedback against requirements, code, and history. Push back on incorrect or regression-prone suggestions, and prefer simpler solutions over unnecessary complexity.
+
+## Validation Guidelines
+
+- Validate code changes when appropriate. Prefer targeted lint, type checks, and tests relevant to the files or behavior changed. Fix issues introduced by the changes and rerun affected checks before reporting completion.
+- Avoid full-repository lint, test, or build commands unless explicitly requested or necessary to validate broader changes. Skip checks that provide little value for the task. Summarize validation performed and disclose relevant checks that were skipped or could not be completed.

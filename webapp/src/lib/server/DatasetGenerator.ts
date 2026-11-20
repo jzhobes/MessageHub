@@ -6,7 +6,7 @@ import EmailPairBuilder, { Msg } from '@/lib/server/dataset/builders/EmailPairBu
 import { EventRecordBuilder } from '@/lib/server/dataset/builders/EventRecordBuilder';
 import { MarkdownExportBuilder, MarkdownMessageRow } from '@/lib/server/dataset/builders/MarkdownExportBuilder';
 import { MessageSessionBuilder } from '@/lib/server/dataset/builders/MessageSessionBuilder';
-import { scanThreadDays } from '@/lib/server/dataset/scanThreadDays';
+import { sampleThreadDays } from '@/lib/server/dataset/sampleThreadDays';
 // Utilities & Shared
 import { redactPII } from '@/lib/server/piiUtils';
 import { inferThreadTitle } from '@/lib/server/threadUtils';
@@ -394,7 +394,7 @@ export class DatasetGenerator {
         const selectedDays =
           explicitDays && explicitDays.length > 0
             ? explicitDays
-            : scanThreadDays(dbInstance, threadId, identityNames, {
+            : sampleThreadDays(dbInstance, threadId, identityNames, {
                 dateRange,
                 timeZone: this._timeZone,
               }).selectedDays;
@@ -463,7 +463,7 @@ export class DatasetGenerator {
       const selectedDays =
         explicitDays && explicitDays.length > 0
           ? explicitDays
-          : scanThreadDays(dbInstance, threadId, identityNames, {
+          : sampleThreadDays(dbInstance, threadId, identityNames, {
               dateRange,
               timeZone: this._timeZone,
             }).selectedDays;

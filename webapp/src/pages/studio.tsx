@@ -9,6 +9,7 @@ import layoutStyles from '@/components/Layout.module.css';
 import SetupModal from '@/components/modals/SetupModal';
 import ThreadPreviewModal from '@/components/modals/ThreadPreviewModal';
 import TextInput from '@/components/TextInput';
+import Tooltip from '@/components/Tooltip';
 
 import { useDatasetGeneration } from '@/hooks/useDatasetGeneration';
 import { useForm } from '@/hooks/useForm';
@@ -351,7 +352,7 @@ export default function Studio() {
             }
             const chunk = pendingIds.slice(i, i + CHUNK_SIZE);
             try {
-              const res = await fetch('/api/studio/scan-days', {
+              const res = await fetch('/api/studio/sample-thread-days', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -451,7 +452,7 @@ export default function Studio() {
     };
   }, [isProjectMode, selectedIds, scanningLabels.size, config.recencyFilter, config.identityNames]);
 
-  // Abort any in-flight scan-days requests on unmount or when recency/mode changes
+  // Abort any in-flight sample-thread-days requests on unmount or when recency/mode changes
   useEffect(() => {
     return () => {
       scanAbortRef.current?.abort();
@@ -514,7 +515,7 @@ export default function Studio() {
           .map((s) => s.trim())
           .filter(Boolean);
         const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
-        fetch('/api/studio/scan-days', {
+        fetch('/api/studio/sample-thread-days', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -839,9 +840,11 @@ export default function Studio() {
       />
       <div className={layoutStyles.topBar}>
         <div className={layoutStyles.leftSection}>
-          <Link href="/" className={layoutStyles.iconButton} title="Back to MessageHub">
-            <FaArrowLeft />
-          </Link>
+          <Tooltip content="Back to MessageHub" align="start">
+            <Link href="/" className={layoutStyles.iconButton} aria-label="Back to MessageHub">
+              <FaArrowLeft />
+            </Link>
+          </Tooltip>
 
           <div className={styles.mobileHidden} style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
             <Link aria-label="Back to MessageHub" className={layoutStyles.appTitle} href="/" prefetch={false}>
@@ -863,21 +866,25 @@ export default function Studio() {
         <div className={layoutStyles.searchSection} />
 
         <div className={layoutStyles.themeToggleWrapper}>
-          <button
-            className={`${layoutStyles.iconButton} ${layoutStyles.headerIconBtn}`}
-            title="Setup"
-            style={{ marginRight: 8 }}
-            onClick={() => setShowSetup(true)}
-          >
-            <FaCog size={20} />
-          </button>
-          <button
-            className={`${layoutStyles.iconButton} ${layoutStyles.headerIconBtn}`}
-            title={theme === 'light' ? 'Switch to Dark Mode' : 'Switch to Light Mode'}
-            onClick={toggleTheme}
-          >
-            {!mounted || theme === 'light' ? <FiMoon size={20} /> : <FiSun size={20} />}
-          </button>
+          <Tooltip content="Setup" align="end">
+            <button
+              className={`${layoutStyles.iconButton} ${layoutStyles.headerIconBtn}`}
+              aria-label="Setup"
+              style={{ marginRight: 8 }}
+              onClick={() => setShowSetup(true)}
+            >
+              <FaCog size={20} />
+            </button>
+          </Tooltip>
+          <Tooltip content={theme === 'light' ? 'Switch to Dark Mode' : 'Switch to Light Mode'} align="end">
+            <button
+              className={`${layoutStyles.iconButton} ${layoutStyles.headerIconBtn}`}
+              aria-label={theme === 'light' ? 'Switch to Dark Mode' : 'Switch to Light Mode'}
+              onClick={toggleTheme}
+            >
+              {!mounted || theme === 'light' ? <FiMoon size={20} /> : <FiSun size={20} />}
+            </button>
+          </Tooltip>
         </div>
       </div>
 
@@ -1054,18 +1061,20 @@ export default function Studio() {
                             placeholder="e.g. 2000000"
                             adornment={
                               <div style={{ display: 'flex', alignItems: 'center', padding: '0 12px' }}>
-                                <input
-                                  type="checkbox"
-                                  checked={config.customSplit}
-                                  style={{
-                                    width: 16,
-                                    height: 16,
-                                    accentColor: 'var(--bubble-sent-bg)',
-                                    cursor: 'pointer',
-                                  }}
-                                  title="Enable file splitting"
-                                  onChange={(e) => setField('customSplit', e.target.checked)}
-                                />
+                                <Tooltip content="Enable file splitting">
+                                  <input
+                                    type="checkbox"
+                                    checked={config.customSplit}
+                                    aria-label="Enable file splitting"
+                                    style={{
+                                      width: 16,
+                                      height: 16,
+                                      accentColor: 'var(--bubble-sent-bg)',
+                                      cursor: 'pointer',
+                                    }}
+                                    onChange={(e) => setField('customSplit', e.target.checked)}
+                                  />
+                                </Tooltip>
                               </div>
                             }
                             onChange={(e) => setField('customFileLimit', e.target.value)}

@@ -1,3 +1,4 @@
+import fileSystem from '@/lib/server/fileSystem';
 import { ingestionManager } from '@/lib/server/ingestionManager';
 import { setupSSE } from '@/lib/server/sse';
 
@@ -5,8 +6,9 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 
 /**
  * Starts or attaches to the singleton ingestion process over SSE (`POST`), replaying buffered logs
- * and streaming live stdout/stderr. Client disconnects detach listeners without terminating the
- * underlying child process.
+ * and streaming live stdout/stderr. Optional `files` in the request body are jailed to
+ * `ROOT_IMPORT_PATH` and extracted directly without copying. Client disconnects detach listeners
+ * without terminating the underlying child process.
  */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -14,11 +16,30 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).end(`Method ${req.method} Not Allowed`);
   }
 
+  const body = req.body && typeof req.body === 'object' ? req.body : {};
+  const deleteArchives =
+    typeof body.deleteArchives === 'boolean' ? body.deleteArchives : req.query.deleteArchives === 'true';
+
+  const resolvedFiles: string[] = [];
+  if (body.files !== undefined) {
+    if (!Array.isArray(body.files) || !body.files.every((f: unknown) => typeof f === 'string')) {
+      return res.status(400).json({ error: 'Invalid files list' });
+    }
+    for (const filePath of body.files) {
+      try {
+        resolvedFiles.push(fileSystem.resolveSafePath('import', filePath));
+      } catch {
+        return res.status(403).json({
+          error: 'PERMISSION_DENIED: Archive path is outside allowed import boundaries.',
+        });
+      }
+    }
+  }
+
   // Setup SSE
   const stream = setupSSE(res, { heartbeat: true });
 
-  const deleteArchives = req.query.deleteArchives === 'true';
-  const child = await ingestionManager.start(deleteArchives);
+  const child = await ingestionManager.start(deleteArchives, resolvedFiles);
   const initialState = ingestionManager.getState();
 
   // 1. Replay buffered logs

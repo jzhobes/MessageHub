@@ -14,7 +14,7 @@ export interface DaySummaryStat {
   score: number;
 }
 
-export interface ThreadDayScanResult {
+export interface ThreadDaySampleResult {
   selectedDays: string[];
   dayStats: Record<string, { totalMsgs: number; myMsgs: number }>;
   totalSelectedMsgs: number;
@@ -174,10 +174,10 @@ export function selectBestDays(
 }
 
 /**
- * Scans a single thread in SQLite within `dateRange` and returns per-day stats
- * plus the auto-selected best days.
+ * Aggregates per-day stats for a single thread in SQLite within `dateRange`
+ * and selects a representative set of days targeting `targetMessages`.
  */
-export function scanThreadDays(
+export function sampleThreadDays(
   dbInstance: Database.Database,
   threadId: string,
   identityNames: string[],
@@ -186,7 +186,7 @@ export function scanThreadDays(
     timeZone?: string;
     targetMessages?: number;
   } = {},
-): ThreadDayScanResult {
+): ThreadDaySampleResult {
   // Events are exported as a timeline without day slicing
   if (threadId.startsWith('fb-event-')) {
     const cat = threadId.replace('fb-event-', '');

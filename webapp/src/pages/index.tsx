@@ -9,6 +9,7 @@ import styles from '@/components/Layout.module.css';
 import MediaPanel from '@/components/MediaPanel';
 import SearchModal from '@/components/modals/SearchModal';
 import SetupModal from '@/components/modals/SetupModal';
+import Tooltip from '@/components/Tooltip';
 
 import { useTheme } from '@/hooks/useTheme';
 
@@ -581,21 +582,25 @@ export default function Home() {
         </div>
 
         <div className={styles.themeToggleWrapper}>
-          <button
-            className={`${styles.iconButton} ${styles.headerIconBtn}`}
-            title="Setup"
-            style={{ marginRight: 8 }}
-            onClick={() => setShowSetup(true)}
-          >
-            <FaCog size={20} />
-          </button>
-          <button
-            className={`${styles.iconButton} ${styles.headerIconBtn}`}
-            title={theme === 'light' ? 'Switch to Dark Mode' : 'Switch to Light Mode'}
-            onClick={toggleTheme}
-          >
-            {!mounted || theme === 'light' ? <FiMoon size={20} /> : <FiSun size={20} />}
-          </button>
+          <Tooltip content="Setup" align="end">
+            <button
+              className={`${styles.iconButton} ${styles.headerIconBtn}`}
+              aria-label="Setup"
+              style={{ marginRight: 8 }}
+              onClick={() => setShowSetup(true)}
+            >
+              <FaCog size={20} />
+            </button>
+          </Tooltip>
+          <Tooltip content={theme === 'light' ? 'Switch to Dark Mode' : 'Switch to Light Mode'} align="end">
+            <button
+              className={`${styles.iconButton} ${styles.headerIconBtn}`}
+              aria-label={theme === 'light' ? 'Switch to Dark Mode' : 'Switch to Light Mode'}
+              onClick={toggleTheme}
+            >
+              {!mounted || theme === 'light' ? <FiMoon size={20} /> : <FiSun size={20} />}
+            </button>
+          </Tooltip>
         </div>
       </div>
 

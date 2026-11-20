@@ -141,7 +141,14 @@ export default function ThreadList({
                   }
                 }}
               >
-                <div className={styles.threadName}>{thread.title}</div>
+                <div className={`${styles.threadName} ${thread.archived ? styles.archivedName : ''}`}>
+                  <span>{thread.title}</span>
+                  {thread.archived && (
+                    <span className={styles.archivedBadge} title="Archived in the Facebook export">
+                      Archived
+                    </span>
+                  )}
+                </div>
                 <div className={styles.threadTime}>
                   {thread.timestamp ? new Date(thread.timestamp).toLocaleDateString() : ''}
                 </div>

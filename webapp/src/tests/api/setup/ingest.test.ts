@@ -4,6 +4,7 @@ import { EventEmitter } from 'events';
 import { createMocks } from 'node-mocks-http';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import fileSystem from '@/lib/server/fileSystem';
 import { ingestionManager } from '@/lib/server/ingestionManager';
 import handler from '@/pages/api/setup/ingest';
 
@@ -52,7 +53,7 @@ describe('/api/setup/ingest', () => {
 
     await handler(req, res);
 
-    expect(ingestionManager.start).toHaveBeenCalledWith(true);
+    expect(ingestionManager.start).toHaveBeenCalledWith(true, []);
     expect(res._isEndCalled()).toBe(true);
     expect(res._getHeaders()['content-type']).toBe('text/event-stream');
     expect(parseSSEEvents(res._getData())).toEqual([
@@ -76,7 +77,7 @@ describe('/api/setup/ingest', () => {
 
     await handler(req, res);
 
-    expect(ingestionManager.start).toHaveBeenCalledWith(false);
+    expect(ingestionManager.start).toHaveBeenCalledWith(false, []);
     expect(res._isEndCalled()).toBe(false);
 
     child.stdout?.emit('data', Buffer.from('  first line \n\n  second line  \n'));
@@ -117,5 +118,51 @@ describe('/api/setup/ingest', () => {
     expect(child.stderr?.listenerCount('data')).toBe(0);
     expect(child.listenerCount('close')).toBe(0);
     expect(res._isEndCalled()).toBe(true);
+  });
+
+  it('resolves explicit import files and forwards them with deleteArchives from body', async () => {
+    const child = createFakeChildProcess();
+    vi.spyOn(fileSystem, 'resolveSafePath').mockImplementation((_mode, p) => `/safe${p}`);
+    vi.spyOn(ingestionManager, 'start').mockResolvedValue(child);
+    vi.spyOn(ingestionManager, 'getState').mockReturnValue({
+      isRunning: false,
+      isComplete: true,
+      exitCode: 0,
+      logs: [],
+    });
+
+    const { req, res } = createStreamingMocks({
+      method: 'POST',
+      body: {
+        files: ['/takeout.tar.gz', '/fb.zip'],
+        deleteArchives: true,
+      },
+    });
+
+    await handler(req, res);
+
+    expect(fileSystem.resolveSafePath).toHaveBeenCalledWith('import', '/takeout.tar.gz');
+    expect(fileSystem.resolveSafePath).toHaveBeenCalledWith('import', '/fb.zip');
+    expect(ingestionManager.start).toHaveBeenCalledWith(true, ['/safe/takeout.tar.gz', '/safe/fb.zip']);
+  });
+
+  it('returns 403 when an explicit archive path escapes the import root', async () => {
+    vi.spyOn(fileSystem, 'resolveSafePath').mockImplementation(() => {
+      throw new Error('PERMISSION_DENIED');
+    });
+    const startSpy = vi.spyOn(ingestionManager, 'start');
+
+    const { req, res } = createMocks({
+      method: 'POST',
+      body: {
+        files: ['/etc/passwd'],
+        deleteArchives: false,
+      },
+    });
+
+    await handler(req, res);
+
+    expect(res._getStatusCode()).toBe(403);
+    expect(startSpy).not.toHaveBeenCalled();
   });
 });

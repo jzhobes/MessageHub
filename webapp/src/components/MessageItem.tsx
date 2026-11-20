@@ -10,10 +10,11 @@ import {
   FaQuoteLeft,
 } from 'react-icons/fa';
 
+import LazyView from '@/components/LazyView';
+import LinkPreview from '@/components/LinkPreview';
+
 import { ContentRecord } from '@/lib/shared/types';
 
-import LazyView from './LazyView';
-import LinkPreview from './LinkPreview';
 import styles from './MessageItem.module.css';
 
 const FILE_ICON_MAP: Record<string, React.ElementType> = {

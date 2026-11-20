@@ -24,7 +24,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   // Use correlated subquery to get content record count efficiently
   let query = `
-    SELECT t.*, (SELECT COUNT(*) FROM content c WHERE c.thread_id = t.id) as msg_count 
+    SELECT t.*, EXISTS(SELECT 1 FROM thread_labels el WHERE el.thread_id=t.id AND el.label='e2ee_cutover') as e2ee_cutover, EXISTS(SELECT 1 FROM thread_labels al WHERE al.thread_id=t.id AND al.label='archived') as archived, (SELECT COUNT(*) FROM content c WHERE c.thread_id = t.id) as msg_count
     FROM threads t
   `;
   const params: string[] = [];
@@ -56,6 +56,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       last_activity_ms: number;
       snippet: string | null;
       msg_count: number;
+
+      // Conversation status
+      e2ee_cutover: number;
+      archived: number;
     }
 
     const dbInstance = db.get();
@@ -95,11 +99,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       return {
         id: row.id,
+        ...(row.archived ? { archived: true } : {}),
         platform: row.platform,
         title: title || 'Untitled',
         participants,
         timestamp: row.last_activity_ms ?? 0,
         snippet: row.snippet ?? '',
+        ...(row.e2ee_cutover ? { e2eeCutover: true } : {}),
         pageCount: Math.ceil((row.msg_count ?? 0) / PAGE_SIZE),
       };
     });

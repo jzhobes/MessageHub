@@ -2,14 +2,15 @@ import React, { useEffect, useState } from 'react';
 
 import { FaCheckCircle, FaCog, FaDatabase, FaFileImport, FaTimes } from 'react-icons/fa';
 
-import styles from '@/components/modals/SetupModal.module.css';
+import BaseModal from '@/components/modals/BaseModal';
+import DataPathStep from '@/components/modals/setup/DataPathStep';
+import ImportStep from '@/components/modals/setup/ImportStep';
+import ScanStep from '@/components/modals/setup/ScanStep';
+import Tooltip from '@/components/Tooltip';
 
-import { useIngestion } from '@/hooks/useIngestion';
+import { ArchiveMode, useIngestion } from '@/hooks/useIngestion';
 
-import BaseModal from './BaseModal';
-import DataPathStep from './setup/DataPathStep';
-import ImportStep from './setup/ImportStep';
-import ScanStep from './setup/ScanStep';
+import styles from './SetupModal.module.css';
 
 interface SetupModalProps {
   isOpen: boolean;
@@ -52,7 +53,7 @@ export default function SetupModal({
   const [pathError, setPathError] = useState<string | null>(null);
   const [resolvedPath, setResolvedPath] = useState<string | null>(null);
   const [remoteFiles, setRemoteFiles] = useState<string[]>([]);
-  const [transferMode, setTransferMode] = useState<'copy' | 'move'>('copy');
+  const [archiveMode, setArchiveMode] = useState<ArchiveMode>('keep');
   const [isExistingWorkspace, setIsExistingWorkspace] = useState(false);
   const [hasExistingArchives, setHasExistingArchives] = useState(false);
 
@@ -71,7 +72,23 @@ export default function SetupModal({
     error,
     activeTransfers,
     runInstall: startIngestion,
+    reset: resetIngestion,
   } = useIngestion();
+
+  const handleClose = () => {
+    if (!isInstalling) {
+      resetIngestion();
+      setRemoteFiles([]);
+    }
+    onClose();
+  };
+
+  const handleSetRemoteFiles = (files: string[]) => {
+    setRemoteFiles(files);
+    if (files.length > 0 && !isInstalling && (isComplete || error)) {
+      resetIngestion();
+    }
+  };
 
   // Auto-switch to scan tab if ingestion starts or re-attaches
   useEffect(() => {
@@ -160,7 +177,7 @@ export default function SetupModal({
   };
 
   const handleRunInstall = () => {
-    startIngestion(remoteFiles, transferMode);
+    startIngestion(remoteFiles, archiveMode);
   };
 
   const currentIndex = steps.indexOf(activeTab as 'path' | 'import' | 'scan');
@@ -212,7 +229,7 @@ export default function SetupModal({
     if (activeTab === 'scan') {
       if (isComplete) {
         onCompleted?.();
-        onClose();
+        handleClose();
       }
       return;
     }
@@ -248,7 +265,7 @@ export default function SetupModal({
             onGoToImport={() => setActiveTab('import')}
             onFinish={() => {
               onCompleted?.();
-              onClose();
+              handleClose();
             }}
             onQueueUpdate={setHasExistingArchives}
           />
@@ -257,10 +274,15 @@ export default function SetupModal({
         return (
           <ImportStep
             isFirstRun={isFirstRun}
-            setRemoteFiles={(files: string[]) => setRemoteFiles(files)}
-            transferMode={transferMode}
-            setTransferMode={setTransferMode}
-            onConfirm={() => setActiveTab('scan')}
+            setRemoteFiles={handleSetRemoteFiles}
+            archiveMode={archiveMode}
+            setArchiveMode={setArchiveMode}
+            onConfirm={() => {
+              if (!isInstalling && (isComplete || error)) {
+                resetIngestion();
+              }
+              setActiveTab('scan');
+            }}
           />
         );
       case 'path':
@@ -337,7 +359,7 @@ export default function SetupModal({
             return;
           }
           onCompleted?.();
-          onClose();
+          handleClose();
         } else {
           handleRunInstall();
         }
@@ -381,19 +403,15 @@ export default function SetupModal({
       height="80vh"
       dismissible={false}
       className={styles.modal}
-      onClose={onClose}
+      onClose={handleClose}
     >
       <div className={styles.setupContainerFull}>
         {!isFirstRun && (
-          <button
-            className={styles.closeButton}
-            disabled={isInstalling}
-            title="Close"
-            aria-label="Close"
-            onClick={onClose}
-          >
-            <FaTimes />
-          </button>
+          <Tooltip content="Close" align="end" className={styles.closeButtonTooltip}>
+            <button className={styles.closeButton} disabled={isInstalling} aria-label="Close" onClick={handleClose}>
+              <FaTimes />
+            </button>
+          </Tooltip>
         )}
         {isFirstRun ? (
           <div className={styles.wizardLayout}>
@@ -428,7 +446,7 @@ export default function SetupModal({
                   <span style={{ textTransform: 'capitalize', flex: 1 }}>
                     {step === 'scan' ? 'Overview' : step === 'path' ? 'Workspace' : step}
                   </span>
-                  {step === 'scan' && remoteFiles.length > 0 && (
+                  {step === 'scan' && !isComplete && remoteFiles.length > 0 && (
                     <span className={styles.sidebarBadge}>{remoteFiles.length}</span>
                   )}
                 </button>
@@ -442,7 +460,7 @@ export default function SetupModal({
                     if (isComplete) {
                       onCompleted?.();
                     }
-                    onClose();
+                    handleClose();
                   }}
                 >
                   Close

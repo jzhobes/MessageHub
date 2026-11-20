@@ -14,6 +14,7 @@ import {
 import FileExplorer from '@/components/FileExplorer';
 import styles from '@/components/modals/SetupModal.module.css';
 import TextInput from '@/components/TextInput';
+import Tooltip from '@/components/Tooltip';
 
 import { PathMetadata } from '@/lib/shared/types';
 
@@ -204,18 +205,24 @@ export default function DataPathStep({
           }
           addressBarSuffix={
             isFirstRun ? (
-              <button
-                className={`${styles.button} ${styles.explorerActionBtn}`}
-                title="Revert to default location"
-                disabled={(dataPath?.replace(/\/+$/, '') || '') === (resolvedPath?.replace(/\/+$/, '') || '')}
-                style={{
-                  opacity:
-                    (dataPath?.replace(/\/+$/, '') || '') === (resolvedPath?.replace(/\/+$/, '') || '') ? 0.4 : 1,
-                }}
-                onClick={() => onChange(resolvedPath || '')}
+              <Tooltip
+                content="Revert to default location"
+                align="end"
+                style={{ height: '100%', borderRadius: 'inherit' }}
               >
-                <FaReply size={16} />
-              </button>
+                <button
+                  className={`${styles.button} ${styles.explorerActionBtn}`}
+                  aria-label="Revert to default location"
+                  disabled={(dataPath?.replace(/\/+$/, '') || '') === (resolvedPath?.replace(/\/+$/, '') || '')}
+                  style={{
+                    opacity:
+                      (dataPath?.replace(/\/+$/, '') || '') === (resolvedPath?.replace(/\/+$/, '') || '') ? 0.4 : 1,
+                  }}
+                  onClick={() => onChange(resolvedPath || '')}
+                >
+                  <FaReply size={16} />
+                </button>
+              </Tooltip>
             ) : (
               <button
                 className={`${styles.button} ${styles.explorerActionBtn}`}

@@ -80,6 +80,7 @@ export default function BaseModal({
     }
 
     if (isMounted && !dialog.open) {
+      dialog.setAttribute('closedby', dismissible ? 'closerequest' : 'none');
       dialog.showModal();
       // Delay enabling the close button slightly to let
       // the browser's initial focus scan hit the content first.
@@ -88,14 +89,16 @@ export default function BaseModal({
     } else if (!isMounted && dialog.open) {
       dialog.close();
     }
-  }, [isMounted]);
+  }, [isMounted, dismissible]);
 
-  // Handle native cancel (Escape key)
+  // Handle native cancel (Escape key) and unexpected native close (e.g. Chromium CloseWatcher)
   useEffect(() => {
     const dialog = dialogRef.current;
-    if (!dialog) {
+    if (!dialog || !isMounted) {
       return;
     }
+
+    dialog.setAttribute('closedby', dismissible ? 'closerequest' : 'none');
 
     const handleCancel = (e: Event) => {
       e.preventDefault(); // Prevent default to handle close via state
@@ -104,9 +107,25 @@ export default function BaseModal({
       }
     };
 
+    const handleClose = () => {
+      if (!isOpen) {
+        return;
+      }
+      if (dismissible && onClose) {
+        onClose();
+      } else if (dialog.isConnected && !dialog.open) {
+        // Keep DOM in sync if the browser force-closed a non-dismissible dialog
+        dialog.showModal();
+      }
+    };
+
     dialog.addEventListener('cancel', handleCancel);
-    return () => dialog.removeEventListener('cancel', handleCancel);
-  }, [dismissible, onClose]);
+    dialog.addEventListener('close', handleClose);
+    return () => {
+      dialog.removeEventListener('cancel', handleCancel);
+      dialog.removeEventListener('close', handleClose);
+    };
+  }, [isMounted, isOpen, dismissible, onClose]);
 
   // Trigger onAfterClose when close animation finished
   useEffect(() => {

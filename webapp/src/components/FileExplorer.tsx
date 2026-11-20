@@ -12,12 +12,14 @@ import {
   FaSquare,
 } from 'react-icons/fa';
 
+import TextInput from '@/components/TextInput';
+import Tooltip from '@/components/Tooltip';
+
 import { useRangeSelection } from '@/hooks/useRangeSelection';
 
 import { PathMetadata } from '@/lib/shared/types';
 
 import styles from './FileExplorer.module.css';
-import TextInput from './TextInput';
 
 export type { PathMetadata };
 
@@ -371,12 +373,16 @@ export default function FileExplorer({
           value={currentPath}
           adornment={
             <>
-              <button className={styles.navButton} title="Go Home" onClick={() => navigateTo('', true)}>
-                <FaHome size={16} />
-              </button>
-              <button className={styles.navButton} disabled={!parentPath} title="Go Up" onClick={handleUp}>
-                <FaArrowUp size={16} />
-              </button>
+              <Tooltip content="Go Home" align="start" className={styles.navButtonTooltip}>
+                <button className={styles.navButton} aria-label="Go Home" onClick={() => navigateTo('', true)}>
+                  <FaHome size={16} />
+                </button>
+              </Tooltip>
+              <Tooltip content="Go Up" align="start" className={styles.navButtonTooltip}>
+                <button className={styles.navButton} disabled={!parentPath} aria-label="Go Up" onClick={handleUp}>
+                  <FaArrowUp size={16} />
+                </button>
+              </Tooltip>
             </>
           }
           suffix={addressBarSuffix}

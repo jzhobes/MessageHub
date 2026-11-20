@@ -1,4 +1,5 @@
 import os
+import json
 import shutil
 import tarfile
 import threading
@@ -8,6 +9,30 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from utils import merge_folders
+
+ZIP_HEADROOM_MULTIPLIER = 1.2
+FALLBACK_COMPRESSED_MULTIPLIER = 2.5
+
+
+def estimate_required_disk_space(archives):
+    """
+    Estimates peak workspace disk space (in bytes) required to extract and index `archives`.
+    Uses exact uncompressed central-directory sizes (+20% DB/index headroom) for `.zip` files,
+    falling back to `2.5x` compressed size for `.tar.gz`/`.tgz` or unreadable zips.
+    """
+    required_bytes = 0.0
+    for archive in archives:
+        archive_path = Path(archive)
+        if archive_path.suffix.lower() == ".zip":
+            try:
+                with zipfile.ZipFile(archive_path, "r") as zf:
+                    uncompressed = sum(info.file_size for info in zf.infolist())
+                required_bytes += uncompressed * ZIP_HEADROOM_MULTIPLIER
+                continue
+            except (zipfile.BadZipFile, OSError):
+                pass
+        required_bytes += archive_path.stat().st_size * FALLBACK_COMPRESSED_MULTIPLIER
+    return int(required_bytes)
 
 
 def extract_archives_found(search_dirs, target_root, platform_filter="all"):
@@ -20,10 +45,14 @@ def extract_archives_found(search_dirs, target_root, platform_filter="all"):
     return extract_archives_found_with_opts(search_dirs, target_root, platform_filter, False)
 
 
-def extract_archives_found_with_opts(search_dirs, target_root, platform_filter="all", delete_after=False):
+def extract_archives_found_with_opts(
+    search_dirs, target_root, platform_filter="all", delete_after=False, explicit_archives=None
+):
     """
-    Scans specified directories for .zip/.tar.gz files and extracts them
-    into a subdirectory of target_root named after the zip file.
+    Scans specified directories (and any explicit archive paths) for .zip/.tar.gz/.tgz files
+    and extracts them into target_root (or platform subdirectories).
+    Explicit archives are left untouched in place when delete_after=False, and deleted after
+    successful extraction when delete_after=True.
     Returns: tuple (processed_count, set_of_platforms_detected, archive_moves)
     archive_moves: list of (original_Path, processed_Path_or_None)
     """
@@ -33,10 +62,23 @@ def extract_archives_found_with_opts(search_dirs, target_root, platform_filter="
     extraction_lock = threading.Lock()
 
     seen_zips = set()
+    explicit_resolved = set()
     detected_platforms = set()
 
     # Collect all archives first
     all_archives = []
+    if explicit_archives:
+        for a in explicit_archives:
+            a_path = Path(a)
+            if not a_path.exists():
+                print(f"  Warning: Explicit archive not found, skipping: {a_path}")
+                continue
+            resolved = a_path.resolve()
+            explicit_resolved.add(resolved)
+            if resolved not in seen_zips:
+                seen_zips.add(resolved)
+                all_archives.append(a_path)
+
     for d in search_dirs:
         d_path = Path(d)
         if not d_path.exists():
@@ -84,6 +126,19 @@ def extract_archives_found_with_opts(search_dirs, target_root, platform_filter="
                 "personal_information/profile_information/" in f for f in file_list
             )
 
+            is_e2e = False
+            if is_zip and not is_fb and not is_insta:
+                from parsers.facebook_e2e import is_e2e_document
+                for name in file_list:
+                    if name.endswith('.json') and '/' not in name:
+                        try:
+                            is_e2e = is_e2e_document(json.loads(archive_obj.read(name)))
+                        except (ValueError, UnicodeError):
+                            continue
+                        if is_e2e:
+                            is_fb = True
+                            break
+
             # Filter Check
             if platform_filter != "all":
                 allowed = False
@@ -108,6 +163,9 @@ def extract_archives_found_with_opts(search_dirs, target_root, platform_filter="
                 dest_dir = target_root / "Instagram"
             if is_fb:
                 dest_dir = target_root / "Facebook"
+
+            if is_e2e:
+                dest_dir = target_root / "Facebook/your_facebook_activity/e2e"
 
             # Identification Logging
             if has_voice or has_chat or has_mail:
@@ -183,12 +241,15 @@ def extract_archives_found_with_opts(search_dirs, target_root, platform_filter="
                 except Exception:
                     pass
 
-        # Post-Processing: Move or Delete archive (only after archive_obj is closed & extraction succeeded)
+        # Post-Processing: Delete, Preserve (explicit), or Move to .processed
         try:
             with extraction_lock:
                 if delete_after:
                     archive_path.unlink()
                     print(f"  [Post] Deleted archive: {archive_path.name}")
+                    return True, local_detected, (archive_path, None)
+                elif archive_path.resolve() in explicit_resolved:
+                    print(f"  [Post] Preserved original archive: {archive_path.name}")
                     return True, local_detected, (archive_path, None)
                 else:
                     processed_dir = target_root / ".processed"

@@ -14,17 +14,20 @@
   min-height: 500px;
 }
 
-.closeButton {
-  composes: btn-reset from global;
+.closeButtonTooltip {
   position: absolute;
   top: 15px;
   right: 15px;
+  z-index: 100;
+}
+
+.closeButton {
+  composes: btn-reset from global;
   color: var(--text-secondary);
   border-radius: var(--radius-circle);
   width: 36px;
   height: 36px;
   justify-content: center;
-  z-index: 100;
   cursor: pointer;
 }
 

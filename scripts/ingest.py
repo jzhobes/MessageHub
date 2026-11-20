@@ -4,8 +4,9 @@ import shutil
 import sys
 from pathlib import Path
 
-from lib.archives import extract_archives_found_with_opts
+from lib.archives import estimate_required_disk_space, extract_archives_found_with_opts
 from lib.db_ops import finalize_gmail_identity, get_db_connection, init_db, save_identity
+from parsers.facebook_e2e import ingest_e2e, reconcile_cutovers
 from parsers.facebook import (
     discover_facebook_identity,
     discover_instagram_identity,
@@ -160,6 +161,10 @@ def scan_directory(scan_path, db_path, platform_filter="all", limit_platforms=No
     priority_map = {"google_chat": 1, "facebook": 2, "instagram": 3}
 
     for root, _, files in os.walk(scan_path):
+        if Path(root).name == "e2e" and platform_filter in ("all", "facebook"):
+            if limit_platforms is None or "facebook" in limit_platforms:
+                files_to_process.extend((4, Path(root) / f, "facebook_e2e") for f in files if f.endswith('.json'))
+            continue
         # Look for message threads OR identity files
         if not any(
             f in files
@@ -193,11 +198,13 @@ def scan_directory(scan_path, db_path, platform_filter="all", limit_platforms=No
     gmail_identity_stats = {}
     discovered_identities = set()
 
-    for _, p_root, platform_type in files_to_process:
+    for _, p_root, platform_type in sorted(files_to_process):
         if p_root in processed_dirs:
             continue
 
-        if platform_type == "google_mail":
+        if platform_type == "facebook_e2e":
+            count, skipped = ingest_e2e(cursor, p_root)
+        elif platform_type == "google_mail":
             count, skipped = handle_google_mail(cursor, p_root, scan_path, discovered_identities, gmail_identity_stats)
         else:
             handler = PLATFORM_HANDLERS.get(platform_type)
@@ -214,6 +221,8 @@ def scan_directory(scan_path, db_path, platform_filter="all", limit_platforms=No
             if total_threads % 10 == 0:
                 conn.commit()
                 print(f"  [Committed]: {total_threads} threads ({total_msgs} messages, {total_skipped} skipped)")
+
+    reconcile_cutovers(cursor)
 
     if gmail_identity_stats:
         finalize_gmail_identity(cursor, gmail_identity_stats)
@@ -233,10 +242,18 @@ def start_ingestion():
         choices=["all", "facebook", "instagram", "google_chat", "google_voice", "google_mail"],
         default="all",
     )
-    parser.add_argument("--delete-archives", action="store_true", help="Delete ZIPs after extraction")
+    parser.add_argument("--delete-archives", action="store_true", help="Delete archives after successful extraction")
+    parser.add_argument(
+        "--archive",
+        action="append",
+        dest="archives",
+        default=[],
+        help="Explicit archive file path to extract directly into the workspace (can be specified multiple times)",
+    )
     args = parser.parse_args()
 
     # Setup Paths
+    WORKSPACE_PATH.mkdir(parents=True, exist_ok=True)
     source_path = Path(args.source if args.source else WORKSPACE_PATH).resolve()
     db_path = Path(args.db if args.db else WORKSPACE_PATH / DB_NAME).resolve()
     init_db(db_path)
@@ -246,7 +263,7 @@ def start_ingestion():
     if source_path.is_dir() and source_path not in scan_locations:
         scan_locations.append(source_path)
 
-    all_archives = []
+    all_archives = [Path(a) for a in args.archives if Path(a).exists()]
     for loc in scan_locations:
         if loc.exists():
             all_archives.extend(list(loc.glob("*.zip")) + list(loc.glob("*.tgz")) + list(loc.glob("*.tar.gz")))
@@ -255,14 +272,20 @@ def start_ingestion():
     print(f"[TotalArchives]: {len(unique_archives)}")
 
     if unique_archives:
-        total_size = sum(a.stat().st_size for a in unique_archives)
+        required_bytes = estimate_required_disk_space(unique_archives)
         _, _, free = shutil.disk_usage(WORKSPACE_PATH)
-        if free < total_size * 2.5:
-            print(f"[Error]: Insufficient disk space ({free / 1e9:.2f} GB free, need ~{total_size * 2.5 / 1e9:.2f} GB)")
+        if free < required_bytes:
+            print(
+                f"[Error]: Insufficient disk space ({free / 1e9:.2f} GB free, need ~{required_bytes / 1e9:.2f} GB)"
+            )
             sys.exit(1)
 
     processed_count, detected_platforms, archive_moves = extract_archives_found_with_opts(
-        scan_locations, WORKSPACE_PATH, args.platform, args.delete_archives
+        scan_locations,
+        WORKSPACE_PATH,
+        args.platform,
+        args.delete_archives,
+        explicit_archives=args.archives,
     )
 
     # Execution

@@ -39,6 +39,9 @@ class DatabaseService {
     try {
       this._instance = new Database(dbPath, { readonly: true });
       this._instance.pragma('foreign_keys = ON');
+      this._instance.pragma('cache_size = -64000'); // 64 MB page cache
+      this._instance.pragma('mmap_size = 268435456'); // 256 MB memory-mapped I/O
+      this._instance.pragma('temp_store = MEMORY'); // Keep temp tables/B-trees in RAM
       return this._instance;
     } catch (e) {
       console.error('Failed to open database at %s', dbPath, e);

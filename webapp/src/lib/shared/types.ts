@@ -74,6 +74,10 @@ export interface Thread {
   participationRatio?: number;
   myAvgMessageLength?: number;
   qualityScore?: number;
+
+  // Conversation status
+  e2eeCutover?: boolean;
+  archived?: boolean;
 }
 
 export interface SearchResult {

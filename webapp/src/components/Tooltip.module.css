@@ -5,6 +5,9 @@
 
 .tooltip {
   position: fixed;
+  inset: auto;
+  margin: 0;
+  overflow: visible;
   z-index: 9999;
   pointer-events: none;
   max-width: 280px;
@@ -20,6 +23,12 @@
   white-space: normal;
   word-wrap: break-word;
   animation: tooltipFadeIn 120ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tooltip {
+    animation: none;
+  }
 }
 
 .arrow {
@@ -40,6 +49,20 @@
   bottom: -6px;
   border-right: 1px solid rgba(255, 255, 255, 0.12);
   border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.arrowLeft {
+  left: -6px;
+  transform: translateY(-50%) rotate(45deg);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  border-left: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.arrowRight {
+  right: -6px;
+  transform: translateY(-50%) rotate(45deg);
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  border-right: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 @keyframes tooltipFadeIn {

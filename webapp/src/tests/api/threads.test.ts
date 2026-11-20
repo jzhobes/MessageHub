@@ -30,6 +30,36 @@ describe('/api/threads', () => {
     }
   });
 
+  it('returns archive status while keeping archived conversations in Messages', async () => {
+    memDb = createMemoryDb();
+    seedThread(memDb, {
+      id: 'archived',
+      platform: 'facebook',
+      title: 'Archived chat',
+      labels: ['message', 'archived'],
+    });
+    vi.spyOn(db, 'exists').mockReturnValue(true);
+    vi.spyOn(db, 'get').mockReturnValue(memDb);
+    const { req, res } = createMocks({ method: 'GET', query: { platform: 'facebook', type: 'message' } });
+    await handler(req, res);
+    expect(res._getJSONData().threads).toEqual([expect.objectContaining({ id: 'archived', archived: true })]);
+  });
+
+  it('returns cutover status for labeled Facebook conversations', async () => {
+    memDb = createMemoryDb();
+    seedThread(memDb, {
+      id: 'cutover',
+      platform: 'facebook',
+      title: 'Cutover chat',
+      labels: ['message', 'e2ee_cutover'],
+    });
+    vi.spyOn(db, 'exists').mockReturnValue(true);
+    vi.spyOn(db, 'get').mockReturnValue(memDb);
+    const { req, res } = createMocks({ method: 'GET', query: { platform: 'facebook', type: 'message' } });
+    await handler(req, res);
+    expect(res._getJSONData().threads).toEqual([expect.objectContaining({ id: 'cutover', e2eeCutover: true })]);
+  });
+
   it('returns empty array when DB does not exist', async () => {
     vi.spyOn(db, 'exists').mockReturnValue(false);
 

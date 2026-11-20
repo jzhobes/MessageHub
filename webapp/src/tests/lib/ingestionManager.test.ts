@@ -114,4 +114,20 @@ describe('ingestionManager', () => {
 
     fakeChild.emit('close', 0);
   });
+
+  it('passes explicit archive paths as --archive arguments', async () => {
+    const fakeChild = makeFakeChild();
+    vi.mocked(getPythonPath).mockResolvedValue('/venv/bin/python');
+    vi.mocked(spawn).mockReturnValue(fakeChild);
+
+    await ingestionManager.start(false, ['/imports/a.tar.gz', '/imports/b.zip']);
+
+    expect(spawn).toHaveBeenCalledWith(
+      '/venv/bin/python',
+      ['-u', '/scripts/ingest.py', '--archive', '/imports/a.tar.gz', '--archive', '/imports/b.zip'],
+      expect.any(Object),
+    );
+
+    fakeChild.emit('close', 0);
+  });
 });

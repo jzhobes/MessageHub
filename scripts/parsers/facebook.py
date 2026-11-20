@@ -62,11 +62,19 @@ def ingest_facebook_instagram_thread(cursor, thread_dir, platform, thread_id_ove
 
     cursor.execute(
         """
-        INSERT OR REPLACE INTO threads (id, platform, title, participants_json, is_group)
+        INSERT INTO threads (id, platform, title, participants_json, is_group)
         VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET title=excluded.title, participants_json=excluded.participants_json, is_group=excluded.is_group
         """,
         (thread_id, platform, title, participants_json, is_group),
     )
+
+    if platform == "facebook":
+        for label, present in (("archived", "archived_threads" in thread_path.parts),
+                               ("e2ee_cutover", "e2ee_cutover" in thread_path.parts or "e2ee_cutover_filtered" in thread_path.parts)):
+            cursor.execute("DELETE FROM thread_labels WHERE thread_id=? AND label=?", (thread_id, label))
+            if present:
+                cursor.execute("INSERT OR IGNORE INTO thread_labels VALUES (?,?)", (thread_id, label))
 
     # Insert label
     cursor.execute("INSERT OR IGNORE INTO thread_labels (thread_id, label) VALUES (?, ?)", (thread_id, "message"))
@@ -154,8 +162,8 @@ def ingest_facebook_instagram_thread(cursor, thread_dir, platform, thread_id_ove
     # Update thread with metadata
     if last_activity_ms > 0:
         cursor.execute(
-            "UPDATE threads SET last_activity_ms = ?, snippet = ? WHERE id = ?",
-            (last_activity_ms, latest_snippet, thread_id),
+            "UPDATE threads SET last_activity_ms = ?, snippet = ? WHERE id = ? AND COALESCE(last_activity_ms, 0) <= ?",
+            (last_activity_ms, latest_snippet, thread_id, last_activity_ms),
         )
 
     return msg_count, skipped_count

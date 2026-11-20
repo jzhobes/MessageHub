@@ -54,7 +54,7 @@ describe('useIngestion', () => {
     });
 
     await act(async () => {
-      await result.current.runInstall([], 'copy');
+      await result.current.runInstall([], 'keep');
     });
 
     expect(result.current.isInstalling).toBe(false);
@@ -81,7 +81,7 @@ describe('useIngestion', () => {
     const { result } = renderHook(() => useIngestion());
 
     await act(async () => {
-      await result.current.runInstall([], 'copy');
+      await result.current.runInstall([], 'keep');
     });
 
     expect(result.current.isInstalling).toBe(false);
@@ -90,24 +90,71 @@ describe('useIngestion', () => {
     expect(result.current.error).toBe('Ingestion stream ended unexpectedly');
   });
 
-  it('handles split chunks across both transfer and ingest phases', async () => {
+  it('sends selected archives directly to /api/setup/ingest without a separate transfer step', async () => {
     const fetchMock = vi.fn().mockImplementation((url: string) => {
       if (url === '/api/setup/ingest-status') {
         return Promise.resolve(new Response(JSON.stringify({ isRunning: false, isComplete: false }), { status: 200 }));
       }
-      if (url === '/api/setup/transfer') {
+      if (url === '/api/setup/ingest') {
         return Promise.resolve(
           new Response(
             makeSSEBody([
-              'data: {"type":"progress","payload":{"index":1,"total":1,"file":"fb.zip","stat',
-              'us":"success"}}\n\ndata: {"type":"do',
-              'ne","payload":{"success":true}}\n\n',
+              'data: {"type":"stdout","payload":"[TotalArchives]: 1"}\n\n',
+              'data: {"type":"stdout","payload":"[ArchiveExtracted]: fb.zip"}\n\n',
+              'data: {"type":"done","payload":{"code":0}}\n\n',
             ]),
             { status: 200 },
           ),
         );
       }
-      if (url.startsWith('/api/setup/ingest')) {
+      throw new Error(`Unexpected URL: ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { result } = renderHook(() => useIngestion());
+
+    await act(async () => {
+      await result.current.runInstall(['/import/fb.zip'], 'keep');
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/setup/ingest', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ files: ['/import/fb.zip'], deleteArchives: false }),
+    });
+    expect(result.current.isInstalling).toBe(false);
+    expect(result.current.isComplete).toBe(true);
+    expect(result.current.progress).toBe(100);
+    expect(result.current.logs).toContain('Finished: fb.zip');
+  });
+
+  it('stays idle on mount when ingest-status reports a previously completed run', async () => {
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url === '/api/setup/ingest-status') {
+        return Promise.resolve(new Response(JSON.stringify({ isRunning: false, isComplete: true }), { status: 200 }));
+      }
+      throw new Error(`Unexpected URL: ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { result } = renderHook(() => useIngestion());
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith('/api/setup/ingest-status');
+    });
+
+    expect(result.current.isInstalling).toBe(false);
+    expect(result.current.isComplete).toBe(false);
+    expect(result.current.progress).toBe(0);
+    expect(result.current.status).toBe('');
+  });
+
+  it('resets completed state back to idle via reset()', async () => {
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url === '/api/setup/ingest-status') {
+        return Promise.resolve(new Response(JSON.stringify({ isRunning: false, isComplete: false }), { status: 200 }));
+      }
+      if (url === '/api/setup/ingest') {
         return Promise.resolve(
           new Response(makeSSEBody(['data: {"type":"done","payload":{"code":0}}\n\n']), { status: 200 }),
         );
@@ -119,13 +166,19 @@ describe('useIngestion', () => {
     const { result } = renderHook(() => useIngestion());
 
     await act(async () => {
-      await result.current.runInstall(['/import/fb.zip'], 'copy');
+      await result.current.runInstall(['/import/fb.zip'], 'keep');
     });
-
-    expect(result.current.isInstalling).toBe(false);
     expect(result.current.isComplete).toBe(true);
     expect(result.current.progress).toBe(100);
-    expect(result.current.logs).toContain('[1/1] fb.zip: success');
-    expect(result.current.logs).toContain('Transfer complete.');
+
+    act(() => {
+      result.current.reset();
+    });
+
+    expect(result.current.isComplete).toBe(false);
+    expect(result.current.progress).toBe(0);
+    expect(result.current.status).toBe('');
+    expect(result.current.logs).toEqual([]);
+    expect(result.current.error).toBeNull();
   });
 });

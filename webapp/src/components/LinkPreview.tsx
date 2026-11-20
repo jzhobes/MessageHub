@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 
-import LazyView from './LazyView';
+import LazyView from '@/components/LazyView';
+
 import styles from './LinkPreview.module.css';
 
 interface PreviewData {
