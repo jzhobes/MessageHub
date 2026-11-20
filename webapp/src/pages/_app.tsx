@@ -9,6 +9,7 @@ import LoadingSplash from '@/components/LoadingSplash';
 import { ThemeProvider } from '@/hooks/useTheme';
 
 import { AppProvider, useApp } from '@/context/AppContext';
+import { withBasePath } from '@/lib/client/env';
 
 import type { AppProps } from 'next/app';
 
@@ -34,7 +35,7 @@ export default function App({ Component, pageProps }: AppProps) {
             name="description"
             content="Personal message archive viewer for Facebook, Instagram, Google Chat, and Google Voice"
           />
-          <link rel="icon" href="/favicon.png" />
+          <link rel="icon" href={withBasePath('/favicon.png')} />
         </Head>
         <div className={`${geistSans.variable} ${geistMono.variable}`}>
           <MainContent Component={Component} pageProps={pageProps} />

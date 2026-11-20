@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import BaseModal, { BaseModalProps, ModalHeader } from '@/components/modals/BaseModal';
 import Tooltip from '@/components/Tooltip';
 
+import { apiFetch } from '@/lib/client/apiClient';
 import { getPlatformLabel } from '@/lib/shared/platforms';
 import { ContentRecord, Thread } from '@/lib/shared/types';
 import ThreadContent from '@/sections/ThreadContent';
@@ -86,7 +87,7 @@ export default function ThreadPreviewModal({
       setLoading(true);
 
       try {
-        const res = await fetch(
+        const res = await apiFetch(
           `/api/content?threadId=${encodeURIComponent(tid)}&page=${pageNum}&platform=${encodeURIComponent(
             threadPlatform,
           )}`,
@@ -142,7 +143,7 @@ export default function ThreadPreviewModal({
 
     async function fetchInitial() {
       try {
-        const res = await fetch(
+        const res = await apiFetch(
           `/api/content?threadId=${encodeURIComponent(activeId!)}&page=1&platform=${encodeURIComponent(
             threadPlatform,
           )}`,
@@ -223,7 +224,7 @@ export default function ThreadPreviewModal({
 
       try {
         const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
-        const jumpRes = await fetch(
+        const jumpRes = await apiFetch(
           `/api/jump?threadId=${encodeURIComponent(threadId)}&date=${encodeURIComponent(dateStr)}&timeZone=${encodeURIComponent(tz)}`,
         );
         if (latestRequestRef.current !== requestId) {
@@ -236,7 +237,7 @@ export default function ThreadPreviewModal({
         const page = jumpData.page || 1;
         const ts = jumpData.timestamp || null;
 
-        const contentRes = await fetch(
+        const contentRes = await apiFetch(
           `/api/content?threadId=${encodeURIComponent(threadId)}&page=${page}&platform=${encodeURIComponent(threadPlatform)}`,
         );
         if (latestRequestRef.current !== requestId) {

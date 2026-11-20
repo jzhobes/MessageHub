@@ -33,6 +33,31 @@ describe('MarkdownExportBuilder', () => {
     expect(kept.map((m) => m.content)).toEqual(['late night msg', 'crossed midnight reply']);
   });
 
+  it.each(['sample-group-messages', 'sample-group-messages.md', 'sample-group-messages.MD'])(
+    'uses the chosen filename without category suffixes: %s',
+    (datasetName) => {
+      const builder = new MarkdownExportBuilder({
+        datasetName,
+        identityNames: ['John'],
+        includeReactions: false,
+        removeSystemMessages: false,
+        redactPII: false,
+        timeZone: 'UTC',
+      });
+      builder.addChatThread({
+        threadId: 'group',
+        title: 'Friends',
+        platform: 'facebook',
+        isGroup: true,
+        participants: ['John'],
+        messages: [{ sender_name: 'John', content: 'Hello', timestamp_ms: 1 }],
+      });
+      const files = builder.finalize(false);
+      expect(files).toHaveLength(1);
+      expect(files[0].fileName).toBe('sample-group-messages.md');
+    },
+  );
+
   it('formats group chats, DMs, posts, emails, events, and summary cleanly', () => {
     const builder = new MarkdownExportBuilder({
       datasetName: 'virtual_me',
@@ -138,17 +163,10 @@ describe('MarkdownExportBuilder', () => {
     const files = builder.finalize(true);
     const byName = new Map(files.map((f) => [f.fileName, f.content]));
 
-    expect(Array.from(byName.keys())).toEqual([
-      'virtual_me-group-messages.md',
-      'virtual_me-dm-messages.md',
-      'virtual_me-posts.md',
-      'virtual_me-emails.md',
-      'virtual_me-events.md',
-      'virtual_me-summary.md',
-    ]);
+    expect(Array.from(byName.keys())).toEqual(['virtual_me.md', 'virtual_me-summary.md']);
 
-    const groupMd = byName.get('virtual_me-group-messages.md')!;
-    expect(groupMd).toContain('type: group_chat_samples');
+    const groupMd = byName.get('virtual_me.md')!;
+    expect(groupMd).toContain('type: message_samples');
     expect(groupMd).toContain('self_label: John (self)');
     expect(groupMd).toContain('# Group: SPOOKY FRIDAYS');
     expect(groupMd).toContain('## Conversation: 2026-11-15 | SPOOKY FRIDAYS');
@@ -161,27 +179,27 @@ describe('MarkdownExportBuilder', () => {
     expect(groupMd).not.toContain('555-123-4567');
     expect(groupMd).toContain('[Deleted message]');
 
-    const dmMd = byName.get('virtual_me-dm-messages.md')!;
+    const dmMd = byName.get('virtual_me.md')!;
     expect(dmMd).toContain('# DM: Dylan');
     expect(dmMd).toContain('[Image attachment: IMG_123.jpg]');
 
-    const postsMd = byName.get('virtual_me-posts.md')!;
+    const postsMd = byName.get('virtual_me.md')!;
     expect(postsMd).not.toContain('Happy birthday!');
     expect(postsMd).toContain('Best ramen all year.');
     expect(postsMd).toContain('*Context: Shared a photo*');
 
-    const emailsMd = byName.get('virtual_me-emails.md')!;
+    const emailsMd = byName.get('virtual_me.md')!;
     expect(emailsMd).toContain('# Subject: Project Sync');
     expect(emailsMd).toContain('Following up on the roadmap.');
     expect(emailsMd).not.toContain('Old quoted text');
 
-    const eventsMd = byName.get('virtual_me-events.md')!;
-    expect(eventsMd).toContain('type: event_timeline');
+    const eventsMd = byName.get('virtual_me.md')!;
+    expect(eventsMd).toContain('# Events');
     expect(eventsMd).toContain('Ramen Fest');
 
     const summaryMd = byName.get('virtual_me-summary.md')!;
     expect(summaryMd).toContain('SPOOKY FRIDAYS');
-    expect(summaryMd).toContain('virtual_me-group-messages.md');
+    expect(summaryMd).toContain('virtual_me.md');
   });
 });
 

@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 
 import LazyView from '@/components/LazyView';
 
+import { apiFetch } from '@/lib/client/apiClient';
+
 import styles from './LinkPreview.module.css';
 
 interface PreviewData {
@@ -62,7 +64,7 @@ export default function LinkPreview({ url }: LinkPreviewProps) {
     abortControllerRef.current = controller;
 
     try {
-      const res = await fetch(`/api/preview?url=${encodeURIComponent(url)}`, { signal: controller.signal });
+      const res = await apiFetch(`/api/preview?url=${encodeURIComponent(url)}`, { signal: controller.signal });
       if (res.ok) {
         const json: PreviewData = await res.json();
         setCachedPreview(url, json);

@@ -6,6 +6,7 @@ import { FaArrowLeft, FaCog, FaRobot } from 'react-icons/fa';
 import { FiMoon, FiSun } from 'react-icons/fi';
 
 import layoutStyles from '@/components/Layout.module.css';
+import DemoInfoModal from '@/components/modals/DemoInfoModal';
 import SetupModal from '@/components/modals/SetupModal';
 import ThreadPreviewModal from '@/components/modals/ThreadPreviewModal';
 import TextInput from '@/components/TextInput';
@@ -16,6 +17,8 @@ import { useForm } from '@/hooks/useForm';
 import { usePersonaFilter } from '@/hooks/usePersonaFilter';
 import { useTheme } from '@/hooks/useTheme';
 
+import { apiFetch } from '@/lib/client/apiClient';
+import { IS_DEMO_MODE, withBasePath } from '@/lib/client/env';
 import { getPlatformLabel } from '@/lib/shared/platforms';
 import { DatasetEntry, Thread } from '@/lib/shared/types';
 import styles from '@/pages/studio.module.css';
@@ -136,7 +139,7 @@ export default function Studio() {
     async function init() {
       try {
         // Fetch threads (all platforms) using dataset-optimized API
-        const res = await fetch(`/api/studio/dataset-threads?platform=all`);
+        const res = await apiFetch(`/api/studio/dataset-threads?platform=all`);
         let allThreads: Thread[] = [];
 
         if (res.ok) {
@@ -151,7 +154,7 @@ export default function Studio() {
         setThreads(allThreads);
 
         // Fetch Identity
-        const idRes = await fetch('/api/identity');
+        const idRes = await apiFetch('/api/identity');
         if (idRes.ok) {
           const idData = await idRes.json();
           setField('identityNames', idData.names.join(', '));
@@ -167,7 +170,7 @@ export default function Studio() {
 
   // Warmup AI Model on Mount
   useEffect(() => {
-    const worker = new Worker('/workers/style-worker.js', { type: 'module' });
+    const worker = new Worker(withBasePath('/workers/style-worker.js'), { type: 'module' });
     worker.postMessage({ type: 'preload' });
 
     worker.onmessage = (e) => {
@@ -352,7 +355,7 @@ export default function Studio() {
             }
             const chunk = pendingIds.slice(i, i + CHUNK_SIZE);
             try {
-              const res = await fetch('/api/studio/sample-thread-days', {
+              const res = await apiFetch('/api/studio/sample-thread-days', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -515,7 +518,7 @@ export default function Studio() {
           .map((s) => s.trim())
           .filter(Boolean);
         const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
-        fetch('/api/studio/sample-thread-days', {
+        apiFetch('/api/studio/sample-thread-days', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -553,7 +556,7 @@ export default function Studio() {
         .filter(Boolean);
       const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
 
-      const res = await fetch('/api/studio/preview-dataset', {
+      const res = await apiFetch('/api/studio/preview-dataset', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -606,7 +609,7 @@ export default function Studio() {
 
     try {
       // 1. Fetch sample messages
-      const res = await fetch('/api/studio/sample-messages', {
+      const res = await apiFetch('/api/studio/sample-messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -629,7 +632,7 @@ export default function Studio() {
       // 2. Run Worker
       setStatusMessage('Initializing AI...');
       analyzeWorkerRef.current?.terminate();
-      const worker = new Worker('/workers/style-worker.js', { type: 'module' });
+      const worker = new Worker(withBasePath('/workers/style-worker.js'), { type: 'module' });
       analyzeWorkerRef.current = worker;
 
       worker.onmessage = (e) => {
@@ -831,13 +834,17 @@ export default function Studio() {
         <title>DataForge AI - MessageHub</title>
       </Head>
 
-      <SetupModal
-        isOpen={showSetup}
-        initialStep={2}
-        isFirstRun={false}
-        onClose={() => setShowSetup(false)}
-        onCompleted={() => window.location.reload()}
-      />
+      {IS_DEMO_MODE ? (
+        <DemoInfoModal isOpen={showSetup} onClose={() => setShowSetup(false)} />
+      ) : (
+        <SetupModal
+          isOpen={showSetup}
+          initialStep={2}
+          isFirstRun={false}
+          onClose={() => setShowSetup(false)}
+          onCompleted={() => window.location.reload()}
+        />
+      )}
       <div className={layoutStyles.topBar}>
         <div className={layoutStyles.leftSection}>
           <Tooltip content="Back to MessageHub" align="start">
@@ -866,16 +873,30 @@ export default function Studio() {
         <div className={layoutStyles.searchSection} />
 
         <div className={layoutStyles.themeToggleWrapper}>
-          <Tooltip content="Setup" align="end">
-            <button
-              className={`${layoutStyles.iconButton} ${layoutStyles.headerIconBtn}`}
-              aria-label="Setup"
-              style={{ marginRight: 8 }}
-              onClick={() => setShowSetup(true)}
-            >
-              <FaCog size={20} />
-            </button>
-          </Tooltip>
+          {IS_DEMO_MODE ? (
+            <Tooltip content="About Interactive Demo" align="end">
+              <button
+                className={layoutStyles.demoBadge}
+                aria-label="About Interactive Demo"
+                type="button"
+                onClick={() => setShowSetup(true)}
+              >
+                <span className={layoutStyles.demoBadgeDot} />
+                <span>Demo</span>
+              </button>
+            </Tooltip>
+          ) : (
+            <Tooltip content="Setup" align="end">
+              <button
+                className={`${layoutStyles.iconButton} ${layoutStyles.headerIconBtn}`}
+                aria-label="Setup"
+                style={{ marginRight: 8 }}
+                onClick={() => setShowSetup(true)}
+              >
+                <FaCog size={20} />
+              </button>
+            </Tooltip>
+          )}
           <Tooltip content={theme === 'light' ? 'Switch to Dark Mode' : 'Switch to Light Mode'} align="end">
             <button
               className={`${layoutStyles.iconButton} ${layoutStyles.headerIconBtn}`}
@@ -995,7 +1016,7 @@ export default function Studio() {
 
                   <div style={{ marginBottom: 24 }}>
                     <label className={styles.label} style={{ marginBottom: 8, display: 'block' }}>
-                      Dataset Filename
+                      {isProjectMode ? 'Filename' : 'Dataset Filename'}
                     </label>
                     <TextInput
                       value={config.datasetName}
@@ -1009,7 +1030,7 @@ export default function Studio() {
                     />
                     <p style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>
                       {isProjectMode
-                        ? `Base name for exported files (e.g. ${config.datasetName.trim() || 'virtual_me'}-group-messages.md).`
+                        ? 'All selected content is combined into one Markdown file with this name. A separate verification summary is included.'
                         : 'Used as the base name for exported files.'}
                     </p>
                   </div>

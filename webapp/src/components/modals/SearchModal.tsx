@@ -11,6 +11,7 @@ import Tooltip from '@/components/Tooltip';
 
 import { useForm } from '@/hooks/useForm';
 
+import { apiFetch } from '@/lib/client/apiClient';
 import { PlatformMap } from '@/lib/shared/platforms';
 
 import styles from './SearchModal.module.css';
@@ -88,7 +89,7 @@ export default function SearchModal({ isOpen, onClose, onNavigate }: SearchModal
         params.append('type', c);
       });
       try {
-        const res = await fetch(`/api/search?${params}`, { signal: controller.signal });
+        const res = await apiFetch(`/api/search?${params}`, { signal: controller.signal });
         if (!res.ok) {
           throw new Error('Search failed');
         }

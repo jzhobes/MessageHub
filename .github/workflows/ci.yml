@@ -44,3 +44,10 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: Build Static Demo
+        env:
+          NEXT_PUBLIC_DEMO_MODE: "true"
+          NEXT_PUBLIC_BASE_PATH: "/${{ github.event.repository.name }}"
+          WORKSPACE_PATH: "${{ github.workspace }}/data_samples"
+        run: npm run build:demo

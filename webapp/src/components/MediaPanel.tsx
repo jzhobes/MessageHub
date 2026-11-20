@@ -3,6 +3,9 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { FaImage, FaPlay, FaSpinner, FaTimes } from 'react-icons/fa';
 import { VirtuosoGrid } from 'react-virtuoso';
 
+import { apiFetch } from '@/lib/client/apiClient';
+import { getMediaUrl } from '@/lib/client/mediaUrl';
+
 import styles from './MediaPanel.module.css';
 
 interface MediaItem {
@@ -45,7 +48,7 @@ export default function MediaPanel({ threadId, platform, isOpen, onClose, onMedi
 
     async function fetchMedia() {
       try {
-        const res = await fetch(`/api/media-gallery?threadId=${encodeURIComponent(threadId)}`, {
+        const res = await apiFetch(`/api/media-gallery?threadId=${encodeURIComponent(threadId)}`, {
           signal: controller.signal,
         });
         const data = await res.json();
@@ -150,7 +153,7 @@ export default function MediaPanel({ threadId, platform, isOpen, onClose, onMedi
               }
 
               const { item } = data;
-              const imageUrl = `/api/media?path=${encodeURIComponent(item.thumbnailUrl || item.mediaUrl)}&platform=${platform}`;
+              const imageUrl = getMediaUrl(item.thumbnailUrl || item.mediaUrl, platform);
 
               return (
                 <div className={styles.mediaThumbnail} onClick={() => onMediaClick(item.messageId)}>

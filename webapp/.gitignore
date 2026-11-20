@@ -18,6 +18,10 @@
 /.next/
 /out/
 
+# github pages demo build artifacts
+/public/demo/
+/.demo-build-tmp/
+
 # production
 /build
 

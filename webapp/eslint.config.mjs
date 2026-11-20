@@ -14,6 +14,8 @@ const eslintConfig = defineConfig([
     'out/**',
     'build/**',
     'coverage/**',
+    'public/demo/**',
+    '.demo-build-tmp/**',
     'next-env.d.ts',
   ]),
   {
@@ -64,6 +66,36 @@ const eslintConfig = defineConfig([
             order: 'asc',
             caseInsensitive: true,
           },
+        },
+      ],
+    },
+  },
+  {
+    files: [
+      'src/pages/**/*.{ts,tsx}',
+      'src/components/**/*.{ts,tsx}',
+      'src/sections/**/*.{ts,tsx}',
+      'src/context/**/*.{ts,tsx}',
+      'src/hooks/**/*.{ts,tsx}',
+    ],
+    ignores: [
+      'src/pages/api/**',
+      'src/components/modals/SetupModal.tsx',
+      'src/components/modals/setup/**',
+      'src/components/FileExplorer.tsx',
+      'src/hooks/useIngestion.ts',
+    ],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'CallExpression[callee.name="fetch"][arguments.0.type="Literal"][arguments.0.value=/^\\/api\\//]',
+          message: 'Use apiFetch from "@/lib/client/apiClient" instead of raw fetch("/api/...") so Demo Mode works.',
+        },
+        {
+          selector:
+            'CallExpression[callee.name="fetch"][arguments.0.type="TemplateLiteral"][arguments.0.quasis.0.value.raw=/^\\/api\\//]',
+          message: 'Use apiFetch from "@/lib/client/apiClient" instead of raw fetch(`/api/...`) so Demo Mode works.',
         },
       ],
     },

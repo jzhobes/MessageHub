@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { apiFetch } from '@/lib/client/apiClient';
+import { withBasePath } from '@/lib/client/env';
 import { Thread } from '@/lib/shared/types';
 
 /**
@@ -57,7 +59,7 @@ export function usePersonaFilter({
   // Worker Setup
   const setupFilterWorker = useCallback(() => {
     if (!filterWorkerRef.current) {
-      const worker = new Worker('/workers/style-worker.js', { type: 'module' });
+      const worker = new Worker(withBasePath('/workers/style-worker.js'), { type: 'module' });
       worker.onmessage = (e) => {
         const { type, id, matches, labels: echoedLabels, message, progress } = e.data;
 
@@ -176,7 +178,7 @@ export function usePersonaFilter({
           }
 
           try {
-            const res = await fetch('/api/studio/thread-content', {
+            const res = await apiFetch('/api/studio/thread-content', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ ids: batchIds }),

@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { apiFetch, resolveDemoDownloadUrl } from '@/lib/client/apiClient';
+import { IS_DEMO_MODE } from '@/lib/client/env';
+
 export interface DatasetGenerationPayload {
   threadIds: string[];
   identityNames: string[];
@@ -72,7 +75,7 @@ export function useDatasetGeneration(pollIntervalMs = 1000) {
       setProgress({ current: 0, total: 0 });
 
       try {
-        const res = await fetch('/api/studio/generate-dataset', {
+        const res = await apiFetch('/api/studio/generate-dataset', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
@@ -100,7 +103,7 @@ export function useDatasetGeneration(pollIntervalMs = 1000) {
           }
 
           try {
-            const statusRes = await fetch(`/api/job-status?id=${jobId}`, { signal });
+            const statusRes = await apiFetch(`/api/job-status?id=${jobId}`, { signal });
             if (signal.aborted) {
               return;
             }
@@ -116,13 +119,24 @@ export function useDatasetGeneration(pollIntervalMs = 1000) {
             setProgress({ current: job.progress ?? 0, total: job.total ?? 0 });
 
             if (job.status === 'completed') {
-              const downloadUrl = `/api/studio/generate-dataset?jobId=${jobId}`;
+              let downloadUrl = `/api/studio/generate-dataset?jobId=${jobId}`;
+              let isBlobUrl = false;
+              if (IS_DEMO_MODE) {
+                const demoUrl = await resolveDemoDownloadUrl(jobId);
+                if (demoUrl) {
+                  downloadUrl = demoUrl;
+                  isBlobUrl = true;
+                }
+              }
               const a = document.createElement('a');
               a.href = downloadUrl;
               a.download = `${downloadFileName || 'virtual_me'}.zip`;
               document.body.appendChild(a);
               a.click();
               document.body.removeChild(a);
+              if (isBlobUrl) {
+                setTimeout(() => URL.revokeObjectURL(downloadUrl), 10000);
+              }
               return;
             }
 

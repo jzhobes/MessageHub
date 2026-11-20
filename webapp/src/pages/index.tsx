@@ -7,6 +7,7 @@ import { FiMoon, FiSun } from 'react-icons/fi';
 
 import styles from '@/components/Layout.module.css';
 import MediaPanel from '@/components/MediaPanel';
+import DemoInfoModal from '@/components/modals/DemoInfoModal';
 import SearchModal from '@/components/modals/SearchModal';
 import SetupModal from '@/components/modals/SetupModal';
 import Tooltip from '@/components/Tooltip';
@@ -14,6 +15,8 @@ import Tooltip from '@/components/Tooltip';
 import { useTheme } from '@/hooks/useTheme';
 
 import { useApp } from '@/context/AppContext';
+import { apiFetch } from '@/lib/client/apiClient';
+import { IS_DEMO_MODE } from '@/lib/client/env';
 import { ContentRecord, Thread } from '@/lib/shared/types';
 import Sidebar from '@/sections/Sidebar';
 import ThreadContent from '@/sections/ThreadContent';
@@ -206,7 +209,7 @@ export default function Home() {
       setLoading(true);
 
       try {
-        const res = await fetch(
+        const res = await apiFetch(
           `/api/content?threadId=${encodeURIComponent(threadId)}&page=${pageNum}&platform=${encodeURIComponent(activePlatform)}`,
         );
 
@@ -322,7 +325,7 @@ export default function Home() {
   const handleSearchNavigate = useCallback(
     async (msgId: number) => {
       try {
-        const res = await fetch(`/api/jump?messageId=${msgId}`);
+        const res = await apiFetch(`/api/jump?messageId=${msgId}`);
         if (res.ok) {
           const info = await res.json();
 
@@ -370,13 +373,13 @@ export default function Home() {
   // 1. One-time Check for Background Jobs on Mount
   useEffect(() => {
     const checkIngest = async () => {
-      if (hasCheckedBgIngestRef.current) {
+      if (IS_DEMO_MODE || hasCheckedBgIngestRef.current) {
         return;
       }
       hasCheckedBgIngestRef.current = true;
 
       try {
-        const res = await fetch('/api/setup/ingest-status');
+        const res = await apiFetch('/api/setup/ingest-status');
         if (res.ok) {
           const data = await res.json();
           if (data.isRunning) {
@@ -401,7 +404,9 @@ export default function Home() {
 
     async function loadThreads() {
       try {
-        const res = await fetch(`/api/threads?platform=${encodeURIComponent(activePlatform)}&type=${activeCategory}`);
+        const res = await apiFetch(
+          `/api/threads?platform=${encodeURIComponent(activePlatform)}&type=${activeCategory}`,
+        );
         if (res.ok) {
           const data = await res.json();
           if (!ignore) {
@@ -447,7 +452,7 @@ export default function Home() {
 
     async function fetchInitialMessages() {
       try {
-        const res = await fetch(
+        const res = await apiFetch(
           `/api/content?threadId=${encodeURIComponent(threadId)}&page=${startPage}&platform=${encodeURIComponent(activePlatform)}`,
           { signal: controller.signal },
         );
@@ -518,14 +523,18 @@ export default function Home() {
 
   return (
     <div className={styles.container} data-theme={theme}>
-      {isSetupOpen && (
-        <SetupModal
-          isOpen={isSetupOpen}
-          initialStep={isInitialized ? 2 : 0}
-          isFirstRun={isInitialized === false}
-          onClose={() => setShowSetup(false)}
-          onCompleted={() => window.location.reload()}
-        />
+      {IS_DEMO_MODE ? (
+        <DemoInfoModal isOpen={showSetup} onClose={() => setShowSetup(false)} />
+      ) : (
+        isSetupOpen && (
+          <SetupModal
+            isOpen={isSetupOpen}
+            initialStep={isInitialized ? 2 : 0}
+            isFirstRun={isInitialized === false}
+            onClose={() => setShowSetup(false)}
+            onCompleted={() => window.location.reload()}
+          />
+        )
       )}
       <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} onNavigate={handleSearchNavigate} />
 
@@ -582,16 +591,30 @@ export default function Home() {
         </div>
 
         <div className={styles.themeToggleWrapper}>
-          <Tooltip content="Setup" align="end">
-            <button
-              className={`${styles.iconButton} ${styles.headerIconBtn}`}
-              aria-label="Setup"
-              style={{ marginRight: 8 }}
-              onClick={() => setShowSetup(true)}
-            >
-              <FaCog size={20} />
-            </button>
-          </Tooltip>
+          {IS_DEMO_MODE ? (
+            <Tooltip content="About Interactive Demo" align="end">
+              <button
+                className={styles.demoBadge}
+                aria-label="About Interactive Demo"
+                type="button"
+                onClick={() => setShowSetup(true)}
+              >
+                <span className={styles.demoBadgeDot} />
+                <span>Demo</span>
+              </button>
+            </Tooltip>
+          ) : (
+            <Tooltip content="Setup" align="end">
+              <button
+                className={`${styles.iconButton} ${styles.headerIconBtn}`}
+                aria-label="Setup"
+                style={{ marginRight: 8 }}
+                onClick={() => setShowSetup(true)}
+              >
+                <FaCog size={20} />
+              </button>
+            </Tooltip>
+          )}
           <Tooltip content={theme === 'light' ? 'Switch to Dark Mode' : 'Switch to Light Mode'} align="end">
             <button
               className={`${styles.iconButton} ${styles.headerIconBtn}`}

@@ -8,6 +8,9 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "demo:export": "node scripts/export-demo-data.mjs",
+    "build:demo": "npm run demo:export && node scripts/build-demo.mjs",
+    "preview:demo": "npx --yes serve out -l 4173",
     "start": "next start",
     "lint": "eslint",
     "format": "prettier --write .",

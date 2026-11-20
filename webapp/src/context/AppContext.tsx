@@ -2,6 +2,8 @@ import React, { createContext, useCallback, useContext, useEffect, useRef, useSt
 
 import { useRouter } from 'next/router';
 
+import { apiFetch } from '@/lib/client/apiClient';
+
 interface AppContextType {
   isInitialized: boolean | null; // null means "checking"
   availability: Record<string, boolean>;
@@ -18,7 +20,7 @@ interface StatusResult {
 
 async function fetchStatusResult(pathname: string): Promise<StatusResult> {
   try {
-    const res = await fetch('/api/status');
+    const res = await apiFetch('/api/status');
     const data = await res.json();
     return {
       initialized: data.initialized,

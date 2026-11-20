@@ -13,6 +13,7 @@ import {
 import LazyView from '@/components/LazyView';
 import LinkPreview from '@/components/LinkPreview';
 
+import { getMediaUrl } from '@/lib/client/mediaUrl';
 import { ContentRecord } from '@/lib/shared/types';
 
 import styles from './MessageItem.module.css';
@@ -184,11 +185,7 @@ const MessageItem = React.memo(
                   displayPhotos.map(({ uri }, idx) => (
                     <div key={`p-${idx}`} className={hasTextContent ? styles.mediaMargin : ''}>
                       <img
-                        src={
-                          uri.startsWith('http')
-                            ? uri
-                            : `/api/media?path=${encodeURIComponent(uri)}&platform=${activePlatform}`
-                        }
+                        src={uri.startsWith('http') ? uri : getMediaUrl(uri, activePlatform)}
                         alt="Photo"
                         className={styles.msgImage}
                         loading="lazy"
@@ -202,7 +199,7 @@ const MessageItem = React.memo(
                       {(inView) => (
                         <video
                           preload={inView ? 'metadata' : 'none'}
-                          src={`/api/media?path=${encodeURIComponent(uri)}&platform=${activePlatform}`}
+                          src={getMediaUrl(uri, activePlatform)}
                           className={styles.msgVideo}
                           controls
                         />
@@ -213,18 +210,13 @@ const MessageItem = React.memo(
                 {/* gifs */}
                 {msg.gifs?.map(({ uri }, idx) => (
                   <div key={`g-${idx}`} className={hasTextContent ? styles.mediaMargin : ''}>
-                    <img
-                      src={`/api/media?path=${encodeURIComponent(uri)}&platform=${activePlatform}`}
-                      alt="GIF"
-                      className={styles.msgGif}
-                      loading="lazy"
-                    />
+                    <img src={getMediaUrl(uri, activePlatform)} alt="GIF" className={styles.msgGif} loading="lazy" />
                   </div>
                 ))}
                 {/* attachments */}
                 {msg.attachments?.map(({ uri }, idx) => {
                   const fileName = (uri.split('/').pop() || 'File').replace(/^File-/, '');
-                  const fileUrl = `/api/media?path=${encodeURIComponent(uri)}&platform=${activePlatform}`;
+                  const fileUrl = getMediaUrl(uri, activePlatform);
                   const ext = fileName.split('.').pop()?.toLowerCase();
                   const Icon = (ext && FILE_ICON_MAP[ext]) || FaFileDownload;
 
@@ -247,7 +239,7 @@ const MessageItem = React.memo(
                 {msg.sticker && (
                   <div className={hasTextContent ? styles.mediaMargin : ''}>
                     <img
-                      src={`/api/media?path=${encodeURIComponent(msg.sticker.uri)}&platform=${activePlatform}`}
+                      src={getMediaUrl(msg.sticker.uri, activePlatform)}
                       alt="Sticker"
                       className={styles.msgSticker}
                       loading="lazy"
