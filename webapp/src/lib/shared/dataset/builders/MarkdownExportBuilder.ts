@@ -238,7 +238,10 @@ export function filterMessagesBySelectedDays<T extends { timestamp_ms: number }>
 }
 
 function formatMarkdownTableCell(value: string): string {
-  return value.replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/\r\n|[\r\n]/g, ' ');
+  return value
+    .replace(/\\/g, '\\\\')
+    .replace(/\|/g, '\\|')
+    .replace(/\r\n|[\r\n]/g, ' ');
 }
 
 function escapeYamlValue(val: string): string {

@@ -222,7 +222,9 @@ describe('MarkdownExportBuilder', () => {
 
     const summary = builder.finalize(true).find(({ fileName }) => fileName === 'export-summary.md');
     expect(summary?.content.split('\n')).toContain(
-      '| `export.md` | ' + String.raw`Friends\\\|Family Weekend Plans Today` + ' | Facebook | 1 | 1 | 1970-01-01 to 1970-01-01 |',
+      '| `export.md` | ' +
+        String.raw`Friends\\\|Family Weekend Plans Today` +
+        ' | Facebook | 1 | 1 | 1970-01-01 to 1970-01-01 |',
     );
   });
 });

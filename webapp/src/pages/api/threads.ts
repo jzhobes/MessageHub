@@ -39,6 +39,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (type && typeof type === 'string' && type !== 'all') {
     conditions.push(`t.id IN (SELECT thread_id FROM thread_labels WHERE label = ?)`);
     params.push(type);
+    if (type === 'message') {
+      conditions.push(`NOT EXISTS (SELECT 1 FROM thread_labels ml WHERE ml.thread_id=t.id AND ml.label='marketplace')`);
+    }
   }
 
   if (conditions.length > 0) {
@@ -72,6 +75,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Count labels within the current platform selection.
     const counts: Record<string, number> = {
       message: 0,
+      marketplace: 0,
       event: 0,
       post: 0,
       checkin: 0,
@@ -91,8 +95,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         label: string;
         count: number;
       }[];
+      const marketplaceMessages = dbInstance
+        .prepare(
+          `
+        SELECT COUNT(*) as count FROM threads t
+        WHERE t.platform IN (${validDbPlatforms.map(() => '?').join(',')})
+        AND EXISTS (SELECT 1 FROM thread_labels l WHERE l.thread_id=t.id AND l.label='message')
+        AND EXISTS (SELECT 1 FROM thread_labels l WHERE l.thread_id=t.id AND l.label='marketplace')
+      `,
+        )
+        .get(...validDbPlatforms) as { count: number };
       countRows.forEach((r) => {
-        counts[r.label] = r.count;
+        counts[r.label] = r.label === 'message' ? r.count - marketplaceMessages.count : r.count;
       });
     }
 
