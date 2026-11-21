@@ -107,6 +107,11 @@
   border-radius: inherit;
 }
 
+.msgAudio {
+  display: block;
+  max-width: 100%;
+}
+
 .msgSticker {
   max-width: 120px;
   display: block;

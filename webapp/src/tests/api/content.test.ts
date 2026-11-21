@@ -56,6 +56,32 @@ describe('/api/content (Integration)', () => {
     expect(mediaPart).not.toHaveProperty('content');
   });
 
+  it('keeps a voice reply together with its quote and reaction', async () => {
+    const audio = { type: 'audio', uri: 'voice.ogg' };
+    const reactions = [{ reaction: '😆', actor: 'Alice' }];
+    const messageId = seedMessage(memDb, {
+      thread_id: 'photos',
+      sender_name: 'Me',
+      timestamp_ms: 1000,
+      content: '',
+      media_json: JSON.stringify([audio]),
+      share_json: JSON.stringify({ quoted_message: { creator: 'Alice', text: 'Original message' } }),
+      reactions_json: JSON.stringify(reactions),
+    });
+
+    const { req, res } = createMocks({ method: 'GET', query: { threadId: 'photos' } });
+    await handler(req, res);
+
+    expect(res._getJSONData().records).toMatchObject([
+      {
+        id: String(messageId),
+        audio: [audio],
+        quoted_message_metadata: { creator: { name: 'Alice' }, text: 'Original message' },
+        reactions,
+      },
+    ]);
+  });
+
   it('keeps text, a URL, and one photo together for link previews', async () => {
     const content = 'Here is the trail map https://example.com/trail';
     const messageId = seedMessage(memDb, {
