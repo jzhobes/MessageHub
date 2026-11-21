@@ -215,7 +215,7 @@ describe('demoRouter', () => {
     const fbData = await fbThreadsRes.json();
     expect(fbData.threads).toHaveLength(1);
     expect(fbData.threads[0].title).toBe('Alice Smith');
-    expect(fbData.counts).toMatchObject({ message: 1, post: 1, event: 1 });
+    expect(fbData.counts).toMatchObject({ message: 1, marketplace: 0, post: 1, event: 1 });
 
     const fbEventsRes = await handleDemoFetch('/api/threads?platform=facebook&type=event');
     const fbEvents = await fbEventsRes.json();

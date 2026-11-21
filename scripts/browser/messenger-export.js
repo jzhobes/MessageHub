@@ -1,14 +1,28 @@
-/* Paste this file into DevTools on the Messenger conversation to export.
- * See docs/messenger-export-investigation.md for usage and verified limitations.
+/**
+ * Paste this file into DevTools Console on the Messenger conversation to export.
+ *
+ * Quick usage:
+ *   await messageHubFastExporter.start()
+ *   await messageHubFastExporter.start({ maxBatches: 500, batchSize: 20, saveEvery: 10 })
+ *   await messageHubFastExporter.loadCheckpoint() // resume from a saved JSON file, then start()
+ *   messageHubFastExporter.status()               // inspect progress
+ *   messageHubFastExporter.stop()                 // stop after the current batch and save
+ *   messageHubFastExporter.reset()                // clear loaded state in memory
+ *
+ * Start defaults: maxBatches = 50, batchSize = 20, timeoutMs = 30000,
+ *   saveEvery = 10, stallRetries = 2, retryDelayMs = 2000.
+ * Outputs `messagehub-facebook-messenger-extended` (v1) JSON for `scripts/merge_messenger.py`.
  */
 (() => {
   'use strict';
 
-  if (window.messageHubExporter?.status().running || window.messageHubExporter?.status().pendingRequest) {
+  if (window.messageHubFastExporter?.status().running || window.messageHubFastExporter?.status().pendingRequest) {
     throw new Error('Stop the running export before installing the script again.');
   }
 
-  const FORMAT = 'messagehub-messenger-investigation';
+  const FORMAT = 'messagehub-facebook-messenger';
+  const EXTENDED_SCHEMA = 'messagehub-facebook-messenger-extended';
+  const EXTENDED_VERSION = 1;
   const INTEGER = /^\d+$/;
   let document = null;
   let running = false;
@@ -16,13 +30,19 @@
   let inFlight = null;
   let lastError = null;
 
+  /**
+   * Returns the numeric thread ID from the active Messenger conversation URL.
+   */
   function activeThreadId() {
     const match = window.location.pathname.match(/^\/messages\/(?:e2ee\/)?t\/(\d+)\/?$/);
     if (!match) throw new Error('Open a Messenger conversation first.');
     return match[1];
   }
 
-  function validateCheckpoint(value) {
+  /**
+   * Validates and returns the exporter's internal resumable checkpoint shape.
+   */
+  function validateInternalCheckpoint(value) {
     if (
       value?.format !== FORMAT ||
       ![1, 2].includes(value.version) ||
@@ -61,6 +81,107 @@
     return value;
   }
 
+  /**
+   * Converts an extended Facebook-compatible file back into the internal checkpoint shape.
+   */
+  function fromExtendedCheckpoint(value) {
+    if (value?._messagehub?.schema !== EXTENDED_SCHEMA || value._messagehub.version !== EXTENDED_VERSION) {
+      return value;
+    }
+    const metadata = value._messagehub;
+    const exported = metadata.export;
+    if (!exported || !Array.isArray(value.messages) || !Array.isArray(value.participants)) {
+      throw new Error('Unsupported Messenger checkpoint.');
+    }
+    return {
+      ...exported,
+      threadId: metadata.thread_id,
+      encrypted: metadata.encrypted,
+      title: value.title,
+      participants: value.participants.map((participant) => {
+        const extension = participant?._messagehub;
+        return {
+          id: extension?.participant_id,
+          name: Object.prototype.hasOwnProperty.call(extension ?? {}, 'name') ? extension.name : participant.name,
+        };
+      }),
+      messages: value.messages.map((message) => {
+        const extension = message?._messagehub;
+        const reply = extension?.reply_to;
+        return {
+          id: extension?.message_id,
+          timestampMs: String(message.timestamp_ms),
+          senderId: extension?.sender_id,
+          text: message.content ?? null,
+          isUnsent: message.is_unsent === true,
+          replyTo: reply
+            ? {
+                messageId: reply.message_id,
+                senderId: reply.sender_id,
+                text: reply.content ?? null,
+              }
+            : null,
+        };
+      }),
+    };
+  }
+
+  function slugify(value) {
+    return value.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+  }
+
+  /**
+   * Converts an internal checkpoint into the persisted Facebook-compatible schema.
+   */
+  function toExtendedCheckpoint(value) {
+    const participantsById = new Map(value.participants.map((participant) => [participant.id, participant.name]));
+    const messages = value.messages
+      .map((message) => {
+        const extended = {
+          sender_name: participantsById.get(message.senderId) ?? (message.senderId === '0' ? 'Facebook' : 'Unknown'),
+          timestamp_ms: Number(message.timestampMs),
+          is_unsent: message.isUnsent === true,
+          type: 'Generic',
+          _messagehub: {
+            message_id: message.id,
+            sender_id: message.senderId,
+          },
+        };
+        if (message.text !== null) extended.content = message.text;
+        if (message.replyTo) {
+          extended._messagehub.reply_to = {
+            message_id: message.replyTo.messageId,
+            sender_id: message.replyTo.senderId,
+            content: message.replyTo.text,
+          };
+        }
+        return extended;
+      })
+      .sort((left, right) => right.timestamp_ms - left.timestamp_ms);
+    const { messages: _messages, participants: _participants, title: _title, ...exportMetadata } = value;
+    return {
+      participants: value.participants.map((participant) => ({
+        name: participant.name ?? (participant.id === '0' ? 'Facebook' : 'Unknown'),
+        _messagehub: { participant_id: participant.id, name: participant.name },
+      })),
+      messages,
+      title: value.title,
+      is_still_participant: true,
+      thread_path: `inbox/${slugify(value.title)}_${value.threadId}`,
+      magic_words: [],
+      _messagehub: {
+        schema: EXTENDED_SCHEMA,
+        version: EXTENDED_VERSION,
+        thread_id: value.threadId,
+        encrypted: value.encrypted,
+        export: exportMetadata,
+      },
+    };
+  }
+
+  /**
+   * Returns a serializable snapshot of the current exporter state.
+   */
   function status() {
     return {
       running,
@@ -76,6 +197,9 @@
     };
   }
 
+  /**
+   * Awaits a promise while enforcing a descriptive timeout.
+   */
   async function bounded(promise, timeoutMs, label) {
     let timer;
     try {
@@ -93,6 +217,9 @@
     }
   }
 
+  /**
+   * Resolves the settled message range covering a pagination cursor.
+   */
   async function rangeAt(loader, cursor, timeoutMs) {
     let subscription;
     try {
@@ -113,11 +240,14 @@
     }
   }
 
+  /**
+   * Atomically replaces the selected file with the latest extended checkpoint.
+   */
   async function writeCheckpoint(handle) {
     document.updatedAt = new Date().toISOString();
     const stream = await handle.createWritable();
     try {
-      await stream.write(JSON.stringify(document, null, 2) + '\n');
+      await stream.write(JSON.stringify(toExtendedCheckpoint(document), null, 2) + '\n');
       await stream.close();
     } catch (error) {
       await stream.abort().catch(() => {});
@@ -125,13 +255,18 @@
     }
   }
 
+  /**
+   * Prompts for and restores either a legacy or extended checkpoint file.
+   */
   async function loadCheckpoint() {
     if (running || inFlight) throw new Error('Wait for the current request to finish.');
     const [handle] = await window.showOpenFilePicker({
       multiple: false,
       types: [{ description: 'Messenger checkpoint', accept: { 'application/json': ['.json'] } }],
     });
-    const checkpoint = validateCheckpoint(JSON.parse(await (await handle.getFile()).text()));
+    const checkpoint = validateInternalCheckpoint(
+      fromExtendedCheckpoint(JSON.parse(await (await handle.getFile()).text())),
+    );
     if (checkpoint.threadId !== activeThreadId())
       throw new Error('Open the conversation belonging to this checkpoint.');
     document = checkpoint;
@@ -140,12 +275,26 @@
     return status();
   }
 
-  async function start({ maxBatches = 50, batchSize = 20, timeoutMs = 30000 } = {}) {
+  /**
+   * Exports older history from the active thread and saves resumable checkpoints.
+   */
+  async function start({
+    maxBatches = 50,
+    batchSize = 20,
+    timeoutMs = 30000,
+    saveEvery = 10,
+    stallRetries = 2,
+    retryDelayMs = 2000,
+  } = {}) {
     if (running || inFlight) throw new Error('A history request is already running.');
-    for (const [name, value] of Object.entries({ maxBatches, batchSize, timeoutMs })) {
+    for (const [name, value] of Object.entries({ maxBatches, batchSize, timeoutMs, saveEvery })) {
       if (!Number.isSafeInteger(value) || value < 1) throw new Error(`${name} must be a positive integer.`);
     }
     if (batchSize > 100) throw new Error('Use a batch size of 100 or fewer.');
+    if (!Number.isSafeInteger(stallRetries) || stallRetries < 0 || stallRetries > 5)
+      throw new Error('stallRetries must be between 0 and 5.');
+    if (!Number.isSafeInteger(retryDelayMs) || retryDelayMs < 1 || retryDelayMs > 30000)
+      throw new Error('retryDelayMs must be between 1 and 30000.');
     const threadId = activeThreadId();
     if (document && document.threadId !== threadId)
       throw new Error('Load the checkpoint for this conversation or reset.');
@@ -195,7 +344,12 @@
         }
       }
 
+      const title =
+        decode(thread.threadName ?? thread.name, threadId, 'title') ?? document?.title ?? `Messenger ${threadId}`;
+
       const messages = new Map((document?.messages ?? []).map((message) => [message.id, message]));
+      const fingerprints = new Map();
+      const startedAt = performance.now();
       const participants = new Map((document?.participants ?? []).map((person) => [person.id, person]));
       const startCursor = document?.checkpoint
         ? {
@@ -206,16 +360,13 @@
           }
         : { threadKey, timestampMs: i64.max_int };
       let current = await rangeAt(loader, startCursor, timeoutMs);
-      const initialMaximum = [...messages.values()].reduce(
-        (maximum, message) => (BigInt(message.timestampMs) > BigInt(maximum) ? message.timestampMs : maximum),
-        document?.coverage?.throughTimestampMs ?? i64.to_string(current.range.maxTimestampMs),
-      );
       document = {
         ...document,
         format: FORMAT,
         version: 2,
         threadId,
         encrypted,
+        title,
         createdAt: document?.createdAt ?? new Date().toISOString(),
         scope: 'Message text and reply metadata from the selected Messenger history segment',
         batches: document?.batches ?? 0,
@@ -240,18 +391,37 @@
         );
         for (const row of rows) {
           if (typeof row.messageId !== 'string' || !row.messageId) throw new Error('Message has no platform ID.');
-          const senderId = i64.to_string(row.senderId);
+          const i64String = (value) => (value == null ? null : i64.to_string(value));
+          const fingerprint = JSON.stringify([
+            row.text,
+            row.isUnsent,
+            row.replySourceId,
+            row.replyMessageText,
+            row.replySnippet,
+            i64String(row.replyToUserId),
+            i64String(row.timestampMs),
+            i64String(row.senderId),
+          ]);
+          if (fingerprints.get(row.messageId) === fingerprint) continue;
+          const previous = messages.get(row.messageId);
+          const senderId = i64String(row.senderId);
+          const decodedText = row.isUnsent ? null : decode(row.text, row.messageId, 'text');
+          const replyTargetId = row.replySourceId || null;
+          const previousReply = previous?.replyTo?.messageId === replyTargetId ? previous.replyTo : null;
+          const decodedQuote = replyTargetId
+            ? decode(row.replyMessageText ?? row.replySnippet, row.messageId, 'quote')
+            : null;
           messages.set(row.messageId, {
             id: row.messageId,
-            timestampMs: i64.to_string(row.timestampMs),
+            timestampMs: i64String(row.timestampMs),
             senderId,
-            text: row.isUnsent ? null : decode(row.text, row.messageId, 'text'),
+            text: row.isUnsent ? null : (decodedText ?? previous?.text ?? null),
             isUnsent: row.isUnsent === true,
-            replyTo: row.replySourceId
+            replyTo: replyTargetId
               ? {
-                  messageId: row.replySourceId,
-                  senderId: row.replyToUserId ? i64.to_string(row.replyToUserId) : null,
-                  text: decode(row.replyMessageText ?? row.replySnippet, row.messageId, 'quote'),
+                  messageId: replyTargetId,
+                  senderId: i64String(row.replyToUserId) ?? previousReply?.senderId ?? null,
+                  text: decodedQuote ?? previousReply?.text ?? null,
                 }
               : null,
           });
@@ -259,11 +429,9 @@
             const contact = await db.tables.contacts.get(row.senderId);
             participants.set(senderId, { id: senderId, name: decode(contact?.name, senderId, 'name') });
           }
+          fingerprints.set(row.messageId, fingerprint);
         }
-        document.messages = [...messages.values()].sort((a, b) => {
-          const difference = Number(b.timestampMs) - Number(a.timestampMs);
-          return difference || a.id.localeCompare(b.id);
-        });
+        document.messages = [...messages.values()];
         document.participants = [...participants.values()];
         document.decodeErrors = [...decodeErrors.values()];
       }
@@ -287,9 +455,17 @@
         const unresolvedReplies = [...messages.values()].filter(
           (message) => message.replyTo && !messages.has(message.replyTo.messageId),
         ).length;
+        let oldest = null;
+        let newest = null;
+        for (const message of messages.values()) {
+          const timestamp = BigInt(message.timestampMs);
+          if (timestamp <= 0n) continue;
+          if (oldest === null || timestamp < oldest) oldest = timestamp;
+          if (newest === null || timestamp > newest) newest = timestamp;
+        }
         document.coverage = {
-          fromTimestampMs: i64.to_string(range.minTimestampMs),
-          throughTimestampMs: initialMaximum,
+          fromTimestampMs: oldest?.toString() ?? null,
+          throughTimestampMs: newest?.toString() ?? null,
           availableHistoryComplete: range.hasMoreBefore === false,
           accountHistoryComplete: false,
           unresolvedReplies,
@@ -300,8 +476,11 @@
       await collect();
       checkpoint();
       await writeCheckpoint(handle);
+      let unchangedAttempts = 0;
       for (let batch = 0; batch < maxBatches && !stopping && current.range.hasMoreBefore; batch++) {
         checkConversation();
+        const requestStarted = performance.now();
+        const previousCount = messages.size;
         const before = document.checkpoint.range;
         const cursor = {
           threadKey,
@@ -328,10 +507,28 @@
         document.batches++;
         checkpoint();
         const unchanged = afterMinimum === before.minTimestampMs && current.range.minMessageId === before.minMessageId;
-        if (unchanged && current.range.hasMoreBefore) document.status = 'stalled';
-        await writeCheckpoint(handle);
+        unchangedAttempts = unchanged && current.range.hasMoreBefore ? unchangedAttempts + 1 : 0;
+        document.paginationDiagnostics = {
+          before: { timestampMs: before.minTimestampMs, messageId: before.minMessageId },
+          after: { timestampMs: afterMinimum, messageId: current.range.minMessageId },
+          hasMoreBefore: current.range.hasMoreBefore,
+          isLoadingBefore: current.range.isLoadingBefore,
+          isLoadingAfter: current.range.isLoadingAfter,
+          durationMs: Math.round(performance.now() - requestStarted),
+          addedMessages: messages.size - previousCount,
+          unchangedAttempts,
+        };
+        if (unchangedAttempts > stallRetries) document.status = 'stalled';
+        document.elapsedMs = Math.round(performance.now() - startedAt);
+        if ((batch + 1) % saveEvery === 0) await writeCheckpoint(handle);
         console.log('MessageHub export progress', status());
         if (document.status === 'stalled') break;
+        if (unchangedAttempts) {
+          // Save before retrying so a persistent stall remains resumable.
+          await writeCheckpoint(handle);
+          console.warn('MessageHub pagination unchanged; retrying', document.paginationDiagnostics);
+          await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+        }
       }
       if (document.status !== 'stalled') {
         document.status = stopping ? 'stopped' : current.range.hasMoreBefore ? 'batch-limit' : 'history-end';
@@ -357,7 +554,7 @@
     return status();
   }
 
-  window.messageHubExporter = {
+  window.messageHubFastExporter = {
     start,
     loadCheckpoint,
     status,
@@ -372,5 +569,7 @@
       return status();
     },
   };
-  console.log('MessageHub exporter ready. Call messageHubExporter.start() or messageHubExporter.loadCheckpoint().');
+  console.log(
+    'MessageHub fast exporter ready. Use messageHubFastExporter.start(). Saves every 10 batches by default and on exit. Message order is unspecified.',
+  );
 })();

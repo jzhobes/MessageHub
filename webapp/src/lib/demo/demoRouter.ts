@@ -220,6 +220,7 @@ function handleThreads(store: DemoStore, url: URL): Response {
 
   const counts: Record<string, number> = {
     message: 0,
+    marketplace: 0,
     event: 0,
     post: 0,
     checkin: 0,
@@ -235,6 +236,12 @@ function handleThreads(store: DemoStore, url: URL): Response {
         counts[tl.label] = (counts[tl.label] || 0) + 1;
       }
     }
+
+    const marketplaceMessages = [...store.threadsById.values()].filter((thread) => {
+      const labels = store.labelsByThread.get(thread.id);
+      return platformSet.has(thread.platform) && labels?.has('message') && labels.has('marketplace');
+    }).length;
+    counts.message -= marketplaceMessages;
   }
 
   if (validDbPlatforms.includes('facebook') && type === 'event') {

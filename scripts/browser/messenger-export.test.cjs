@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 
-const source = fs.readFileSync(require.resolve('./messenger-export-incremental.js'), 'utf8');
+const source = fs.readFileSync(require.resolve('./messenger-export.js'), 'utf8');
 const prior = (id, overrides = {}) => ({
   id,
   timestampMs: '100',
@@ -13,7 +13,7 @@ const prior = (id, overrides = {}) => ({
   ...overrides,
 });
 const checkpoint = {
-  format: 'messagehub-messenger-investigation',
+  format: 'messagehub-facebook-messenger',
   version: 2,
   threadId: '123',
   messages: [prior('sparse'), prior('decode'), prior('changed'), prior('unsent')],
@@ -60,7 +60,7 @@ const loader = {
 };
 const db = {
   tables: {
-    threads: { get: async () => ({ threadType: 16 }) },
+    threads: { get: async () => ({ threadType: 16, threadName: 'Test Thread' }) },
     messages: {},
     contacts: { get: async () => ({ name: 'Tester' }) },
   },
@@ -74,9 +74,10 @@ const modules = {
   MAWVault: { unvault: () => { throw new Error('unavailable'); } },
 };
 let saved;
+let checkpointText = JSON.stringify(checkpoint);
 const window = {
   location: { pathname: '/messages/e2ee/t/123' },
-  showOpenFilePicker: async () => [{ getFile: async () => ({ text: async () => JSON.stringify(checkpoint) }) }],
+  showOpenFilePicker: async () => [{ getFile: async () => ({ text: async () => checkpointText }) }],
   showSaveFilePicker: async () => ({
     createWritable: async () => ({
       write: async (value) => { saved = JSON.parse(value); },
@@ -97,14 +98,39 @@ vm.runInNewContext(source, {
 (async () => {
   await window.messageHubFastExporter.loadCheckpoint();
   await window.messageHubFastExporter.start();
-  const messages = new Map(saved.messages.map((message) => [message.id, message]));
-  assert.deepEqual(messages.get('sparse').replyTo, checkpoint.messages[0].replyTo);
-  assert.equal(messages.get('decode').text, 'known body');
-  assert.deepEqual(messages.get('decode').replyTo, checkpoint.messages[1].replyTo);
-  assert.deepEqual(messages.get('changed').replyTo, { messageId: 'different', senderId: null, text: null });
-  assert.equal(messages.get('unsent').text, null);
-  assert.equal(messages.get('unsent').replyTo, null);
-  assert.deepEqual(saved.decodeErrors, [{ id: 'decode', field: 'text' }]);
+  assert.equal(saved._messagehub.schema, 'messagehub-facebook-messenger-extended');
+  assert.equal(saved._messagehub.version, 1);
+  assert.equal(saved._messagehub.thread_id, '123');
+  assert.equal(saved.title, 'Test Thread');
+  assert.equal(saved.thread_path, 'inbox/test_thread_123');
+  assert.deepEqual(saved.participants[0], {
+    name: 'Tester',
+    _messagehub: { participant_id: '1', name: 'Tester' },
+  });
+  const messages = new Map(saved.messages.map((message) => [message._messagehub.message_id, message]));
+  const replyTo = (message) => {
+    const reply = message._messagehub.reply_to;
+    return reply
+      ? { messageId: reply.message_id, senderId: reply.sender_id, text: reply.content }
+      : null;
+  };
+  assert.deepEqual(replyTo(messages.get('sparse')), checkpoint.messages[0].replyTo);
+  assert.equal(messages.get('decode').content, 'known body');
+  assert.deepEqual(replyTo(messages.get('decode')), checkpoint.messages[1].replyTo);
+  assert.deepEqual(replyTo(messages.get('changed')), { messageId: 'different', senderId: null, text: null });
+  assert.equal('content' in messages.get('unsent'), false);
+  assert.equal(replyTo(messages.get('unsent')), null);
+  assert.deepEqual(saved._messagehub.export.decodeErrors, [{ id: 'decode', field: 'text' }]);
+  assert.equal(saved.messages.every((message, index, values) => (
+    index === 0 || values[index - 1].timestamp_ms >= message.timestamp_ms
+  )), true);
+
+  checkpointText = JSON.stringify(saved);
+  window.messageHubFastExporter.reset();
+  await window.messageHubFastExporter.loadCheckpoint();
+  await window.messageHubFastExporter.start();
+  assert.equal(saved._messagehub.schema, 'messagehub-facebook-messenger-extended');
+  assert.equal(saved.messages.length, checkpoint.messages.length);
   console.log('PASS sparse metadata, decode failure, changed reply target, and unsent handling');
 })().catch((error) => {
   console.error(error);

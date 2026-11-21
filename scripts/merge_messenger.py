@@ -11,35 +11,39 @@ from pathlib import Path
 
 
 def plan(conn, data, thread_id):
-    names = {p['id']: p.get('name') for p in data['participants']}
     buckets = collections.defaultdict(list)
     for row in conn.execute('SELECT id,sender_name,timestamp_ms,content,share_json FROM content WHERE thread_id=?', (thread_id,)):
         buckets[(row[1], row[2] // 1000, row[3] or '')].append(row)
     matches = {}
     claims = collections.Counter()
     for message in data['messages']:
-        if message.get('isUnsent') or int(message['timestampMs']) <= 0:
+        mh = message.get('_messagehub') or {}
+        message_id = mh.get('message_id')
+        timestamp_ms = message.get('timestamp_ms')
+        if not message_id or message.get('is_unsent') or not isinstance(timestamp_ms, int) or timestamp_ms <= 0:
             continue
-        rows = buckets.get((names.get(message['senderId']), int(message['timestampMs']) // 1000, message.get('text') or ''), [])
+        rows = buckets.get((message.get('sender_name'), timestamp_ms // 1000, message.get('content') or ''), [])
         if len(rows) == 1:
-            matches[message['id']] = rows[0]
+            matches[message_id] = rows[0]
             claims[rows[0][0]] += 1
     matches = {key: row for key, row in matches.items() if claims[row[0]] == 1}
     updates = []
     conflicts = 0
     for message in data['messages']:
-        row = matches.get(message['id'])
+        mh = message.get('_messagehub') or {}
+        message_id = mh.get('message_id')
+        row = matches.get(message_id)
         if row is None:
             continue
         share = json.loads(row[4] or '{}')
         if not isinstance(share, dict):
             conflicts += 1
             continue
-        metadata = {'message_id': message['id'], 'sender_id': message['senderId']}
-        reply = message.get('replyTo')
+        metadata = {'message_id': message_id, 'sender_id': mh.get('sender_id')}
+        reply = mh.get('reply_to')
         if reply:
-            metadata['reply_to_message_id'] = reply['messageId']
-            original = matches.get(reply['messageId'])
+            metadata['reply_to_message_id'] = reply['message_id']
+            original = matches.get(reply['message_id'])
             if original:
                 quote = {'creator': original[1], 'text': original[3] or ''}
                 if share.get('quoted_message') not in (None, quote):
@@ -67,7 +71,8 @@ def main():
     parser.add_argument('--apply', action='store_true')
     args = parser.parse_args()
     data = json.loads(args.source.read_text())
-    if data.get('format') != 'messagehub-messenger-investigation':
+    mh = data.get('_messagehub') or {}
+    if mh.get('schema') != 'messagehub-facebook-messenger-extended' or mh.get('version') != 1:
         raise ValueError('Unsupported export format')
     conn = sqlite3.connect(f'file:{args.db.resolve()}?mode=rw', uri=True)
     if conn.execute('SELECT platform FROM threads WHERE id=?', (args.thread_id,)).fetchone() != ('facebook',):
