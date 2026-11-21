@@ -201,6 +201,30 @@ describe('MarkdownExportBuilder', () => {
     expect(summaryMd).toContain('SPOOKY FRIDAYS');
     expect(summaryMd).toContain('virtual_me.md');
   });
+
+  it('keeps backslashes, pipes, and line breaks in titles from disrupting summary rows', () => {
+    const builder = new MarkdownExportBuilder({
+      datasetName: 'export',
+      identityNames: ['John'],
+      includeReactions: false,
+      removeSystemMessages: false,
+      redactPII: false,
+      timeZone: 'UTC',
+    });
+    builder.addChatThread({
+      threadId: 'group',
+      title: 'Friends\\|Family\r\nWeekend\nPlans\rToday',
+      platform: 'Facebook',
+      isGroup: true,
+      participants: ['John'],
+      messages: [{ sender_name: 'John', content: 'Hello', timestamp_ms: 1 }],
+    });
+
+    const summary = builder.finalize(true).find(({ fileName }) => fileName === 'export-summary.md');
+    expect(summary?.content.split('\n')).toContain(
+      '| `export.md` | ' + String.raw`Friends\\\|Family Weekend Plans Today` + ' | Facebook | 1 | 1 | 1970-01-01 to 1970-01-01 |',
+    );
+  });
 });
 
 describe('selectBestDays heuristic', () => {

@@ -237,6 +237,10 @@ export function filterMessagesBySelectedDays<T extends { timestamp_ms: number }>
   return kept;
 }
 
+function formatMarkdownTableCell(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/\r\n|[\r\n]/g, ' ');
+}
+
 function escapeYamlValue(val: string): string {
   if (/[:#[\]{},&*?|>!'"%@`]|^\s|\s$/.test(val)) {
     return JSON.stringify(val);
@@ -826,7 +830,7 @@ export class MarkdownExportBuilder {
       '| :--- | :--- | :--- | ---: | ---: | :--- |',
       ...this._summaryStats.map(
         (s) =>
-          `| \`${s.fileName}\` | ${s.title.replace(/\|/g, '\\|')} | ${s.platform} | ${s.selfMessages.toLocaleString()} | ${s.totalMessages.toLocaleString()} | ${s.minDate} to ${s.maxDate} |`,
+          `| \`${s.fileName}\` | ${formatMarkdownTableCell(s.title)} | ${s.platform} | ${s.selfMessages.toLocaleString()} | ${s.totalMessages.toLocaleString()} | ${s.minDate} to ${s.maxDate} |`,
       ),
       '',
     ];
