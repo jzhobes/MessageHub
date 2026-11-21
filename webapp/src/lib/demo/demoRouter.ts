@@ -37,6 +37,18 @@ function throwIfAborted(signal?: AbortSignal | null): void {
   }
 }
 
+function messageTimestampBounds(rows: DemoContentRow[]) {
+  let firstMessageTimestamp: number | null = null;
+  let lastMessageTimestamp: number | null = null;
+  for (const { timestamp_ms } of rows) {
+    if (timestamp_ms != null) {
+      firstMessageTimestamp = Math.min(firstMessageTimestamp ?? timestamp_ms, timestamp_ms);
+      lastMessageTimestamp = Math.max(lastMessageTimestamp ?? timestamp_ms, timestamp_ms);
+    }
+  }
+  return { firstMessageTimestamp, lastMessageTimestamp };
+}
+
 function jsonResponse(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
     status,
@@ -249,6 +261,7 @@ function handleThreads(store: DemoStore, url: URL): Response {
         platform: 'facebook',
         title: cat.title,
         timestamp: lastTs,
+        ...messageTimestampBounds(matching),
         snippet,
         pageCount: Math.ceil(matching.length / PAGE_SIZE),
       };
@@ -271,6 +284,7 @@ function handleThreads(store: DemoStore, url: URL): Response {
           platform: 'facebook',
           title,
           timestamp: lastTs,
+          ...messageTimestampBounds(matchingThreads.flatMap((t) => store.contentByThread.get(t.id) ?? [])),
           snippet,
           pageCount: Math.ceil(matchingThreads.length / PAGE_SIZE),
         },
@@ -303,6 +317,8 @@ function handleThreads(store: DemoStore, url: URL): Response {
       title: title || 'Untitled',
       participants,
       timestamp: row.last_activity_ms ?? 0,
+      firstMessageTimestamp: store.contentByThread.get(row.id)?.at(-1)?.timestamp_ms ?? null,
+      lastMessageTimestamp: store.contentByThread.get(row.id)?.at(0)?.timestamp_ms ?? null,
       snippet: row.snippet ?? '',
       ...(row.e2ee_cutover ? { e2eeCutover: true } : {}),
       pageCount: Math.ceil(msgCount / PAGE_SIZE),
@@ -811,6 +827,8 @@ function handleDatasetThreads(store: DemoStore, url: URL): Response {
         title: title || 'Untitled',
         platform: t.platform,
         timestamp,
+        firstMessageTimestamp: msgs.at(-1)?.timestamp_ms ?? null,
+        lastMessageTimestamp: msgs.at(0)?.timestamp_ms ?? null,
         is_group: !!t.is_group,
         pageCount: 1,
         type: 'message',
@@ -823,15 +841,11 @@ function handleDatasetThreads(store: DemoStore, url: URL): Response {
     });
 
   if (!platformStr || platformStr === 'all' || platformStr === 'facebook') {
-    const postMsgs = store.data.content.filter((m) => {
+    const allPosts = store.data.content.filter((m) => {
       const thread = store.threadsById.get(m.thread_id);
-      return (
-        thread?.platform === 'facebook' &&
-        store.labelsByThread.get(m.thread_id)?.has('post') &&
-        m.content &&
-        !m.content.startsWith('http')
-      );
+      return thread?.platform === 'facebook' && store.labelsByThread.get(m.thread_id)?.has('post');
     });
+    const postMsgs = allPosts.filter((m) => m.content && !m.content.startsWith('http'));
     if (postMsgs.length > 0) {
       const lastTs = postMsgs.reduce((max, m) => {
         const ts = store.threadsById.get(m.thread_id)?.last_activity_ms ?? 0;
@@ -850,6 +864,7 @@ function handleDatasetThreads(store: DemoStore, url: URL): Response {
         title: 'My Posts',
         platform: 'facebook',
         timestamp: lastTs,
+        ...messageTimestampBounds(allPosts),
         is_group: false,
         pageCount: 1,
         type: 'post',
@@ -883,6 +898,9 @@ function handleDatasetThreads(store: DemoStore, url: URL): Response {
           title: cat.title,
           platform: 'facebook',
           timestamp: lastTs,
+          ...messageTimestampBounds(
+            evMsgs.filter((m) => m.content === (cat.id === 'fb-event-owned' ? 'Created Event' : 'Joined Event')),
+          ),
           is_group: false,
           pageCount: 1,
           type: 'event',

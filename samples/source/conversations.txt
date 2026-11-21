@@ -59,27 +59,132 @@ M: oh that's where it went. can I grab it Saturday?
 L: Yep. Coffee around 11?
 M: perfect. same place by the station?
 L: Let's try Willow Coffee instead. Station place is closed for repairs.
+@ 2025-01-11 10:40
+M: heading over now. scarf rescue mission
+L: I'm upstairs. Buzz when you get here.
+M: do you want to walk to Willow or meet there?
+L: Walk together. I need to pick up a parcel on the way.
+M: okay, ten minutes
+L: And yes, I've put the scarf by the door this time.
+@ 2025-01-18 16:00
+L: How was the coffee place?
+M: good! slightly dangerous having those pastries right by the till
+L: The cinnamon one?
+M: obviously. went back for another on the way home
+L: We should go earlier next time. They're usually gone by noon.
+M: useful information, thank you
+@ 2025-01-29 18:00
+M: have you started the book yet?
+L: Nearly finished. Don't tell me anything about the ending.
+M: not a word. text me when you're done
+L: I have a theory about the sister.
+M: keeping my face completely neutral over here
+L: That sounds suspiciously like a spoiler.
+@ 2025-02-07 17:30
+L: Walk tomorrow if it's dry?
+M: yes please. need a break from staring at signup forms
+L: Canal path? We can turn back at the bridge.
+M: 10:30 by the library?
+L: Works for me. I'll check the weather in the morning.
+M: bringing the rain jacket regardless. learning from experience
+@ 2025-02-08 09:10
+L: Still raining. Coffee instead?
+M: please. not feeling heroic today
+L: Willow at 11, then?
+M: yep. can grab the table if I get there first
+L: I'll bring your book back too.
+M: look at us remembering things
 @ 2025-02-16 16:05
 M: did you ever find that lentil soup recipe?
 L: Susan's one? You sent it to me in November 😂
 M: wait didn't I send it to you originally
 L: Ask your mom. It had lemon at the end, that's all I remember.
 M: will do. keep forgetting the lemon
+@ 2025-02-18 19:00
+M: soup recipe obtained and successfully tested
+L: Send it over? I've got lentils taking up half a cupboard.
+M: Mom says vegetable stock is fine. lemon after turning off the heat
+L: That's probably the important bit.
+M: apparently yes. freezing two portions for later
+L: Future you will be very pleased.
+@ 2025-02-26 18:10
+L: Do you have a spare charger I could borrow for the weekend?
+M: USB-C? yes, the black one
+L: That's the one. Mine only works at a very specific angle.
+M: can drop it off after work tomorrow
+L: Thank you! I'll give it back before the cabin trip.
+M: no hurry, just remind me where it is when I forget
+@ 2025-03-10 19:30
+M: returned charger acquired. now attempting to pack before Thursday night
+L: Ambitious. Have you checked the cabin kitchen list?
+M: yes. there is a big pot, so pasta should be easy
+L: I'll bring tea and a couple of dish towels just in case.
+M: good idea. do we need board games?
+L: Bring the small card game. Less room for arguments about missing pieces.
 @ 2025-03-18 19:30
 L: Did the cabin host reply about your charger?
 M: yes! they're mailing it. left it behind the sofa apparently
 L: At least it wasn't the entire suitcase.
 M: leave Sam out of this 😂
+@ 2025-03-20 18:30
+L: Have you recovered from the hill yet?
+M: legs fine. still recovering from leaving the charger behind immediately
+L: At least the host found it.
+M: should arrive tomorrow. putting a bright tag on it now
+L: You could just look behind the sofa before leaving.
+M: let's not get carried away with practical advice
+@ 2025-03-28 17:00
+M: charger is home. bright orange tag attached
+L: Excellent. How did the cabin photos turn out?
+M: mostly trees, one good group photo, twelve accidental pictures of my shoes
+L: Keep the group photo. Delete the shoes.
+M: some of them have artistic merit
+L: I'll accept one shoe picture in the album.
+@ 2025-04-10 18:00
+L: How did the website launch go?
+M: smoothly! which feels suspicious after all that checking
+L: Maybe all that checking helped.
+M: possible. finally going for the celebratory coffee tomorrow
+L: You deserve a pastry too.
+M: this is the kind of project feedback I need
 @ 2025-04-22 18:20
 L: Soup report: excellent. Used red lentils, cooked in 25 minutes.
 M: remember the lemon?
 L: I did. I have learned from your mistakes.
 M: fair enough haha
+@ 2025-04-24 19:10
+M: thanks for the soup report. sent it to Mom
+L: Was she pleased?
+M: yes. immediately asked if you wanted her bread recipe too
+L: I do, but I should master one thing at a time.
+M: sensible. bread feels like a whole weekend commitment
+L: And my freezer is currently full of soup.
+@ 2025-05-08 18:20
+L: Do you want me to print the concert confirmation?
+M: can collect with the email, right?
+L: Yes. Just checking in case your phone does its battery thing again.
+M: fair. I'll charge it and bring the little battery pack
+L: I'll keep a copy on mine too.
+M: between us we might successfully attend a concert
+@ 2025-05-24 12:00
+M: fancy a walk Monday? no plans other than laundry
+L: Afternoon works. Need to drop a library book back first.
+M: I need to collect mine! we can start there
+L: Two errands and a walk. Very efficient.
+M: then undo all the efficiency with a long coffee stop
+L: Now that's a plan.
 @ 2025-06-08 10:10
 M: Willow at 11 again next Saturday?
 L: Yes please. Bring the cabin photos if you have them.
 M: I'll make an album. fair warning, about 40 are the same tree
 L: It was a good tree.
+@ 2025-06-14 10:20
+M: table secured. outside, under the awning
+L: Five minutes away. Did you bring the album?
+M: yes. reduced the tree count to a respectable twelve
+L: And the shoes?
+M: one, as negotiated
+L: Good. Looking forward to seeing the evidence.
 
 ## facebook | family-table | Sunday table | M,A,R
 @ 2025-01-19 15:00
@@ -212,6 +317,39 @@ E: I can audit the current pages. Where are the support notes?
 S: I'll send a summary tomorrow. Main issue is people losing the confirmation email.
 M: Let's put the next step on the success page too, then.
 N: Good. Small launch first: signup, event list, contact page.
+@ 2025-01-20 10:00
+M: I've counted five different signup entry points on the current site.
+E: Five? I found the home page and event pages.
+M: Also the footer, contact page, and old newsletter page.
+S: That newsletter link still gets shared. People have it bookmarked.
+N: Keep the address working when we launch.
+E: Redirect it to the new signup page?
+M: Yes, with a short explanation so it doesn't feel like the wrong place.
+S: I'll check the saved replies for other old links.
+N: Add those to the handover list, please.
+E: I'll keep a redirect checklist alongside the page audit.
+@ 2025-01-23 14:00
+S: Support summary is ready. Several people ask whether signup reserves a place.
+M: It doesn't, right? They still need to choose an event.
+N: Correct. Newsletter signup and event booking are separate.
+E: The current button just says Join. That's probably part of it.
+M: I'll change it to Get event updates.
+S: Much clearer. Can the success page say that no booking was made?
+M: Yes, and link to the event list.
+N: Keep that sentence friendly. No need for a big warning box.
+E: I'll check both routes lead to the same success screen.
+S: Thanks. That should save a few confusing emails.
+@ 2025-01-30 11:00
+E: Event audit question: do we show events after they finish?
+N: Keep a small past-events section. Organizers use it as a record.
+M: Should past events still have the signup button?
+S: No. We get questions about dates that already happened.
+M: I'll use a simple Event finished label instead.
+E: What about an event that lasts all weekend?
+N: It stays current until the final session ends.
+M: I'll include a two-day example in the layout.
+S: Please include the year in the past-events section too.
+E: Added both cases to the review list.
 @ 2025-02-04 10:00
 M: First flow is ready. Could someone try it without me narrating?
 E: Happy to. Is mobile included?
@@ -220,6 +358,61 @@ S: I got through, but didn't realize the email field was required.
 M: Thanks. I'll make the label explicit and keep the error next to the field.
 N: Can we review Thursday at 10?
 E: Works. I'll bring the keyboard navigation notes.
+@ 2025-02-06 11:00
+N: Thanks for the review. Main decision: one signup form, no extra preferences yet.
+M: I'll remove the topic checkboxes from the first screen.
+S: Can people change their mind later?
+N: Every email will have an unsubscribe link.
+E: We already have that in the mail template. I'll verify it in the preview.
+M: I'll mention it below the button, without making the form longer.
+S: Good. Also the contact page should say when replies usually arrive.
+N: Two working days is realistic.
+M: Noted. I'll use that exact wording.
+E: I'll have the revised preview ready Monday.
+@ 2025-02-10 15:00
+E: Revised preview is ready. No real email will be sent from this version.
+M: Thanks. I'm checking on my phone now.
+S: The success message is much easier to follow.
+M: One thing: the back link takes me to the top of the event list.
+E: Would returning to the selected event be better?
+M: Yes. Otherwise I lose where I was reading.
+N: Worth fixing within this scope.
+E: I'll preserve that event link when opening the form.
+S: I'll try it from the old newsletter address too.
+M: Great, that's the route I would have forgotten.
+@ 2025-02-14 10:00
+S: Checked the contact copy. Should we publish the office address?
+N: Mailing address, yes. Please don't imply people can drop in.
+M: I'll label it Postal address.
+E: Does it need a map?
+N: No. We don't run events from the office.
+S: Venue addresses belong on the individual events instead.
+M: That keeps the contact page much simpler.
+E: I can remove the empty map container from the old layout.
+S: I'll update the saved support reply to match.
+N: Thanks. Please keep the phone number in the handover notes too.
+@ 2025-02-18 09:30
+M: New event example: family planting morning, with children welcome.
+S: Please keep the age guidance visible before booking.
+E: Is that a fixed field or part of the description?
+N: Part of the description for now. Events vary too much.
+M: Okay. I'll put the short description above the button.
+S: The full description should still include what to bring.
+E: We can show the whole thing rather than another expandable section.
+M: Agreed. Most descriptions are only a couple of paragraphs.
+N: Let's avoid hiding information people need to decide.
+S: I'll check that each organizer has supplied it.
+@ 2025-02-25 13:00
+E: Keyboard review is ready. Focus gets lost after closing the menu.
+M: It should return to the menu button.
+E: That's the fix I'm making. Also adding a clearer focus outline.
+S: Can I try it without a mouse once it's ready?
+E: Please do. I'll send the preview this afternoon.
+N: Do we need to change the menu labels?
+M: The labels are fine. This is about where focus goes.
+S: I hadn't noticed how easy it was to lose your place.
+E: Same. Testing just by clicking missed it completely.
+M: I'll include keyboard steps in the final review checklist.
 @ 2025-03-04 14:00
 E: Signup review: tab order is good now. One issue with long event titles.
 M: Wrapping or clipping?
@@ -227,6 +420,61 @@ E: Clipping on the confirmation screen. Sending a review note separately.
 M: Found it. Fixed width on the title container. I'll adjust it.
 S: Support copy is approved. Kept the phone number on the contact page.
 N: Great. No new features before launch please.
+@ 2025-03-06 10:30
+S: Two organizers sent updated descriptions this morning.
+M: Any changes to dates or venues?
+S: One venue change. The planting workshop is at the library courtyard now.
+E: Please send the exact address, not just the venue name.
+S: 8 Linden Street. Entrance from the side gate.
+M: I'll include the side gate detail next to the address.
+N: Who confirms that the gate is open before the event?
+S: The organizer. I've asked them to name a contact.
+E: Good. I'll keep the old venue out of the preview data.
+M: I'll check the confirmation email once that change is in.
+@ 2025-03-13 14:00
+N: We have one week left for content changes before the final review.
+S: Still waiting for access details from two venues.
+M: Can we show a contact link until those arrive?
+N: Yes. Don't guess whether a venue is accessible.
+E: I'll make that field optional without leaving an empty heading.
+S: I'll chase the organizers today.
+M: The layout works with either a short note or a longer paragraph.
+N: Good. Please keep confirmed details separate from questions we're still asking.
+S: I'll mark the outstanding items in the handover document.
+E: That will help me check the final version against the preview.
+@ 2025-03-20 11:00
+E: Final review preview is up. Could everyone check their assigned pages?
+M: I'll do signup and the event details on mobile.
+S: Taking contact page and confirmation copy.
+N: I'll check dates, venue names, and the main navigation.
+E: Please note which browser you used if something looks odd.
+M: Do we have a long email address to try?
+S: I'll use my test address with the extra department name.
+E: Good idea. That catches wrapping issues too.
+N: Can we finish by tomorrow afternoon?
+M: Yes. I'll post my notes before lunch tomorrow.
+@ 2025-03-24 09:30
+M: Review notes are in. Only one remaining issue: the phone link is hard to tap.
+E: On the contact page?
+M: Yes, especially beside the email link.
+S: Could we put them on separate lines?
+E: That's easy enough and gives both more room.
+N: Please do. Any content blockers left?
+S: Both venue replies arrived Friday. I've added the confirmed access details.
+M: I'll check the page again after James updates the spacing.
+E: Should be ready this afternoon.
+N: Thanks. Then we can freeze the launch copy.
+@ 2025-03-31 10:00
+E: Launch rehearsal passed. The old newsletter link redirects correctly.
+M: Did the existing event links survive too?
+E: Yes. Tried all the addresses from the audit.
+S: And confirmation emails?
+E: Delivered to the test inbox. Unsubscribe link works too.
+N: Let's record the rehearsal result in the email thread.
+M: I'll send the signup checks there so we have one summary.
+S: I'll prepare the announcement draft, but won't send it yet.
+N: Exactly. We wait for Tuesday's live checks.
+E: I'll keep the previous version ready in case we need to roll back.
 @ 2025-04-07 15:30
 N: Tomorrow's launch: James deploys at 10, Alex checks signup, Chris watches support.
 M: Ready. Test account uses alex+preview@example.com.
@@ -243,6 +491,72 @@ S: First week: 43 signups, two questions about accessibility, no missing confirm
 M: Nice. I'll add the venue access details next to each event.
 E: I can pair on that Friday.
 N: Let's do it. Good small follow-up.
+@ 2025-04-17 14:00
+S: Library confirmed the courtyard has a step-free entrance from Linden Street.
+M: Different from the side gate we already list?
+S: Same gate. They just clarified the approach from the pavement.
+E: Let's include both facts in one note rather than two separate labels.
+M: Agreed. I'll update the wording before we pair tomorrow.
+N: Does the organizer have a contact number for arrival questions?
+S: Yes, and permission to publish it on that event only.
+E: I'll keep it out of the general contact page.
+M: That should make it much easier to find on the day.
+N: Thanks. Please mention the update in the handover email.
+@ 2025-04-25 11:00
+S: A visitor asked if the Saturday workshop is cancelled when it rains.
+N: Good question. What's the organizer's plan?
+S: Move indoors to the library activity room. Same start time.
+M: We should add that before the weekend.
+E: Can update the event description now.
+M: Put it after What to bring. That's where I'd look for weather advice.
+S: I'll ask the organizer to confirm capacity indoors too.
+N: Don't advertise extra spaces until they've confirmed.
+E: Existing bookings stay as they are.
+S: Confirmed: same capacity. I'll reply to the visitor.
+@ 2025-05-02 10:00
+S: Saturday's workshop went well. Only one person went to the old venue first.
+M: Did they use an old email?
+S: Yes, an early organizer email from before the venue changed.
+N: We can't change that message, but can make the update prominent on the page.
+E: I'll add Venue updated above the address until the next workshop.
+M: A dated note would help. Otherwise people won't know which address is current.
+S: I'll ask organizers to resend changes to booked attendees next time.
+N: Let's put that in the handover process.
+E: No need for another site feature yet, then.
+M: Agreed. Clearer instructions solve this one.
+@ 2025-05-15 15:00
+N: Summer events are coming in. Any problems adding them?
+S: One organizer sent a poster instead of a written description.
+M: We still need the text. People shouldn't have to read an image to get details.
+E: And a poster won't give us a useful event title in search.
+S: I've asked for date, time, address, and a short description separately.
+N: Good. Can the poster be an optional extra?
+M: Yes, after the main details.
+E: I'll check it doesn't push the booking button off the narrow layout.
+S: I'll wait for the text before publishing anything.
+N: Thanks. Let's keep that requirement in the organizer instructions.
+@ 2025-06-05 11:00
+E: Quick maintenance note: one June event has the start and finish reversed.
+S: Which one?
+E: The seed swap. Listed as 2 PM to noon.
+M: Probably noon to 2, but let's ask.
+S: Asking the organizer now.
+N: Thanks for catching it before the reminder goes out.
+S: Confirmed: noon to 2 PM on June 21.
+E: Updated. I'll check the reminder preview as well.
+M: Can we add a simple date check to the publishing checklist?
+N: Yes. Keep that in the handover notes for whoever publishes next.
+@ 2025-06-24 10:00
+S: Seed swap report: 28 attendees, no venue questions this time.
+M: Nice. Did the rain plan get used?
+S: Briefly. They moved under the covered courtyard for ten minutes.
+E: Glad the directions were clear enough.
+N: I'd like to close out the refresh work this week.
+M: I'll tidy the review notes and mark what's actually shipped.
+E: I'll send the maintenance checklist and current version details.
+S: I'll keep the support summary with the organizer instructions.
+N: Great. Let's put the final handover in the email thread Friday.
+M: Will do. It's a much clearer site than the one we started with.
 
 ## google_chat | DM James Turner | James Turner | M,E
 @ 2025-01-28 11:00
@@ -402,8 +716,133 @@ N: Thanks for the kickoff. For April 8 we're updating signup, event listings, an
 M: Confirmed. I'll include mobile layouts and the confirmation screen. Could Chris send the most common signup questions before next Tuesday?
 @ 2025-01-17 09:00
 S: Sent the summary in Chat. The biggest question is what happens after submitting the form. We should show the event date and next step immediately.
+@ 2025-01-21 09:00
+M: The signup audit found five entry points, including the old newsletter page. I suggest keeping that address and redirecting it to the new form with a short explanation.
+E: Agreed. I'll keep a list of old addresses and check each one during the launch rehearsal.
+S: I'll check our saved replies for links that aren't visible in the main navigation.
+N: Please include those in the audit. We should preserve existing links wherever possible.
+@ 2025-01-24 09:00
+S: The support summary confirms that people confuse newsletter signup with booking an event. The current Join button doesn't explain the difference.
+M: I'll use Get event updates and put a link to the event list on the confirmation screen. The form won't imply that a place has been reserved.
+E: That works with the current implementation. All signup entry points can use the same confirmation screen.
+N: Approved. Please keep the explanation brief and review it with the rest of the copy.
+@ 2025-01-31 09:00
+E: We need a decision on finished events. Should they disappear from the site or move to a past-events section?
+N: Keep a past-events section as a record for organizers. Finished events should not offer booking.
+M: I'll show Event finished and include the year. Multi-day events remain current until their final session ends.
+S: That matches the questions we receive. I'll check the old descriptions for missing years.
+@ 2025-02-05 09:00
+M: Tomorrow's review covers the signup flow and mobile layouts. Please try the preview before the meeting if you can; I'd like feedback without a walkthrough first.
+E: I'll check keyboard navigation and narrow-screen behavior. I'll bring notes on the date picker as well.
+S: I'll focus on the required fields and what happens after submitting. The current preview makes the email requirement easy to miss.
+N: Thank you. We'll decide the remaining scope questions at 10 tomorrow.
+@ 2025-02-07 09:00
+N: Review decisions: one signup form, no topic preferences for launch, and a clear link to the event list after submitting. Replies to contact enquiries should be promised within two working days.
+M: I'll update the layouts and remove the preference checkboxes. I'll also keep the unsubscribe explanation near the signup button.
+E: Revised preview will be ready Monday. I'll verify the unsubscribe link in the test email template.
+S: I'll update the contact copy and compare it with our saved support replies.
+@ 2025-02-12 09:00
+M: The revised preview looks good on mobile. One follow-up: returning from signup should take visitors back to the event they were reading.
+E: I'll preserve the selected event link. The old newsletter address will still lead to the general event list afterward.
+S: I can test both routes and check that the confirmation wording makes sense for each.
+N: Please include that check before we sign off the signup flow.
+@ 2025-02-17 09:00
+S: Contact page decision from Friday: publish the postal address, but don't imply that the office is open for visits. Event venues will be listed separately.
+M: I'll label it Postal address and keep the phone and email links easy to find. We don't need an office map.
+E: I'll remove the old map container rather than leaving empty space where it used to be.
+N: Approved. Please keep the full contact details in the handover document as well.
+@ 2025-02-19 09:00
+M: For event descriptions, I suggest showing the full text before the booking button. Age guidance and what to bring shouldn't be hidden in expandable sections.
+S: Agreed. The family planting session needs both details visible. I've asked organizers to supply anything missing.
+E: The current descriptions are short enough for that layout. I'll check one longer example too.
+N: Let's keep this approach for launch. We can review it if event descriptions become substantially longer.
+@ 2025-02-26 09:00
+E: Keyboard review found that focus was lost after closing the menu. The fix returns focus to the menu button and makes the outline more visible.
+M: Thanks. I'll include those steps in the final review checklist so we test them again before launch.
+S: I'll try the updated preview without a mouse and report anything that feels unclear.
+N: Please record the result alongside the mobile review. Both matter for sign-off.
+@ 2025-03-05 09:00
+E: The long event title issue is fixed. Spring neighborhood planting workshop now wraps on the confirmation screen instead of clipping.
+M: I've checked the revised layout. Please keep that long title in the review examples so we continue to test it.
+S: The same title fits in the confirmation email. I've checked the event date and next-step wording too.
+N: Good. Please mark that review item complete and keep the example for handover.
+@ 2025-03-07 09:00
+S: The planting workshop venue has changed to the library courtyard at 8 Linden Street. Visitors should use the side gate.
+E: I'll replace the old venue details in the preview and check the confirmation email against the new address.
+M: I'll keep the side-gate instruction next to the address, where visitors will look for arrival details.
+N: Please ask the organizer who will handle arrival questions and confirm the gate will be open.
+@ 2025-03-14 09:00
+S: Two venue access replies are still outstanding. I have asked both organizers for confirmed details rather than making assumptions.
+M: Until they reply, we can show a contact link without an empty access heading. The layout supports a longer note when we have one.
+E: I'll make sure missing notes don't leave blank sections. Existing addresses remain visible.
+N: That's the right approach. Keep the unresolved questions clearly marked in the handover document.
+@ 2025-03-21 09:00
+M: Final mobile review is complete. The only remaining layout issue is the contact page: the phone and email links are too close together to tap comfortably.
+E: I'll put them on separate lines and increase the spacing. The revised page should be ready Monday.
+S: Both venue access replies arrived today. I've added their confirmed wording to the content document.
+N: Thank you. Once the contact spacing is checked, we'll freeze the launch copy.
+@ 2025-03-25 09:00
+E: Contact links are now on separate lines. Please check the revised page on a narrow screen before I close that item.
+M: Checked. Both targets are easy to tap, and the email address wraps without covering the phone number.
+S: The contact wording still matches the saved reply. No outstanding content changes from support.
+N: Launch copy is approved. Any further changes need a specific reason so the rehearsal stays useful.
+@ 2025-04-01 09:00
+E: The launch rehearsal passed yesterday. Old event addresses and the newsletter redirect work, and the confirmation email reached the test inbox.
+M: Signup checks passed on mobile. Returning to the selected event works, including after a required-field error.
+S: Announcement draft is ready. I will wait for the live checks on April 8 before sending it.
+N: Thank you. Keep the previous version available for rollback and use the assignments already listed in Chat.
 @ 2025-04-09 09:00
 N: The refresh launched yesterday as planned. Thanks everyone. Please keep feedback in the Field Notes launch space for the next week; we'll choose follow-ups together on April 15.
+@ 2025-04-10 09:00
+S: Initial support feedback is quiet. No reports of missing confirmations so far. I'll keep collecting questions through the first-week review.
+M: Thanks. Please flag anything that suggests the next step is still unclear, even if the visitor completes signup.
+E: I'll watch for broken links and layout problems. Nothing has needed a rollback.
+N: Good. Let's avoid changing the launch version until we've reviewed the week as a whole.
+@ 2025-04-16 09:00
+S: First-week summary: 43 signups, two accessibility questions, and no missing confirmations reported. The questions concerned venue entrances rather than the signup form.
+M: I'll add confirmed access details beside each event address. James and I will review the layout Friday.
+E: Confirmed for Friday. We'll check both short notes and longer arrival instructions on mobile.
+N: Approved as a small follow-up. Keep the general contact page separate from event-specific contacts.
+@ 2025-04-18 09:00
+S: The library confirmed that the courtyard side gate has a step-free approach from Linden Street. The organizer also agreed to publish an arrival contact on that event.
+M: I'll combine the gate and approach details into one note next to the address. That avoids two slightly different instructions.
+E: I'll check the contact number appears on the event only, including in the narrow-screen layout.
+N: Please include the confirmed wording and organizer permission in the handover notes.
+@ 2025-04-28 09:00
+S: The workshop rain plan is now confirmed: use the library activity room at the same start time, with the same capacity. The event description was updated before Saturday.
+M: Keeping that note after What to bring worked well. It was easy to find without adding a separate page section.
+E: Existing bookings were unchanged. I've checked the published description against the organizer's reply.
+N: Thanks. Please keep weather arrangements in the organizer checklist for future outdoor events.
+@ 2025-05-05 09:00
+S: One workshop attendee used an early organizer email and went to the old venue. Everyone else found the courtyard. I suggest asking organizers to resend venue changes to booked attendees.
+M: The event page should also carry a dated Venue updated note so visitors can tell which address is current.
+E: I'll add that note for the next workshop. We don't need a new booking feature to handle this case.
+N: Agreed. Please record the resend step in the handover process and keep the site change small.
+@ 2025-05-16 09:00
+S: A summer event submission arrived as a poster only. I've requested a written title, date, time, address, and description before publishing it.
+M: The main event details need to be readable without opening an image. The poster can be an optional extra after the text.
+E: I'll check the poster doesn't crowd the booking controls on smaller screens once the text is available.
+N: Please add those required details to the organizer instructions. Don't publish the incomplete submission yet.
+@ 2025-05-27 09:00
+S: The summer organizer supplied the missing text. The seed swap is scheduled for June 21 in the library courtyard, with the same side-gate entrance.
+M: I'll reuse the confirmed arrival wording and check the new description reads clearly without the poster.
+E: I'll check the page and reminder preview together so the date and venue agree.
+N: Thank you. Please keep the organizer's source details with the final review notes.
+@ 2025-06-06 09:00
+E: We caught a reversed time range on the seed swap listing yesterday. The organizer confirmed noon to 2 PM on June 21, and both page and reminder now match.
+S: I've added an explicit start-and-finish check to the publishing checklist. The organizer has approved the corrected preview.
+M: I'll include the corrected example in the review notes so the next publisher knows what to look for.
+N: Good catch. Keep that checklist practical; it should be usable without a walkthrough from this team.
+@ 2025-06-25 09:00
+S: The seed swap had 28 attendees and no venue questions. Visitors briefly used the covered courtyard during rain, as the organizer planned.
+M: I'll tidy the layout notes this week and mark which changes shipped. Any future ideas will be clearly separate from completed work.
+E: I'll send the current version details and maintenance checklist with Friday's handover.
+N: Thank you. Please close out this thread with the final ownership and support arrangements.
+@ 2025-06-27 09:00
+E: Final handover: current version and redirect list are recorded in the maintenance notes. The publishing checklist covers dates, times, venue changes, and confirmation previews.
+M: Design review notes are complete. Mobile, long titles, contact links, and keyboard steps are documented with the examples we used.
+S: Support will own organizer instructions and collect future feedback. Event-specific arrival contacts stay with each event; general enquiries use the contact page.
+N: Accepted. The refresh is complete. Thank you all for the careful launch and follow-up work.
 
 ## google_mail | concert-tickets | Your Harbor Lights tickets — May 17 | Lantern Hall
 @ 2025-04-03 10:00

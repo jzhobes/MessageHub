@@ -14,6 +14,18 @@ node webapp/scripts/export-demo-data.mjs
 
 The first command replaces the five tracked ZIPs reproducibly. The second replaces the ignored `data_samples/` workspace; the third refreshes the ignored `webapp/public/demo/` bundle. No deployment is performed.
 
+## Pagination examples
+
+Content pages contain 100 messages. The dataset has 680 messages across 23 conversations, with three longer threads for trying page navigation and jumps to older search results:
+
+| Conversation | Messages | Pages |
+| --- | ---: | ---: |
+| Field Notes launch (Google Chat) | 222 | 3 |
+| Emma Wilson (Facebook DM) | 112 | 2 |
+| Field Notes refresh — agreed scope (Gmail) | 104 | 2 |
+
+The work threads follow the initial audit through launch and June handover. Emma's DM follows recurring coffee plans, books, the cabin trip, and concert arrangements. Other conversations stay short. This exercises message pagination; it does not add extra conversations for thread-list pagination.
+
 ## Things to explore
 
 - **Fern House:** Find the final pickup time, cabin address, arrival instructions, grocery split, and forgotten charger across Facebook, Voice, and email.

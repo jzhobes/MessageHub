@@ -59,6 +59,8 @@ export interface Thread {
   title: string;
   participants: string[];
   timestamp: number;
+  firstMessageTimestamp?: number | null;
+  lastMessageTimestamp?: number | null;
   snippet: string;
   pageCount: number;
 

@@ -23,7 +23,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   // Count each thread's content rows in a correlated subquery.
   let query = `
-    SELECT t.*, EXISTS(SELECT 1 FROM thread_labels el WHERE el.thread_id=t.id AND el.label='e2ee_cutover') as e2ee_cutover, EXISTS(SELECT 1 FROM thread_labels al WHERE al.thread_id=t.id AND al.label='archived') as archived, (SELECT COUNT(*) FROM content c WHERE c.thread_id = t.id) as msg_count
+    SELECT t.*, EXISTS(SELECT 1 FROM thread_labels el WHERE el.thread_id=t.id AND el.label='e2ee_cutover') as e2ee_cutover, EXISTS(SELECT 1 FROM thread_labels al WHERE al.thread_id=t.id AND al.label='archived') as archived, (SELECT COUNT(*) FROM content c WHERE c.thread_id = t.id) as msg_count,
+      (SELECT MIN(c.timestamp_ms) FROM content c WHERE c.thread_id = t.id) as first_ts,
+      (SELECT MAX(c.timestamp_ms) FROM content c WHERE c.thread_id = t.id) as latest_ts
     FROM threads t
   `;
   const params: string[] = [];
@@ -55,6 +57,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       last_activity_ms: number;
       snippet: string | null;
       msg_count: number;
+      first_ts: number | null;
+      latest_ts: number | null;
 
       // Conversation status
       e2ee_cutover: number;
@@ -102,6 +106,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         platform: row.platform,
         title: title || 'Untitled',
         participants,
+        firstMessageTimestamp: row.first_ts,
+        lastMessageTimestamp: row.latest_ts,
         timestamp: row.last_activity_ms ?? 0,
         snippet: row.snippet ?? '',
         ...(row.e2ee_cutover ? { e2eeCutover: true } : {}),
@@ -121,13 +127,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const stats = dbInstance
           .prepare(
             `
-          SELECT COUNT(*) as count, MAX(c.timestamp_ms) as last_ts
+          SELECT COUNT(*) as count, MIN(c.timestamp_ms) as first_ts, MAX(c.timestamp_ms) as last_ts
           FROM content c
           INNER JOIN thread_labels tl ON c.thread_id = tl.thread_id
           WHERE tl.label = 'event' AND c.content = ?
         `,
           )
-          .get(cat.status) as { count: number; last_ts: number | null };
+          .get(cat.status) as { count: number; first_ts: number | null; last_ts: number | null };
 
         let snippet = 'No events';
         if (stats.last_ts) {
@@ -149,6 +155,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           id: cat.id,
           platform: 'facebook',
           title: cat.title,
+          firstMessageTimestamp: stats.first_ts,
+          lastMessageTimestamp: stats.last_ts,
           timestamp: stats.last_ts ?? 0,
           snippet: snippet,
           pageCount: Math.ceil((stats.count ?? 0) / PAGE_SIZE),
@@ -163,13 +171,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const stats = dbInstance
         .prepare(
           `
-        SELECT COUNT(*) as count, MAX(t.last_activity_ms) as last_ts
+        SELECT COUNT(*) as count, MIN((SELECT MIN(c.timestamp_ms) FROM content c WHERE c.thread_id = t.id)) as first_ts, MAX((SELECT MAX(c.timestamp_ms) FROM content c WHERE c.thread_id = t.id)) as latest_ts, MAX(t.last_activity_ms) as last_ts
         FROM threads t
         INNER JOIN thread_labels tl ON t.id = tl.thread_id
         WHERE t.platform = 'facebook' AND tl.label = ?
       `,
         )
-        .get(label) as { count: number; last_ts: number | null };
+        .get(label) as { count: number; first_ts: number | null; latest_ts: number | null; last_ts: number | null };
 
       const title = type === 'post' ? 'My Posts' : 'My Check-ins';
       const snippet = `Browse all ${stats.count?.toLocaleString()} ${type === 'post' ? 'posts' : 'check-ins'}`;
@@ -179,6 +187,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           id: `fb-${type}-all`,
           platform: 'facebook',
           title: title,
+          firstMessageTimestamp: stats.first_ts,
+          lastMessageTimestamp: stats.latest_ts,
           timestamp: stats.last_ts ?? 0,
           snippet: snippet,
           pageCount: Math.ceil((stats.count ?? 0) / PAGE_SIZE),

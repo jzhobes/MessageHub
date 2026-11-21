@@ -420,6 +420,8 @@ export default function ThreadContent({
                 threadId={activeThread.id}
                 currentPage={currentTopPage}
                 currentTimestamp={currentTimestamp}
+                firstMessageTimestamp={activeThread.firstMessageTimestamp}
+                lastMessageTimestamp={activeThread.lastMessageTimestamp}
                 totalPages={activeThread.pageCount || 1}
                 onNavigate={onNavigate}
               />

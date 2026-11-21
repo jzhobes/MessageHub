@@ -122,6 +122,8 @@ describe('/api/threads', () => {
         title: 'Project Update',
         participants: ['Alice'],
         timestamp: 2000,
+        firstMessageTimestamp: 100,
+        lastMessageTimestamp: 204,
         snippet: 'Release notes',
         pageCount: 2,
       },
@@ -174,6 +176,8 @@ describe('/api/threads', () => {
         platform: 'facebook',
         title: 'Your Events',
         timestamp: 5000,
+        firstMessageTimestamp: 5000,
+        lastMessageTimestamp: 5000,
         snippet: 'Latest: Launch Party',
         pageCount: 1,
       },
@@ -182,6 +186,8 @@ describe('/api/threads', () => {
         platform: 'facebook',
         title: 'Joined Events',
         timestamp: 0,
+        firstMessageTimestamp: null,
+        lastMessageTimestamp: null,
         snippet: 'No events',
         pageCount: 0,
       },
@@ -190,6 +196,8 @@ describe('/api/threads', () => {
         platform: 'facebook',
         title: 'Events Interested In',
         timestamp: 0,
+        firstMessageTimestamp: null,
+        lastMessageTimestamp: null,
         snippet: 'No events',
         pageCount: 0,
       },
@@ -198,6 +206,8 @@ describe('/api/threads', () => {
         platform: 'facebook',
         title: 'Declined Events',
         timestamp: 0,
+        firstMessageTimestamp: null,
+        lastMessageTimestamp: null,
         snippet: 'No events',
         pageCount: 0,
       },
@@ -213,6 +223,7 @@ describe('/api/threads', () => {
     vi.spyOn(db, 'exists').mockReturnValue(true);
     vi.spyOn(db, 'get').mockReturnValue(memDb);
 
+    seedMessage(memDb, { thread_id: 'p2', timestamp_ms: 500, content: 'First post', sender_name: 'Me' });
     const postCall = createMocks({ method: 'GET', query: { platform: 'facebook', type: 'post' } });
     await handler(postCall.req, postCall.res);
     expect(postCall.res._getJSONData().threads).toEqual([
@@ -221,6 +232,8 @@ describe('/api/threads', () => {
         platform: 'facebook',
         title: 'My Posts',
         timestamp: 6000,
+        firstMessageTimestamp: 500,
+        lastMessageTimestamp: 500,
         snippet: 'Browse all 2 posts',
         pageCount: 1,
       },
@@ -234,6 +247,8 @@ describe('/api/threads', () => {
         platform: 'facebook',
         title: 'My Check-ins',
         timestamp: 7000,
+        firstMessageTimestamp: null,
+        lastMessageTimestamp: null,
         snippet: 'Browse all 1 check-ins',
         pageCount: 1,
       },

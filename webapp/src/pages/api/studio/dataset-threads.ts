@@ -9,6 +9,8 @@ interface ThreadStatsRow {
   title: string;
   platform: string;
   timestamp: number;
+  first_ts: number | null;
+  latest_ts: number | null;
   is_group: number;
   total_msgs: number;
   my_msgs: number;
@@ -42,6 +44,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       t.last_activity_ms as timestamp,
       t.is_group,
       t.participants_json,
+      MIN(m.timestamp_ms) as first_ts, MAX(m.timestamp_ms) as latest_ts,
       COUNT(m.id) as total_msgs,
       SUM(CASE WHEN m.sender_name IN (${namesPlaceholders}) AND m.content NOT LIKE 'http%' AND m.content NOT LIKE 'https%' THEN 1 ELSE 0 END) as my_msgs,
       AVG(CASE WHEN m.sender_name IN (${namesPlaceholders}) AND m.content NOT LIKE 'http%' AND m.content NOT LIKE 'https%' THEN LENGTH(m.content) ELSE NULL END) as my_avg_len
@@ -103,6 +106,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         title: title || 'Untitled',
         platform: row.platform,
         timestamp: row.timestamp,
+        firstMessageTimestamp: row.first_ts,
+        lastMessageTimestamp: row.latest_ts,
         is_group: !!row.is_group,
         pageCount: 1,
         type: 'message',
@@ -120,15 +125,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const postStats = dbInstance
         .prepare(
           `
-        SELECT COUNT(*) as count, MAX(t.last_activity_ms) as last_ts, AVG(LENGTH(m.content)) as avg_len
-        FROM threads t
-        JOIN thread_labels tl ON t.id = tl.thread_id
-        JOIN content m ON m.thread_id = t.id
-        WHERE t.platform = 'facebook' AND tl.label = 'post'
-          AND m.content NOT LIKE 'http%' AND m.content NOT LIKE 'https%'
+        WITH posts AS (
+          SELECT t.last_activity_ms, m.timestamp_ms, m.content, m.content NOT LIKE 'http%' AS scored
+          FROM threads t
+          JOIN thread_labels tl ON t.id = tl.thread_id
+          JOIN content m ON m.thread_id = t.id
+          WHERE t.platform = 'facebook' AND tl.label = 'post'
+        )
+        SELECT COUNT(*) FILTER (WHERE scored) AS count, MAX(last_activity_ms) FILTER (WHERE scored) AS last_ts,
+               AVG(LENGTH(content)) FILTER (WHERE scored) AS avg_len, MIN(timestamp_ms) AS first_ts, MAX(timestamp_ms) AS latest_ts
+        FROM posts
       `,
         )
-        .get() as { count: number; last_ts: number | null; avg_len: number | null };
+        .get() as {
+        count: number;
+        first_ts: number | null;
+        latest_ts: number | null;
+        last_ts: number | null;
+        avg_len: number | null;
+      };
 
       if (postStats.count > 0) {
         const score = Math.min(
@@ -142,6 +157,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           id: 'fb-post-all',
           title: 'My Posts',
           platform: 'facebook',
+          firstMessageTimestamp: postStats.first_ts,
+          lastMessageTimestamp: postStats.latest_ts,
           timestamp: postStats.last_ts || 0,
           is_group: false,
           pageCount: 1,
@@ -165,13 +182,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const estats = dbInstance
           .prepare(
             `
-          SELECT COUNT(*) as count, MAX(c.timestamp_ms) as last_ts
+          SELECT COUNT(*) as count, MIN(CASE WHEN c.content = ? THEN c.timestamp_ms END) as first_ts, MAX(CASE WHEN c.content = ? THEN c.timestamp_ms END) as latest_ts, MAX(c.timestamp_ms) as last_ts
           FROM content c
           INNER JOIN thread_labels tl ON c.thread_id = tl.thread_id
           WHERE tl.label = 'event' AND c.content IN (${placeholders})
         `,
           )
-          .get(...cat.status) as { count: number; last_ts: number | null };
+          .get(cat.status[0], cat.status[0], ...cat.status) as {
+          count: number;
+          first_ts: number | null;
+          latest_ts: number | null;
+          last_ts: number | null;
+        };
 
         if (estats.count > 0) {
           let score = Math.min(
@@ -188,6 +210,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             id: cat.id,
             title: cat.title,
             platform: 'facebook',
+            firstMessageTimestamp: estats.first_ts,
+            lastMessageTimestamp: estats.latest_ts,
             timestamp: estats.last_ts || 0,
             is_group: false,
             pageCount: 1,

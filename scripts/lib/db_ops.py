@@ -73,6 +73,7 @@ CREATE TABLE IF NOT EXISTS identities (
 );
 
 CREATE INDEX IF NOT EXISTS idx_content_thread_id ON content(thread_id);
+CREATE INDEX IF NOT EXISTS idx_content_thread_timestamp ON content(thread_id, timestamp_ms DESC);
 CREATE INDEX IF NOT EXISTS idx_content_timestamp ON content(timestamp_ms);
 CREATE INDEX IF NOT EXISTS idx_content_sender_name ON content(sender_name);
 CREATE INDEX IF NOT EXISTS idx_threads_platform ON threads(platform);

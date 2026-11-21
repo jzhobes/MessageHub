@@ -156,6 +156,43 @@ describe('Demo Router vs Real API Parity (data_samples)', () => {
     expect(await demoGalleryRes.json()).toEqual(realGallery.body);
   });
 
+  it('paginates the long sample conversations without gaps and jumps to older pages', async () => {
+    const examples = [
+      { title: 'Field Notes launch', minimumPages: 3 },
+      { title: 'Emma Wilson', minimumPages: 2 },
+      { title: 'Field Notes refresh — agreed scope', minimumPages: 2 },
+    ];
+
+    for (const { title, minimumPages } of examples) {
+      const thread = bundle.threads.find((row) => row.title === title);
+      assert(thread, `Missing sample conversation: ${title}`);
+      const messages = bundle.content
+        .filter((row) => row.thread_id === thread.id)
+        .sort((a, b) => b.timestamp_ms - a.timestamp_ms || b.id - a.id);
+      const pageCount = Math.ceil(messages.length / 100);
+      expect(pageCount, title).toBeGreaterThanOrEqual(minimumPages);
+
+      for (let page = 1; page <= pageCount + 1; page++) {
+        const url = `/api/content?threadId=${encodeURIComponent(thread.id)}&page=${page}`;
+        const real = await callRealGet(contentHandler, url);
+        const demo = await handleDemoFetch(url);
+        expect(demo.status).toBe(200);
+        expect(await demo.json()).toEqual(real.body);
+        const expectedPage = messages.slice((page - 1) * 100, page * 100);
+        expect(real.body, `${title}, page ${page}`).toMatchObject({
+          records: expectedPage.map((row) => ({ id: String(row.id) })),
+        });
+      }
+
+      const oldest = messages[messages.length - 1];
+      const jumpUrl = `/api/jump?messageId=${oldest.id}`;
+      const realJump = await callRealGet(jumpHandler, jumpUrl);
+      const demoJump = await handleDemoFetch(jumpUrl);
+      expect(await demoJump.json()).toEqual(realJump.body);
+      expect(realJump.body).toHaveProperty('page', pageCount);
+    }
+  });
+
   it('matches /api/jump in both messageId and date modes', async () => {
     const message = bundle.content.find((m) => m.thread_id === facebookThreadId);
     assert(message, `Expected a message in ${facebookThreadId}`);

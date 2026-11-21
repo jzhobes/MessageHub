@@ -42,6 +42,29 @@ describe('ThreadNavigation', () => {
     await waitFor(() => expect(onNavigate).toHaveBeenCalledWith(1, undefined));
   });
 
+  it('allows the first local message day and rejects earlier days', () => {
+    const firstMessageTimestamp = new Date(2024, 0, 2, 23, 59).getTime();
+    render(
+      <ThreadNavigation
+        threadId="thread"
+        currentPage={1}
+        totalPages={2}
+        firstMessageTimestamp={firstMessageTimestamp}
+        lastMessageTimestamp={new Date(2024, 0, 3, 0, 1).getTime()}
+        onNavigate={vi.fn()}
+      />,
+    );
+    const input = screen.getByLabelText('Jump to date') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: '2024-01-01' } });
+    expect(input.validity.rangeUnderflow).toBe(true);
+    fireEvent.change(input, { target: { value: '2024-01-02' } });
+    expect(input.checkValidity()).toBe(true);
+    fireEvent.change(input, { target: { value: '2024-01-03' } });
+    expect(input.checkValidity()).toBe(true);
+    fireEvent.change(input, { target: { value: '2024-01-04' } });
+    expect(input.validity.rangeOverflow).toBe(true);
+  });
+
   it('rejects out-of-range pages', () => {
     const onNavigate = vi.fn();
     render(<ThreadNavigation threadId="thread" currentPage={1} totalPages={3} onNavigate={onNavigate} />);

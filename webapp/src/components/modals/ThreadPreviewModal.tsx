@@ -361,6 +361,8 @@ export default function ThreadPreviewModal({
                 threadId={threadId}
                 currentPage={visiblePage}
                 currentTimestamp={visibleTimestamp}
+                firstMessageTimestamp={thread?.firstMessageTimestamp}
+                lastMessageTimestamp={thread?.lastMessageTimestamp}
                 totalPages={totalPages}
                 onNavigate={navigateToPage}
               />

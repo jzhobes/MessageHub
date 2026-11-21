@@ -13,14 +13,25 @@ interface ThreadNavigationProps {
   threadId: string;
   currentPage: number;
   currentTimestamp?: number;
+  firstMessageTimestamp?: number | null;
+  lastMessageTimestamp?: number | null;
   totalPages: number;
   onNavigate: (page: number, timestamp?: number) => Promise<void>;
+}
+
+function formatLocalDate(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 export default function ThreadNavigation({
   threadId,
   currentPage,
   currentTimestamp,
+  firstMessageTimestamp,
+  lastMessageTimestamp,
   totalPages,
   onNavigate,
 }: ThreadNavigationProps) {
@@ -99,10 +110,7 @@ export default function ThreadNavigation({
           setMode('date');
           setPage(String(currentPage));
           if (currentTimestamp !== undefined) {
-            const current = new Date(currentTimestamp);
-            setDate(
-              `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}-${String(current.getDate()).padStart(2, '0')}`,
-            );
+            setDate(formatLocalDate(new Date(Math.min(currentTimestamp, lastMessageTimestamp ?? currentTimestamp))));
           }
           setError('');
           setNotice('');
@@ -153,6 +161,8 @@ export default function ThreadNavigation({
               id={`${id}-date`}
               aria-label="Jump to date"
               type="date"
+              min={firstMessageTimestamp == null ? undefined : formatLocalDate(new Date(firstMessageTimestamp))}
+              max={lastMessageTimestamp == null ? undefined : formatLocalDate(new Date(lastMessageTimestamp))}
               value={date}
               className={styles.jumpField}
               disabled={busy}
