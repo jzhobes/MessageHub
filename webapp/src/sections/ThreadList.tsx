@@ -33,6 +33,7 @@ interface ThreadListProps {
 
 const ALL_CATEGORIES = [
   { id: 'message', label: 'Messages', icon: <FaCommentAlt size={14} color="#0084FF" /> }, // Messenger Blue
+  { id: 'marketplace', label: 'Marketplace', icon: <FaInbox size={14} color="#0084FF" /> },
   { id: 'event', label: 'Events', icon: <FaCalendarAlt size={14} color="#F35E5E" /> }, // FB Event Red
   { id: 'post', label: 'Posts', icon: <FaFileAlt size={14} color="#45BD62" /> }, // FB Post Green
   { id: 'checkin', label: 'Check-ins', icon: <FaMapMarkerAlt size={14} color="#F02849" /> }, // FB Check-in Red

@@ -6,6 +6,7 @@ from pathlib import Path
 
 from lib.archives import estimate_required_disk_space, extract_archives_found_with_opts
 from lib.db_ops import finalize_gmail_identity, get_db_connection, init_db, save_identity
+from parsers.facebook_marketplace import ingest_marketplace, reconcile_marketplace
 from parsers.facebook_e2e import ingest_e2e, reconcile_cutovers
 from parsers.facebook import (
     discover_facebook_identity,
@@ -221,6 +222,12 @@ def scan_directory(scan_path, db_path, platform_filter="all", limit_platforms=No
             if total_threads % 10 == 0:
                 conn.commit()
                 print(f"  [Committed]: {total_threads} threads ({total_msgs} messages, {total_skipped} skipped)")
+
+    if platform_filter in ("all", "facebook") and (limit_platforms is None or "facebook" in limit_platforms):
+        for name in ("conversations_you_had_as_a_seller.json", "conversations_you_had_as_a_buyer.json"):
+            for path in scan_path.rglob(name):
+                ingest_marketplace(cursor, path)
+        print(f"[Marketplace]: {reconcile_marketplace(cursor)} threads classified")
 
     reconcile_cutovers(cursor)
 

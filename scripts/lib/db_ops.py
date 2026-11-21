@@ -26,6 +26,12 @@ CREATE TABLE IF NOT EXISTS thread_labels (
 
 CREATE INDEX IF NOT EXISTS idx_thread_labels_label ON thread_labels(label);
 
+CREATE TABLE IF NOT EXISTS facebook_marketplace_conversations (
+    product_title TEXT NOT NULL,
+    participants_json TEXT NOT NULL,
+    PRIMARY KEY (product_title, participants_json)
+);
+
 CREATE TABLE IF NOT EXISTS content (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     thread_id TEXT,
