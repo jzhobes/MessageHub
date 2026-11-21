@@ -35,6 +35,7 @@ export interface ContentRecord {
   content?: string;
   photos?: MediaItem[];
   videos?: MediaItem[];
+  audio?: MediaItem[];
   gifs?: MediaItem[];
   attachments?: MediaItem[];
   sticker?: MediaItem;

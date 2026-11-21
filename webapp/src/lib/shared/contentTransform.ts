@@ -42,6 +42,7 @@ export function transformContentRows(rows: RawContentRow[], myNames: string[], t
     const media: MediaJsonItem[] = JSON.parse(row.media_json || '[]');
     const photos: MediaItem[] = media.filter((m) => m.type === 'photo' || m.type === 'image');
     const videos: MediaItem[] = media.filter((m) => m.type === 'video');
+    const audio: MediaItem[] = media.filter((m) => m.type === 'audio');
     const gifs: MediaItem[] = media.filter((m) => m.type === 'gif');
     const stickers: MediaItem[] = media.filter((m) => m.type === 'sticker');
     const files: MediaItem[] = media.filter((m) => m.type === 'file');
@@ -158,6 +159,7 @@ export function transformContentRows(rows: RawContentRow[], myNames: string[], t
         content: displayContent,
         quoted_message_metadata,
         share: shareObj,
+        audio: audio.length ? audio : undefined,
         attachments: otherFiles.length ? otherFiles : undefined,
         reactions: undefined, // Reactions attached to media
         event_metadata: eventMetadata,
@@ -175,6 +177,7 @@ export function transformContentRows(rows: RawContentRow[], myNames: string[], t
         photos: photos.length ? photos : undefined,
         videos: videos.length ? videos : undefined,
         gifs: gifs.length ? gifs : undefined,
+        audio: audio.length ? audio : undefined,
         attachments: otherFiles.length ? otherFiles : undefined,
         sticker: stickers.length > 0 ? stickers[0] : undefined,
         reactions: reactions,

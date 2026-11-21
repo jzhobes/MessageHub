@@ -136,6 +136,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       contentType = 'video/mp4';
     } else if (ext === '.mov') {
       contentType = 'video/quicktime';
+    } else if (ext === '.ogg' || ext === '.oga' || ext === '.opus') {
+      contentType = 'audio/ogg';
+    } else if (ext === '.mp3') {
+      contentType = 'audio/mpeg';
+    } else if (ext === '.m4a') {
+      contentType = 'audio/mp4';
+    } else if (ext === '.aac') {
+      contentType = 'audio/aac';
+    } else if (ext === '.wav') {
+      contentType = 'audio/wav';
     } else if (ext === '.pdf') {
       contentType = 'application/pdf';
     } else if (ext === '.csv') {
@@ -157,11 +167,34 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const fileName = path.basename(filePath).replace(/^File-/, '');
     res.setHeader('Content-Type', contentType);
-    res.setHeader('Content-Length', stats.size);
     res.setHeader('Content-Disposition', `${disposition}; filename="${fileName}"`);
     res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
 
-    const stream = createReadStream(absolutePath);
+    let range: { start: number; end: number } | undefined;
+    if (contentType.startsWith('audio/')) {
+      res.setHeader('Accept-Ranges', 'bytes');
+      const match = req.headers.range?.match(/^bytes=(\d*)-(\d*)$/);
+      if (match && (match[1] || match[2])) {
+        const start = match[1] ? Number(match[1]) : Math.max(0, stats.size - Number(match[2]));
+        const end = match[1] && match[2] ? Math.min(Number(match[2]), stats.size - 1) : stats.size - 1;
+
+        if (start > end) {
+          res.setHeader('Content-Range', `bytes */${stats.size}`);
+          return res.status(416).end();
+        }
+
+        range = { start, end };
+        res.status(206);
+        res.setHeader('Content-Range', `bytes ${start}-${end}/${stats.size}`);
+      }
+    }
+
+    res.setHeader('Content-Length', range ? range.end - range.start + 1 : stats.size);
+    if (req.method === 'HEAD') {
+      return res.end();
+    }
+
+    const stream = createReadStream(absolutePath, range);
     stream.pipe(res);
   } catch (e) {
     if (e instanceof Error && e.message === 'PERMISSION_DENIED') {

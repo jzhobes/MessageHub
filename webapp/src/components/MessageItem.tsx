@@ -105,9 +105,10 @@ const MessageItem = React.memo(
       (msg.photos && msg.photos.length > 0) ||
       (msg.videos && msg.videos.length > 0) ||
       (msg.gifs && msg.gifs.length > 0) ||
+      (msg.audio && msg.audio.length > 0) ||
       msg.sticker ||
       isImageShare;
-    const isMediaOnly = hasMedia && !msg.content;
+    const isMediaOnly = hasMedia && !msg.content && !(msg.audio?.length && msg.quoted_message_metadata);
 
     // Skip photos already shown in the link preview.
     const displayPhotos = previewUrl && msg.photos ? [] : msg.photos || [];
@@ -156,6 +157,7 @@ const MessageItem = React.memo(
             {(hasTextContent ||
               displayPhotos?.length ||
               msg.videos?.length ||
+              msg.audio?.length ||
               msg.gifs?.length ||
               msg.attachments?.length ||
               msg.sticker ||
@@ -201,6 +203,21 @@ const MessageItem = React.memo(
                           preload={inView ? 'metadata' : 'none'}
                           src={getMediaUrl(uri, activePlatform)}
                           className={styles.msgVideo}
+                          controls
+                        />
+                      )}
+                    </LazyView>
+                  </div>
+                ))}
+                {msg.audio?.map(({ uri }, idx) => (
+                  <div key={`audio-${idx}`} className={hasTextContent ? styles.mediaMargin : ''}>
+                    <LazyView rootMargin="200px">
+                      {(inView) => (
+                        <audio
+                          aria-label="Voice message"
+                          preload={inView ? 'metadata' : 'none'}
+                          src={getMediaUrl(uri, activePlatform)}
+                          className={styles.msgAudio}
                           controls
                         />
                       )}

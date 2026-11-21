@@ -268,6 +268,31 @@ describe('/api/media', () => {
     expect(res._getHeaders()['content-disposition']).toBe(`${expectedDisp}; filename="${filename}"`);
   });
 
+  it('streams a requested byte range from a Messenger voice message', async () => {
+    const uri = 'your_facebook_activity/e2e/media/voice.ogg';
+    const file = path.join(tempDir, 'Facebook', uri);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, 'OggS-voice');
+
+    const { req, res } = createStreamingMocks({
+      method: 'GET',
+      query: { path: uri, platform: 'facebook' },
+      headers: { range: 'bytes=0-3' },
+    });
+    await handler(req, res);
+    await waitForStreamEnd(res);
+
+    expect(res._getStatusCode()).toBe(206);
+    expect(res._getHeaders()).toMatchObject({
+      'content-type': 'audio/ogg',
+      'content-disposition': 'inline; filename="voice.ogg"',
+      'accept-ranges': 'bytes',
+      'content-range': 'bytes 0-3/10',
+      'content-length': 4,
+    });
+    expect(res._getBuffer().toString()).toBe('OggS');
+  });
+
   it('falls back to raw workspace-relative path and returns 404 when missing', async () => {
     const rawFile = path.join(tempDir, 'direct.txt');
     fs.writeFileSync(rawFile, 'direct-body');
